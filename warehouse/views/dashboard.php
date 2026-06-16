@@ -1,0 +1,314 @@
+<div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card stat-card p-3 h-100">
+                <h6 class="text-muted">Total Customers</h6>
+                <h3><?= count($customers ?? []) ?></h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card p-3 h-100">
+                <h6 class="text-muted">Available Items</h6>
+                <h3><?= count($items ?? []) ?></h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card p-3 h-100">
+                <h6 class="text-muted">Total PO</h6>
+                <h3><?= $allPOCount ?? count($purchase_orders ?? []) ?></h3>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card data-card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-cart3 me-2"></i>Recent Purchase Orders</span>
+            <a href="?controller=warehouse&action=purchaseOrders" class="btn btn-primary btn-sm">View All</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>PO Number</th>
+                        <th>PO Date</th>
+                        <th>Customer</th>
+                        <th>Item</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach (array_slice($purchase_orders ?? [], 0, 5) as $po):
+                        $items = $po_items_map[$po['po_id']] ?? [];
+                    ?>
+                    <tr>
+                        <td><strong><?= $po['customer_po_number'] ?></strong></td>
+                        <td><?= date('Y-m-d', strtotime($po['customer_po_date'])) ?></td>
+                        <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
+                        <td>
+                            <?php if (!empty($items)): ?>
+                                <?php foreach ($items as $idx => $item): ?>
+                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                    <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <small class="text-muted">-</small>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if (!empty($items)): ?>
+                                <?php foreach ($items as $idx => $item):
+                                    $qty = $item['quantity'] ?? 0;
+                                    $itemProduced = $item['produced_quantity'] ?? 0;
+                                    $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                                ?>
+                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
+                                            <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                        </div>
+                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <small class="text-muted">-</small>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php if (empty($purchase_orders)): ?>
+                    <tr><td colspan="5" class="text-center text-muted py-3">No purchase orders yet</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<div class="card data-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-truck me-2"></i>Recent Deliveries</span>
+        <a href="?controller=warehouse&action=deliveries" class="btn btn-primary btn-sm">View All</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>PO Number</th>
+                    <th>Customer</th>
+                    <th>Delivery Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach (array_slice($deliveries ?? [], 0, 5) as $d): ?>
+                <tr>
+                    <td><strong><?= $d['customer_po_number'] ?></strong></td>
+                    <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                    <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
+                </tr>
+                <?php endforeach; ?>
+                <?php if (empty($deliveries)): ?>
+                <tr><td colspan="3" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+    <div class="modal fade" id="viewPOModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-eye me-2"></i>PO Details - <span id="viewPONumber"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <p class="mb-1"><strong>Customer Code:</strong></p>
+                            <p class="text-muted" id="viewCustomerCode">-</p>
+                        </div>
+                        <div class="col-md-3">
+                            <p class="mb-1"><strong>Customer Name:</strong></p>
+                            <p class="text-muted" id="viewCustomerName">-</p>
+                        </div>
+                        <div class="col-md-3">
+                            <p class="mb-1"><strong>Customer TIN:</strong></p>
+                            <p class="text-muted" id="viewCustomerTin">-</p>
+                        </div>
+                        <div class="col-md-3">
+                            <p class="mb-1"><strong>Terms:</strong></p>
+                            <p class="text-muted" id="viewCustomerTerms">-</p>
+                        </div>
+                    </div>
+                    <h5 class="mb-3">Items</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Item Code</th>
+                                    <th>Description</th>
+                                    <th>UOM</th>
+                                    <th>Quantity</th>
+                                    <th>Progress</th>
+                                </tr>
+                            </thead>
+                            <tbody id="viewPOItems">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<div class="modal fade" id="createPOModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cart3 me-2"></i>Create Purchase Order</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="?controller=warehouse&action=createPO">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">PO Number</label>
+                            <input type="text" name="po_number" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">PO Date</label>
+                            <input type="date" name="po_date" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Customer</label>
+                        <select name="customer_id" class="form-select" required>
+                            <option value="">Select Customer</option>
+                            <?php foreach ($customers as $c): ?>
+                                <option value="<?= $c['customer_id'] ?>"><?= $c['customer_code'] ?> - <?= $c['customer_name'] ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Items</label>
+                        <div id="itemsContainer">
+                            <div class="row g-2 mb-2 item-row">
+                                <div class="col-5">
+                                    <select name="item_id[]" class="form-select item-select" required>
+                                        <option value="">Select Item</option>
+                                        <?php foreach ($items as $i): ?>
+                                            <option value="<?= $i['item_id'] ?>" data-price="<?= $i['item_amount'] ?>"><?= $i['item_code'] ?> - <?= $i['item_description'] ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <input type="number" name="quantity[]" class="form-control" placeholder="Quantity" required>
+                                </div>
+                                <div class="col-3">
+                                    <input type="number" name="unit_price[]" class="form-control unit-price" placeholder="Unit Price" step="0.01" required>
+                                </div>
+                                <div class="col-1">
+                                    <button type="button" class="btn btn-outline-danger btn-sm remove-item"><i class="bi bi-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="addItemBtn"><i class="bi bi-plus"></i> Add Item</button>
+                    </div>
+                    <input type="hidden" name="items_json" id="itemsJson">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Create PO</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('addItemBtn').addEventListener('click', function() {
+    const container = document.getElementById('itemsContainer');
+    const itemTemplate = document.querySelector('.item-row').cloneNode(true);
+    itemTemplate.querySelectorAll('select, input').forEach(el => el.value = '');
+    container.appendChild(itemTemplate);
+});
+
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.remove-item')) {
+        const rows = document.querySelectorAll('.item-row');
+        if (rows.length > 1) e.target.closest('.item-row').remove();
+    }
+});
+
+document.querySelectorAll('.item-select').forEach(select => {
+    select.addEventListener('change', function() {
+        const price = this.options[this.selectedIndex].dataset.price || 0;
+        this.closest('.item-row').querySelector('.unit-price').value = price;
+    });
+});
+
+document.querySelector('form').addEventListener('submit', function() {
+    const items = [];
+    document.querySelectorAll('.item-row').forEach(row => {
+        items.push({
+            item_id: row.querySelector('[name="item_id[]"]').value,
+            quantity: row.querySelector('[name="quantity[]"]').value,
+            unit_price: row.querySelector('.unit-price').value
+        });
+    });
+    document.getElementById('itemsJson').value = JSON.stringify(items);
+});
+
+document.querySelectorAll('.view-po-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const poId = this.dataset.poId || this.getAttribute('data-po-id');
+        fetch('?controller=warehouse&action=getPODetails&id=' + poId)
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                const po = data.po;
+                const items = data.po_items;
+
+                document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
+                document.getElementById('viewCustomerCode').textContent = po.customer_code || '-';
+                document.getElementById('viewCustomerName').textContent = po.customer_name || '-';
+                document.getElementById('viewCustomerTin').textContent = po.customer_tin || '-';
+                document.getElementById('viewCustomerTerms').textContent = (po.customer_terms || 0) + ' days';
+
+                const tbody = document.getElementById('viewPOItems');
+                tbody.innerHTML = '';
+                if (items && items.length > 0) {
+                    items.forEach(function(item) {
+                        const qty = item.quantity || 0;
+                        const itemProduced = item.produced_quantity || 0;
+                        const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
+                        const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                        const lineTotal = item.quantity * item.unit_price;
+                        const row = '<tr>' +
+                            '<td>' + (item.item_code || '-') + '</td>' +
+                            '<td>' + (item.item_description || '-') + '</td>' +
+                            '<td>' + (item.item_uom || '-') + '</td>' +
+                            '<td>' + qty + '</td>' +
+                            '<td>' +
+                                '<div class="d-flex align-items-center">' +
+                                    '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
+                                        '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
+                                    '</div>' +
+                                    '<small class="text-muted">' + itemProduced + '/' + qty + '</small>' +
+                                '</div>' +
+                            '</td>' +
+                            '</tr>';
+                        tbody.innerHTML += row;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No items found</td></tr>';
+                }
+
+                const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
+                modal.show();
+            })
+            .catch(function(error) {
+                alert('Failed to load PO details');
+            });
+    });
+});
+</script>

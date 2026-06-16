@@ -1,0 +1,2 @@
+<!-- Bootstrap 5.3.0 - Download from https://getbootstrap.com/docs/5.3/getting-started/download/ -->
+<!-- Extract to public/ folder so it becomes public/css/bootstrap.min.css and public/js/bootstrap.bundle.min.js -->
