@@ -134,31 +134,39 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
                     document.getElementById('viewCustomerCode').textContent = po.customer_code || '-';
                     document.getElementById('viewCustomerName').textContent = po.customer_name || '-';
-                    
-                    const total = po.total_quantity || 0;
-                    const produced = po.produced_quantity || 0;
-                    const percent = total > 0 ? Math.round((produced / total) * 100) : 0;
-                    
-                    document.getElementById('viewTotalQty').textContent = total;
-                    document.getElementById('viewProducedQty').textContent = produced + '/' + total;
-                    document.getElementById('viewProgressBar').style.width = percent + '%';
-                    document.getElementById('viewProgressBar').textContent = percent + '%';
-                    document.getElementById('viewProgressBar').className = 'progress-bar ' + (percent >= 100 ? 'bg-success' : 'bg-warning');
+                    document.getElementById('viewCustomerTin').textContent = po.customer_tin || '-';
+                    document.getElementById('viewCustomerTerms').textContent = (po.customer_terms || 0) + ' days';
                     
                     const tbody = document.getElementById('viewPOItems');
                     tbody.innerHTML = '';
                     if (items && items.length > 0) {
                         items.forEach(function(item) {
-                        const row = '<tr>' +
+                            const qty = item.quantity || 0;
+                            const itemDelivered = item.delivered_quantity || 0;
+                            const remaining = Math.max(0, qty - itemDelivered);
+                            const itemPercent = qty > 0 ? Math.round((itemDelivered / qty) * 100) : 0;
+                            const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                            const row = '<tr>' +
                                 '<td>' + (item.item_code || '-') + '</td>' +
                                 '<td>' + (item.item_description || '-') + '</td>' +
                                 '<td>' + (item.item_uom || '-') + '</td>' +
-                                '<td>' + item.quantity + '</td>' +
+                                '<td>' + qty + '</td>' +
+                                '<td>' +
+                                    '<div class="d-flex align-items-center">' +
+                                        '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
+                                            '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
+                                        '</div>' +
+                                        '<small class="text-muted">' + itemDelivered + '/' + qty + '</small>' +
+                                    '</div>' +
+                                '</td>' +
+                                '<td>' +
+                                    '<small class="badge ' + (remaining <= 0 ? 'bg-success' : 'bg-warning') + '">' + remaining + '</small>' +
+                                '</td>' +
                                 '</tr>';
                             tbody.innerHTML += row;
                         });
                     } else {
-                        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No items found</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No items found</td></tr>';
                     }
                     
                     const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
@@ -228,17 +236,12 @@ document.querySelectorAll('.sortable').forEach(th => {
                         <p class="text-muted" id="viewCustomerName">-</p>
                     </div>
                     <div class="col-md-3">
-                        <p class="mb-1"><strong>Required:</strong></p>
-                        <p class="text-muted" id="viewTotalQty">-</p>
+                        <p class="mb-1"><strong>Customer TIN:</strong></p>
+                        <p class="text-muted" id="viewCustomerTin">-</p>
                     </div>
                     <div class="col-md-3">
-                        <p class="mb-1"><strong>Production Progress:</strong></p>
-                        <div class="d-flex align-items-center">
-                            <div class="progress flex-grow-1 me-2" style="height: 15px;">
-                                <div class="progress-bar bg-warning" id="viewProgressBar" style="width: 0%">0%</div>
-                            </div>
-                        </div>
-                        <small class="text-muted" id="viewProducedQty">0/0</small>
+                        <p class="mb-1"><strong>Terms:</strong></p>
+                        <p class="text-muted" id="viewCustomerTerms">-</p>
                     </div>
                 </div>
                 <h5 class="mb-3">Items</h5>
@@ -250,6 +253,8 @@ document.querySelectorAll('.sortable').forEach(th => {
                                 <th>Description</th>
                                 <th>UOM</th>
                                 <th>Quantity</th>
+                                <th>Delivery Progress</th>
+                                <th>Remaining</th>
                             </tr>
                         </thead>
                         <tbody id="viewPOItems">

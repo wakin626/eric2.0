@@ -146,6 +146,8 @@ document.getElementById('poSelect').addEventListener('change', function() {
     availableRow.style.display = 'none';
     poiSelect.innerHTML = '<option value="">Select Item</option>';
     poiSelect.disabled = false;
+    var existingHidden = poiSelect.parentNode.querySelector('input[name="poi_id"][type="hidden"]');
+    if (existingHidden) existingHidden.remove();
     document.getElementById('deliveryQty').value = '';
     document.getElementById('deliveryQty').classList.remove('is-invalid');
     document.getElementById('deliveryError').textContent = '';
@@ -186,6 +188,11 @@ document.getElementById('poSelect').addEventListener('change', function() {
                 poiSelect.innerHTML = '<option value="' + item.poi_id + '">' + (item.item_description || '-') + '</option>';
                 poiSelect.value = item.poi_id;
                 poiSelect.disabled = true;
+                var hiddenPoi = document.createElement('input');
+                hiddenPoi.type = 'hidden';
+                hiddenPoi.name = 'poi_id';
+                hiddenPoi.value = item.poi_id;
+                poiSelect.parentNode.appendChild(hiddenPoi);
                 itemRow.style.display = 'block';
             }
         });

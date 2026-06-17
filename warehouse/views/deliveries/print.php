@@ -3,33 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Receipt - <?= htmlspecialchars($delivery['customer_po_number'] ?? '') ?></title>
-    <link href="../../public/css/bootstrap-icons.min.css" rel="stylesheet">
+    <title>Delivery Receipt</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
             color: #000;
-            background: #f0f0f0;
-            padding: 20px;
+            background: #e0e0e0;
         }
 
-        .print-container {
-            background: #fff;
-            width: 100%;
-            max-width: 8.5in;
-            margin: 0 auto;
-            padding: 0.4in 0.5in;
-            border: 1px solid #ccc;
-        }
-
-        /* Screen-only print button */
-        .no-print { display: block; }
+        .no-print { display: block; text-align: center; padding: 12px; }
         .no-print button {
-            display: block;
-            margin: 0 auto 15px;
             padding: 10px 30px;
             font-size: 14px;
             cursor: pointer;
@@ -40,176 +26,127 @@
         }
         .no-print button:hover { background: #0b5ed7; }
 
-        /* Header */
-        .receipt-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 12px;
-        }
-        .company-info {
-            text-align: center;
-            flex: 1;
-        }
-        .company-info h2 {
-            font-size: 16px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 2px;
-        }
-        .company-info p {
-            font-size: 11px;
-            line-height: 1.4;
-        }
-        .receipt-title-block {
-            text-align: right;
-            min-width: 180px;
-        }
-        .receipt-title-block h3 {
-            font-size: 14px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 6px;
-        }
-        .receipt-no {
-            font-size: 11px;
-            text-align: right;
-        }
-        .receipt-no span {
-            border-bottom: 1px solid #000;
-            display: inline-block;
-            min-width: 100px;
-            padding-bottom: 1px;
-            font-weight: 600;
+        .receipt-container {
+            width: 8.5in;
+            height: 11in;
+            position: relative;
+            overflow: hidden;
+            background: #fff;
+            margin: 10px auto;
+            font-family: 'Courier New', monospace;
+            border: 2px solid #000;
+            /*
+            outline: 1px dashed red;
+            */
         }
 
-        /* Meta info fields */
-        .meta-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px 30px;
-            margin-bottom: 16px;
-            font-size: 11.5px;
-        }
-        .meta-field {
-            display: flex;
-            align-items: baseline;
-            gap: 6px;
-        }
-        .meta-field label {
-            font-weight: 600;
-            white-space: nowrap;
-        }
-        .meta-field .field-value {
-            flex: 1;
-            border-bottom: 1px solid #000;
-            min-height: 16px;
-            padding-bottom: 1px;
-        }
-
-        /* Items table */
-        .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 16px;
-            font-size: 11.5px;
-        }
-        .items-table th,
-        .items-table td {
-            border: 1px solid #000;
-            padding: 6px 8px;
+        /* ─── Date (top right) ─── */
+        .print-date {
+            position: absolute;
+            top: 0.5in;
+            right: 0.5in;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            font-weight: bold;
             text-align: left;
         }
-        .items-table th {
-            background: #f5f5f5;
-            font-weight: 700;
-            text-transform: uppercase;
-            font-size: 10.5px;
-            text-align: center;
-        }
-        .items-table td { vertical-align: top; }
-        .items-table .col-qty { width: 10%; text-align: center; }
-        .items-table .col-unit { width: 10%; text-align: center; }
-        .items-table .col-desc { width: 35%; }
-        .items-table .col-price { width: 15%; text-align: right; }
-        .items-table .col-total { width: 15%; text-align: right; }
-        .items-table tbody tr { min-height: 28px; }
-        .items-table tbody tr.empty-row { height: 28px; }
-        .items-table tfoot td {
-            font-weight: 700;
-            text-align: right;
+
+        /* ─── Company Info (center-left) ─── */
+        .print-company-info {
+            position: absolute;
+            top: 0.9in;
+            left: 1.35in;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: left;
+            line-height: 1.5;
         }
 
-        /* Signatures section */
-        .signatures {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1.2fr;
-            gap: 20px;
-            margin-top: 30px;
+        /* ─── Terms (right side, same row as company) ─── */
+        .print-terms {
+            position: absolute;
+            top: 0.9in;
+            right: 0.5in;
+            font-family: 'Courier New', monospace;
             font-size: 11px;
+            font-weight: bold;
+            text-align: left;
         }
-        .sig-column h4 {
-            font-size: 10.5px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 14px;
-            border-bottom: 1px solid #999;
-            padding-bottom: 3px;
+
+        /* ─── Customer Code (right side, below terms) ─── */
+        .print-customer-code {
+            position: absolute;
+            top: 1.1in;
+            right: 0.5in;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: left;
         }
-        .sig-line {
-            margin-bottom: 22px;
+
+        /* ─── PO Number (right side, below customer code) ─── */
+        .print-po-number {
+            position: absolute;
+            top: 1.3in;
+            right: 0.5in;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: left;
         }
-        .sig-line .sig-label {
-            font-size: 10px;
-            color: #333;
-            margin-bottom: 2px;
+
+        /* ─── Item Row (single line) ─── */
+        .print-item-row {
+            position: absolute;
+            top: 2.55in;
+            left: 0.4in;
+            width: 7.7in;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            display: flex;
+            overflow: hidden;
         }
-        .sig-line .sig-line-box {
-            border-bottom: 1px solid #000;
-            height: 30px;
+
+        .print-item-row .col-desc     { flex: 1; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+        .print-item-row .col-unit     { width: 0.5in; text-align: center; flex-shrink: 0; }
+        .print-item-row .col-qty      { width: 0.7in; text-align: right; flex-shrink: 0; }
+        .print-item-row .col-price    { width: 0.7in; text-align: right; flex-shrink: 0; }
+        .print-item-row .col-amount   { width: 1in; text-align: right; flex-shrink: 0; }
+
+        /* ─── Totals Block (lower right) ─── */
+        .print-totals-block {
+            position: absolute;
+            bottom: 3.0in;
+            left: 3.5in;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.8;
         }
-        .sig-line .sig-date {
-            font-size: 9.5px;
-            color: #666;
+
+        .print-totals-block .totals-row {
+            display: flex;
+            justify-content: flex-end;
+            width: 4.2in;
+        }
+
+        .print-totals-block .totals-row .totals-value {
+            text-align: right;
+            min-width: 1.5in;
+        }
+
+        .print-totals-block .totals-grand {
+            font-weight: bold;
             margin-top: 2px;
         }
 
-        /* Right block - customer acknowledgement */
-        .ack-block {
-            border: 1px solid #000;
-            padding: 10px;
-            min-height: 120px;
-        }
-        .ack-block h4 {
-            font-size: 10.5px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #999;
-            padding-bottom: 3px;
-        }
-        .ack-text {
-            font-size: 10.5px;
-            line-height: 1.5;
-            margin-bottom: 12px;
-        }
-        .ack-signature {
-            margin-top: 20px;
-        }
-        .ack-signature .sig-label {
-            font-size: 10px;
-            color: #333;
-            margin-bottom: 2px;
-        }
-        .ack-signature .sig-line-box {
-            border-bottom: 1px solid #000;
-            height: 28px;
-        }
-
-        /* Print-specific styles */
+        /* ─── Print Styles ─── */
         @media print {
+            @page {
+                size: 8.5in 11in;
+                margin: 0;
+            }
+
             body {
                 background: none;
                 padding: 0;
@@ -220,32 +157,10 @@
 
             .no-print { display: none !important; }
 
-            .print-container {
-                border: none;
-                padding: 0.3in 0.4in;
-                max-width: 100%;
+            .receipt-container {
                 margin: 0;
                 box-shadow: none;
                 background: #fff;
-            }
-
-            .receipt-header {
-                border-bottom: 2px solid #000;
-            }
-
-            .items-table th {
-                background: #f5f5f5 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
-            .items-table tbody tr.empty-row {
-                min-height: 28px;
-                page-break-inside: avoid;
-            }
-
-            .signatures {
-                page-break-inside: avoid;
             }
         }
     </style>
@@ -256,173 +171,52 @@
     <button onclick="window.print()"><i class="bi bi-printer"></i> Print Delivery Receipt</button>
 </div>
 
-<div class="print-container">
+<div class="receipt-container">
 
-    <!-- HEADER: Company info centered, Receipt title on right -->
-    <div class="receipt-header">
-        <div class="company-info">
-            <h2>Your Company Name</h2>
-            <p>Company Address Line 1, City, Province ZIP</p>
-            <p>TIN: 123-456-789-000</p>
-        </div>
-        <div class="receipt-title-block">
-            <h3>Delivery Receipt</h3>
-            <div class="receipt-no">No. <span><?= htmlspecialchars($delivery['customer_po_number'] ?? '') ?></span></div>
-        </div>
+    <!-- DATE (top right) -->
+    <div class="print-date">3-Jun-2026</div>
+
+    <!-- COMPANY INFO (center-left) -->
+    <div class="print-company-info">
+        <div>SKINTEC ADVANCE INCORPORATED</div>
+        <div>008-434-783-000</div>
+        <div>BYPASS ROAD BULIHAN PLARIDEL BULACAN 3004</div>
     </div>
 
-    <!-- META INFO: Delivered to, Address, Date, Terms -->
-    <div class="meta-grid">
-        <div class="meta-field">
-            <label>Delivered to:</label>
-            <div class="field-value"><?= htmlspecialchars($delivery['customer_name'] ?? '') ?></div>
-        </div>
-        <div class="meta-field">
-            <label>Date:</label>
-            <div class="field-value"><?= date('F d, Y', strtotime($delivery['delivery_date'])) ?></div>
-        </div>
-        <div class="meta-field">
-            <label>Address:</label>
-            <div class="field-value"><?= htmlspecialchars($delivery['customer_address'] ?? '') ?></div>
-        </div>
-        <div class="meta-field">
-            <label>Terms:</label>
-            <div class="field-value"><?= ($delivery['customer_terms'] ?? 0) > 0 ? $delivery['customer_terms'] . ' days' : '' ?></div>
-        </div>
-        <div class="meta-field">
-            <label>Customer Code:</label>
-            <div class="field-value"><?= htmlspecialchars($delivery['customer_code'] ?? '') ?></div>
-        </div>
-        <div class="meta-field">
-            <label>TIN:</label>
-            <div class="field-value"><?= htmlspecialchars($delivery['customer_tin'] ?? '') ?></div>
-        </div>
+    <!-- TERMS (right side) -->
+    <div class="print-terms">90 DAYS</div>
+
+    <!-- CUSTOMER CODE (right side) -->
+    <div class="print-customer-code">SKI-CC-02199</div>
+
+    <!-- PO NUMBER (right side) -->
+    <div class="print-po-number">16529</div>
+
+    <!-- ITEM ROW (single line) -->
+    <div class="print-item-row">
+        <div class="col-desc">Empress Shampoo Long and Healthy 21mlx24pck (11+1)</div>
+        <div class="col-unit">Pck</div>
+        <div class="col-qty">4,224</div>
+        <div class="col-price">29.75</div>
+        <div class="col-amount">125,664.00</div>
     </div>
 
-    <!-- ITEMS TABLE -->
-    <table class="items-table">
-        <thead>
-            <tr>
-                <th class="col-qty">Quantity</th>
-                <th class="col-unit">Unit</th>
-                <th class="col-desc">Description</th>
-                <th class="col-price">Unit Price</th>
-                <th class="col-total">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (!empty($po_items)): ?>
-                <?php foreach ($po_items as $item): ?>
-                <tr>
-                    <td class="col-qty">
-                        <?php if (!empty($delivery['poi_id']) && $item['poi_id'] == $delivery['poi_id']): ?>
-                            <?= htmlspecialchars($delivery['delivery_quantity'] ?? $item['quantity']) ?>
-                        <?php else: ?>
-                            <?= htmlspecialchars($item['quantity'] ?? '') ?>
-                        <?php endif; ?>
-                    </td>
-                    <td class="col-unit"><?= htmlspecialchars($item['item_uom'] ?? '') ?></td>
-                    <td class="col-desc"><?= htmlspecialchars($item['item_description'] ?? '') ?></td>
-                    <td class="col-price"><?= number_format($item['unit_price'] ?? 0, 2) ?></td>
-                    <td class="col-total"><?= number_format(($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0), 2) ?></td>
-                </tr>
-                <?php endforeach; ?>
-            <?php endif; ?>
-            <?php
-            $rowCount = count($po_items ?? []);
-            $emptyRows = max(0, 8 - $rowCount);
-            for ($i = 0; $i < $emptyRows; $i++):
-            ?>
-            <tr class="empty-row">
-                <td>&nbsp;</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-            </tr>
-            <?php endfor; ?>
-        </tbody>
-        <tfoot>
-            <tr>
-                <td colspan="4" style="text-align: right; border: 1px solid #000;">Grand Total:</td>
-                <td class="col-total" style="border: 1px solid #000;">
-                    <?php
-                    $grandTotal = 0;
-                    if (!empty($po_items)):
-                        foreach ($po_items as $item):
-                            $grandTotal += ($item['quantity'] ?? 0) * ($item['unit_price'] ?? 0);
-                        endforeach;
-                    endif;
-                    echo number_format($grandTotal, 2);
-                    ?>
-                </td>
-            </tr>
-        </tfoot>
-    </table>
-
-    <!-- REMARKS -->
-    <?php if (!empty($delivery['remarks'])): ?>
-    <div style="margin-bottom: 14px; font-size: 11px;">
-        <strong>Remarks:</strong> <?= htmlspecialchars($delivery['remarks']) ?>
-    </div>
-    <?php endif; ?>
-
-    <!-- SIGNATURES SECTION -->
-    <div class="signatures">
-        <!-- Left: Released by, Checked by, Verified by -->
-        <div class="sig-column">
-            <h4>Prepared By</h4>
-            <div class="sig-line">
-                <div class="sig-label">Released by:</div>
-                <div class="sig-line-box"></div>
-            </div>
-            <div class="sig-line">
-                <div class="sig-label">Checked by:</div>
-                <div class="sig-line-box"></div>
-            </div>
-            <div class="sig-line">
-                <div class="sig-label">Verified by:</div>
-                <div class="sig-line-box"></div>
-            </div>
+    <!-- TOTALS BLOCK -->
+    <div class="print-totals-block">
+        <div class="totals-row">
+            <span class="totals-value">112,200.00</span>
         </div>
-
-        <!-- Center: Delivered by, Plate No., Noted by -->
-        <div class="sig-column">
-            <h4>Delivery</h4>
-            <div class="sig-line">
-                <div class="sig-label">Delivered by:</div>
-                <div class="sig-line-box"></div>
-            </div>
-            <div class="sig-line">
-                <div class="sig-label">Plate No.:</div>
-                <div class="sig-line-box"></div>
-            </div>
-            <div class="sig-line">
-                <div class="sig-label">Noted by:</div>
-                <div class="sig-line-box"></div>
-            </div>
+        <div class="totals-row">
+            <span class="totals-value">13,464.00</span>
         </div>
-
-        <!-- Right: Customer acknowledgement -->
-        <div class="sig-column">
-            <div class="ack-block">
-                <h4>Customer Acknowledgement</h4>
-                <div class="ack-text">
-                    Received the above items in good order and condition.
-                </div>
-                <div class="ack-signature">
-                    <div class="sig-label">Received by:</div>
-                    <div class="sig-line-box"></div>
-                </div>
-                <div class="ack-signature" style="margin-top: 14px;">
-                    <div class="sig-label">Signature over Printed Name:</div>
-                    <div class="sig-line-box"></div>
-                </div>
-                <div class="ack-signature" style="margin-top: 14px;">
-                    <div class="sig-label">Date Received:</div>
-                    <div class="sig-line-box"></div>
-                </div>
-            </div>
+        <div class="totals-row">
+            <span class="totals-value">-</span>
+        </div>
+        <div class="totals-row">
+            <span class="totals-value">-</span>
+        </div>
+        <div class="totals-row totals-grand">
+            <span class="totals-value">125,664.00</span>
         </div>
     </div>
 
