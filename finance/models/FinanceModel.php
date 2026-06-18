@@ -163,8 +163,7 @@ class FinanceModel extends BaseModel {
     public function getAllPurchaseOrderItems() {
         $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.item_size 
                 FROM purchase_order_items poi 
-                LEFT JOIN items i ON poi.item_id = i.item_id 
-                WHERE poi.`remove` = 0";
+                LEFT JOIN items i ON poi.item_id = i.item_id";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         $all = $stmt->fetchAll();
