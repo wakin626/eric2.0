@@ -159,4 +159,32 @@ class FinanceModel extends BaseModel {
 
         return $data;
     }
+
+    public function getAllPurchaseOrderItems() {
+        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.item_size 
+                FROM purchase_order_items poi 
+                LEFT JOIN items i ON poi.item_id = i.item_id 
+                WHERE poi.`remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        $all = $stmt->fetchAll();
+        $map = [];
+        foreach ($all as $item) {
+            $map[$item['po_id']][] = $item;
+        }
+        return $map;
+    }
+
+    public function getDeliveriesByPOWithItems($po_id) {
+        $sql = "SELECT d.*, u.full_name as delivered_by_name, i.item_description
+                FROM deliveries d 
+                LEFT JOIN users u ON d.delivered_by = u.user_id 
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE d.po_id = :po_id AND d.`remove` = 0
+                ORDER BY d.delivery_date DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_id' => $po_id]);
+        return $stmt->fetchAll();
+    }
 }

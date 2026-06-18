@@ -26,6 +26,7 @@ class FinanceController {
         $data['stats'] = $this->financeModel->getFinanceStats();
         $data['ready_to_deliver'] = $this->financeModel->getPOsReadyToDeliver();
         $data['recent_deliveries'] = array_slice($this->financeModel->getAllDeliveries(), 0, 5);
+        $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
         $this->render('dashboard', $data);
     }
 
@@ -36,6 +37,7 @@ class FinanceController {
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
         $data['page_title'] = 'Customer PO';
         $this->render('purchase_orders/index', $data);
     }
@@ -47,6 +49,7 @@ class FinanceController {
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
         $data['page_title'] = 'Ready to Deliver';
         $this->render('purchase_orders/ready_to_deliver', $data);
     }
@@ -163,7 +166,7 @@ class FinanceController {
         $id = $_GET['id'] ?? null;
         $po = $this->financeModel->getPurchaseOrderById($id);
         $po_items = $this->financeModel->getPurchaseOrderItems($id);
-        $deliveries = $this->financeModel->getDeliveriesByPO($id);
+        $deliveries = $this->financeModel->getDeliveriesByPOWithItems($id);
         $receipts = $this->financeModel->getReceiptsByPO($id);
         echo json_encode([
             'po' => $po, 

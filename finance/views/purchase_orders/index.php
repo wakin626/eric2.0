@@ -15,36 +15,60 @@
                 <tr>
                     <th class="sortable" data-sort="po_number">PO Number</th>
                     <th>Customer</th>
-                    <th class="sortable" data-sort="total">Total Qty</th>
-                    <th class="sortable" data-sort="produced">Produced</th>
+                    <th>Item</th>
+                    <th class="sortable" data-sort="produced">Production Progress</th>
                     <th class="sortable" data-sort="delivered">Delivered</th>
-                    <th>Status</th>
                     <th class="sortable" data-sort="date">Date Created</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody id="poTableBody">
                 <?php foreach ($purchase_orders as $po): 
-                    $produced = $po['produced_quantity'] ?? 0;
-                    $total = $po['total_quantity'] ?? 0;
-                    $delivered = $po['delivered_quantity'] ?? 0;
-                    $available = $produced - $delivered;
-                    if ($available < 0) $available = 0;
-                    $percent = $total > 0 ? round(($produced / $total) * 100) : 0;
+                    $items = $po_items_map[$po['po_id']] ?? [];
                 ?>
                 <tr>
                     <td><strong class="text-primary"><?= htmlspecialchars($po['customer_po_number']) ?></strong></td>
                     <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
-                    <td><?= $total ?></td>
-                    <td><?= $produced ?></td>
-                    <td><?= $delivered ?></td>
                     <td>
-                        <?php if ($available > 0): ?>
-                            <span class="badge bg-warning">Ready to Deliver</span>
-                        <?php elseif ($delivered >= $total && $total > 0): ?>
-                            <span class="badge bg-success">Fully Delivered</span>
+                        <?php if (!empty($items)): ?>
+                            <?php foreach ($items as $idx => $item): ?>
+                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                            <?php endforeach; ?>
                         <?php else: ?>
-                            <span class="badge bg-secondary">Pending</span>
+                            <small class="text-muted">-</small>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (!empty($items)): ?>
+                            <?php foreach ($items as $idx => $item):
+                                $qty = $item['quantity'] ?? 0;
+                                $itemProduced = $item['produced_quantity'] ?? 0;
+                                $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                            ?>
+                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
+                                        <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                    </div>
+                                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <small class="text-muted">-</small>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (!empty($items)): ?>
+                            <?php foreach ($items as $idx => $item):
+                                $itemQty = $item['quantity'] ?? 0;
+                                $itemDelivered = $item['delivered_quantity'] ?? 0;
+                            ?>
+                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?></small>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
                     <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
@@ -56,7 +80,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($purchase_orders)): ?>
-                <tr><td colspan="8" class="text-center text-muted py-4">No purchase orders found</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">No purchase orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -79,7 +103,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>PO Details</h5>
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>PO Details - <span id="viewPONumber"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="poDetailBody">
@@ -132,51 +156,82 @@ function viewPODetails(poId) {
             const items = data.po_items;
             const deliveries = data.deliveries;
             const receipts = data.receipts;
-            const produced = parseInt(po.produced_quantity) || 0;
-            const delivered = parseInt(po.delivered_quantity) || 0;
-            const total = parseInt(po.total_quantity) || 0;
-            const available = produced - delivered;
-            const percent = total > 0 ? Math.round((produced / total) * 100) : 0;
+
+            document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
 
             let html = `
                 <div class="row mb-3">
-                    <div class="col-md-6">
-                        <strong>PO Number:</strong> ${po.customer_po_number}<br>
-                        <strong>Customer:</strong> ${po.customer_name}<br>
-                        <strong>Customer Code:</strong> ${po.customer_code || '-'}
+                    <div class="col-md-3">
+                        <p class="mb-1"><strong>Customer Code:</strong></p>
+                        <p class="text-muted">${po.customer_code || '-'}</p>
                     </div>
-                    <div class="col-md-6">
-                        <strong>Total Required:</strong> ${total}<br>
-                        <strong>Produced:</strong> ${produced}<br>
-                        <strong>Delivered:</strong> ${delivered}<br>
-                        <strong>Available:</strong> <span class="badge bg-success">${available > 0 ? available : 0}</span>
+                    <div class="col-md-3">
+                        <p class="mb-1"><strong>Customer Name:</strong></p>
+                        <p class="text-muted">${po.customer_name || '-'}</p>
+                    </div>
+                    <div class="col-md-3">
+                        <p class="mb-1"><strong>Customer TIN:</strong></p>
+                        <p class="text-muted">${po.customer_tin || '-'}</p>
+                    </div>
+                    <div class="col-md-3">
+                        <p class="mb-1"><strong>Terms:</strong></p>
+                        <p class="text-muted">${(po.customer_terms || 0)} days</p>
                     </div>
                 </div>
-                <div class="progress mb-3" style="height: 20px;">
-                    <div class="progress-bar ${percent >= 100 ? 'bg-success' : 'bg-warning'}" style="width: ${percent}%">${percent}%</div>
-                </div>
-                <hr>
-                <h6><i class="bi bi-box me-1"></i>Order Items</h6>
-                <table class="table table-sm table-bordered mb-3">
-                    <thead><tr><th>Item</th><th>Description</th><th>Qty</th></tr></thead>
-                    <tbody>`;
-            items.forEach(item => {
-                html += `<tr>
-                    <td>${item.item_code}</td>
-                    <td>${item.item_description}</td>
-                    <td>${item.quantity}</td>
-                </tr>`;
-            });
-            html += `</tbody></table>`;
+                <h5 class="mb-3">Items</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Item Code</th>
+                                <th>Description</th>
+                                <th>UOM</th>
+                                <th>Quantity</th>
+                                <th>Production Progress</th>
+                                <th>Delivered</th>
+                                <th>Remaining</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            if (items && items.length > 0) {
+                items.forEach(item => {
+                    const qty = item.quantity || 0;
+                    const itemProduced = item.produced_quantity || 0;
+                    const itemDelivered = item.delivered_quantity || 0;
+                    const remaining = Math.max(0, qty - itemDelivered);
+                    const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
+                    const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                    html += `<tr>
+                        <td>${item.item_code || '-'}</td>
+                        <td>${item.item_description || '-'}</td>
+                        <td>${item.item_uom || '-'}</td>
+                        <td>${qty}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
+                                    <div class="progress-bar ${barClass}" style="width: ${itemPercent}%"></div>
+                                </div>
+                                <small class="text-muted">${itemProduced}/${qty}</small>
+                            </div>
+                        </td>
+                        <td><small class="text-muted">${itemDelivered}/${qty}</small></td>
+                        <td><small class="badge ${remaining <= 0 ? 'bg-success' : 'bg-warning'}">${remaining}</small></td>
+                    </tr>`;
+                });
+            } else {
+                html += '<tr><td colspan="7" class="text-center text-muted py-3">No items found</td></tr>';
+            }
+            html += `</tbody></table></div>`;
 
             if (deliveries && deliveries.length > 0) {
-                html += `<h6><i class="bi bi-truck me-1"></i>Delivery History</h6>
+                html += `<h6 class="mt-3"><i class="bi bi-truck me-1"></i>Delivery History</h6>
                 <table class="table table-sm table-bordered mb-3">
-                    <thead><tr><th>Date</th><th>Qty</th><th>By</th><th>Remarks</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>By</th><th>Remarks</th></tr></thead>
                     <tbody>`;
                 deliveries.forEach(d => {
                     html += `<tr>
                         <td>${d.delivery_date}</td>
+                        <td>${d.item_description || '-'}</td>
                         <td>${d.delivery_quantity}</td>
                         <td>${d.delivered_by_name || '-'}</td>
                         <td>${d.remarks || '-'}</td>
@@ -196,10 +251,6 @@ function viewPODetails(poId) {
                 });
                 html += `</ul>`;
             }
-
-            html += `<div class="text-end">
-                <a href="?controller=finance&action=viewDelivery&id=${po.po_id}" class="btn btn-primary btn-sm">View Full Details</a>
-            </div>`;
 
             body.innerHTML = html;
         });
