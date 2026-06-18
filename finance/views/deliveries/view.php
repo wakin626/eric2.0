@@ -46,16 +46,35 @@
                             <th>UOM</th>
                             <th>Size</th>
                             <th>Qty</th>
+                            <th>Production Progress</th>
+                            <th>Delivered</th>
+                            <th>Remaining</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($po_items as $item): ?>
+                        <?php foreach ($po_items as $item):
+                            $qty = $item['quantity'] ?? 0;
+                            $itemProduced = $item['produced_quantity'] ?? 0;
+                            $itemDelivered = $item['delivered_quantity'] ?? 0;
+                            $remaining = max(0, $qty - $itemDelivered);
+                            $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                        ?>
                         <tr>
                             <td><strong><?= htmlspecialchars($item['item_code']) ?></strong></td>
                             <td><?= htmlspecialchars($item['item_description']) ?></td>
                             <td><?= htmlspecialchars($item['item_uom']) ?></td>
                             <td><?= htmlspecialchars($item['item_size'] ?? '-') ?></td>
-                            <td><?= $item['quantity'] ?></td>
+                            <td><?= $qty ?></td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
+                                        <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                    </div>
+                                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                </div>
+                            </td>
+                            <td><small class="text-muted"><?= $itemDelivered ?>/<?= $qty ?></small></td>
+                            <td><small class="badge <?= $remaining <= 0 ? 'bg-success' : 'bg-warning' ?>"><?= $remaining ?></small></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -64,40 +83,6 @@
         </div>
         <?php endif; ?>
 
-        <div class="card data-card">
-            <div class="card-header">
-                <i class="bi bi-truck me-2"></i>PO Delivery Summary
-            </div>
-            <div class="card-body">
-                <?php 
-                $total = $po['total_quantity'] ?? 0;
-                $produced = $po['produced_quantity'] ?? 0;
-                $delivered = $po['delivered_quantity'] ?? 0;
-                $percent = $total > 0 ? round(($produced / $total) * 100) : 0;
-                ?>
-                <div class="row text-center">
-                    <div class="col-md-3">
-                        <h5><?= $total ?></h5>
-                        <small class="text-muted">Total Required</small>
-                    </div>
-                    <div class="col-md-3">
-                        <h5><?= $produced ?></h5>
-                        <small class="text-muted">Produced</small>
-                    </div>
-                    <div class="col-md-3">
-                        <h5><?= $delivered ?></h5>
-                        <small class="text-muted">Delivered</small>
-                    </div>
-                    <div class="col-md-3">
-                        <h5><?= max(0, $produced - $delivered) ?></h5>
-                        <small class="text-muted">Available</small>
-                    </div>
-                </div>
-                <div class="progress mt-3" style="height: 20px;">
-                    <div class="progress-bar <?= $percent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $percent ?>%"><?= $percent ?>%</div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <div class="col-md-4">
