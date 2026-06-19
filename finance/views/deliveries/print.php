@@ -14,7 +14,7 @@
 
         body {
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             color: #000;
             background: #e0e0e0;
         }
@@ -48,7 +48,7 @@
             top: 1.65in;
             right: 0.65in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -59,7 +59,7 @@
             top: 2.3in;
             left: 1.45in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -70,7 +70,7 @@
             top: 2.5in;
             left: 1.55in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -81,7 +81,7 @@
             top: 2.8in;
             left: 1.4in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -92,7 +92,7 @@
             top: 2.2in;
             right: 0.72in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -103,7 +103,7 @@
             top: 2.45in;
             right: 0.6in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -114,7 +114,7 @@
             top: 2.75in;
             right: 0.75in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -122,11 +122,11 @@
         /* ─── Item Description ─── */
         .print-item-desc {
             position: absolute;
-            top: 4.15in;
+            top: 3.85in;
             left: 0.55in;
             width: 4.2in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: left;
             overflow: hidden;
             white-space: nowrap;
@@ -136,44 +136,44 @@
         /* ─── Item Unit ─── */
         .print-item-unit {
             position: absolute;
-            top: 4.15in;
-            left: 5.0in;
+            top: 3.85in;
+            left: 5.5in;
             width: 0.6in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: center;
         }
 
         /* ─── Item Qty ─── */
         .print-item-qty {
             position: absolute;
-            top: 4.15in;
-            left: 5.6in;
+            top: 3.85in;
+            left: 5.8in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: right;
         }
 
         /* ─── Item Price ─── */
         .print-item-price {
             position: absolute;
-            top: 4.15in;
-            left: 6.3in;
+            top: 3.85in;
+            left: 6.4in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: right;
         }
 
         /* ─── Item Amount ─── */
         .print-item-amount {
             position: absolute;
-            top: 4.15in;
+           top: 3.85in;
             left: 7.0in;
             width: 1.1in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: right;
         }
 
@@ -183,7 +183,7 @@
             bottom: 2.0in;
             left: 3.5in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             line-height: 1.8;
         }
 

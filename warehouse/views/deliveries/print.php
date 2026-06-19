@@ -14,7 +14,7 @@
 
         body {
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             color: #000;
             background: #e0e0e0;
         }
@@ -51,7 +51,7 @@
             top: 1.8in;
             right: 0.5in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -62,7 +62,7 @@
             top: 2.2in;
             left: 1.35in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -73,7 +73,7 @@
             top: 2.4in;
             left: 1.35in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -84,7 +84,7 @@
             top: 2.6in;
             left: 1.35in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -95,7 +95,7 @@
             top: 2.2in;
             right: 0.5in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -106,7 +106,7 @@
             top: 2.4in;
             right: 0.5in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -117,7 +117,7 @@
             top: 2.6in;
             right: 0.5in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
@@ -129,7 +129,7 @@
             left: 0.55in;
             width: 4.2in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: left;
             overflow: hidden;
             white-space: nowrap;
@@ -143,7 +143,7 @@
             left: 5.0in;
             width: 0.6in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: center;
         }
 
@@ -154,7 +154,7 @@
             left: 5.6in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: right;
         }
 
@@ -165,7 +165,7 @@
             left: 6.3in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: right;
         }
 
@@ -176,7 +176,7 @@
             left: 7.0in;
             width: 1.1in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             text-align: right;
         }
 
@@ -186,7 +186,7 @@
             bottom: 3.0in;
             left: 3.5in;
             font-family: Calibri, sans-serif;
-            font-size: 11px;
+            font-size: 11pt;
             line-height: 1.8;
         }
 
