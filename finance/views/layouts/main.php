@@ -43,23 +43,24 @@
                     <small><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
                 <ul class="nav flex-column mt-2 sidebar-menu">
+                    <?php $currentAction = $_GET['action'] ?? ''; ?>
                     <li class="nav-item">
-                        <a class="nav-link <?= ($page_title ?? '') === 'Finance Dashboard' ? 'active' : '' ?>" href="?controller=finance">
+                        <a class="nav-link <?= $currentAction === '' ? 'active' : '' ?>" href="?controller=finance">
                             <i class="bi bi-speedometer2 me-2"></i>Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= strpos($page_title ?? '', 'Customer PO') !== false ? 'active' : '' ?>" href="?controller=finance&action=purchaseOrders">
+                        <a class="nav-link <?= $currentAction === 'purchaseOrders' ? 'active' : '' ?>" href="?controller=finance&action=purchaseOrders">
                             <i class="bi bi-cart3 me-2"></i>Customer PO
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= strpos($page_title ?? '', 'Ready to Deliver') !== false ? 'active' : '' ?>" href="?controller=finance&action=readyToDeliver">
+                        <a class="nav-link <?= $currentAction === 'readyToDeliver' ? 'active' : '' ?>" href="?controller=finance&action=readyToDeliver">
                             <i class="bi bi-box-seam me-2"></i>Ready to Deliver
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= strpos($page_title ?? '', 'Delivery') !== false && strpos($page_title ?? '', 'Ready') === false ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
+                        <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
                             <i class="bi bi-truck me-2"></i>Deliveries
                         </a>
                     </li>
