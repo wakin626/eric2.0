@@ -34,13 +34,13 @@
             background: #fff;
             margin: 10px auto;
             font-family: 'Courier New', monospace;
-            border: 2px solid #000;
+            /* border removed for print */
         }
 
         /* ─── Date (top right) ─── */
         .print-date {
             position: absolute;
-            top: 0.5in;
+            top: 0.8in;
             right: 0.5in;
             font-family: 'Courier New', monospace;
             font-size: 11px;
@@ -51,7 +51,7 @@
         /* ─── Company Info (center-left) ─── */
         .print-company-info {
             position: absolute;
-            top: 0.9in;
+            top: 1.2in;
             left: 1.35in;
             font-family: 'Courier New', monospace;
             font-size: 11px;
@@ -63,7 +63,7 @@
         /* ─── Terms (right side, same row as company) ─── */
         .print-terms {
             position: absolute;
-            top: 0.9in;
+            top: 1.2in;
             right: 0.5in;
             font-family: 'Courier New', monospace;
             font-size: 11px;
@@ -74,7 +74,7 @@
         /* ─── Customer Code (right side, below terms) ─── */
         .print-customer-code {
             position: absolute;
-            top: 1.1in;
+            top: 1.4in;
             right: 0.5in;
             font-family: 'Courier New', monospace;
             font-size: 11px;
@@ -85,7 +85,7 @@
         /* ─── PO Number (right side, below customer code) ─── */
         .print-po-number {
             position: absolute;
-            top: 1.3in;
+            top: 1.6in;
             right: 0.5in;
             font-family: 'Courier New', monospace;
             font-size: 11px;
@@ -96,7 +96,7 @@
         /* ─── Item Row (single line) ─── */
         .print-item-row {
             position: absolute;
-            top: 2.55in;
+            top: 2.85in;
             left: 0.4in;
             width: 7.7in;
             font-family: 'Courier New', monospace;
