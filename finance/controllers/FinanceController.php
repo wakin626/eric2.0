@@ -185,6 +185,11 @@ class FinanceController {
         exit;
     }
 
+    public function printSalesInvoice() {
+        include __DIR__ . "/../views/deliveries/print.php";
+        exit;
+    }
+
     private function render($view, $data = []) {
         extract($data);
         ob_start();

@@ -87,6 +87,14 @@
 
     <div class="col-md-4">
         <div class="card data-card mb-4">
+            <div class="card-body">
+                <a href="?controller=finance&action=printSalesInvoice" target="_blank" class="btn btn-primary w-100">
+                    <i class="bi bi-printer me-2"></i>Print Sales Invoice
+                </a>
+            </div>
+        </div>
+
+        <div class="card data-card mb-4">
             <div class="card-header">
                 <i class="bi bi-paperclip me-2"></i>Delivery Receipts
             </div>
