@@ -122,23 +122,63 @@
             text-align: left;
         }
 
-        /* ─── Item Row (single line) ─── */
-        .print-item-row {
+        /* ─── Item Description ─── */
+        .print-item-desc {
             position: absolute;
             top: 4.15in;
-            left: 0.4in;
-            width: 7.7in;
+            left: 0.55in;
+            width: 4.2in;
             font-family: Calibri, sans-serif;
             font-size: 11px;
-            display: flex;
+            text-align: left;
             overflow: hidden;
+            white-space: nowrap;
+            text-overflow: clip;
         }
 
-        .print-item-row .col-desc     { flex: 1; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: clip; padding-left: 0.15in; }
-        .print-item-row .col-unit     { width: 0.5in; text-align: center; flex-shrink: 0; }
-        .print-item-row .col-qty      { width: 0.7in; text-align: right; flex-shrink: 0; }
-        .print-item-row .col-price    { width: 0.7in; text-align: right; flex-shrink: 0; }
-        .print-item-row .col-amount   { width: 1in; text-align: right; flex-shrink: 0; }
+        /* ─── Item Unit ─── */
+        .print-item-unit {
+            position: absolute;
+            top: 4.15in;
+            left: 5.0in;
+            width: 0.6in;
+            font-family: Calibri, sans-serif;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        /* ─── Item Qty ─── */
+        .print-item-qty {
+            position: absolute;
+            top: 4.15in;
+            left: 5.6in;
+            width: 0.8in;
+            font-family: Calibri, sans-serif;
+            font-size: 11px;
+            text-align: right;
+        }
+
+        /* ─── Item Price ─── */
+        .print-item-price {
+            position: absolute;
+            top: 4.15in;
+            left: 6.3in;
+            width: 0.8in;
+            font-family: Calibri, sans-serif;
+            font-size: 11px;
+            text-align: right;
+        }
+
+        /* ─── Item Amount ─── */
+        .print-item-amount {
+            position: absolute;
+            top: 4.15in;
+            left: 7.0in;
+            width: 1.1in;
+            font-family: Calibri, sans-serif;
+            font-size: 11px;
+            text-align: right;
+        }
 
         /* ─── Totals Block (lower right) ─── */
         .print-totals-block {
@@ -216,14 +256,12 @@
     <!-- PO NUMBER (right side) -->
     <div class="print-po-number">16529</div>
 
-    <!-- ITEM ROW (single line) -->
-    <div class="print-item-row">
-        <div class="col-desc">Empress Shampoo Long and Healthy 21mlx24pck (11+1)</div>
-        <div class="col-unit">Pck</div>
-        <div class="col-qty">4,224</div>
-        <div class="col-price">29.75</div>
-        <div class="col-amount">125,664.00</div>
-    </div>
+    <!-- ITEM ROW (individual elements) -->
+    <div class="print-item-desc">Empress Shampoo Long and Healthy 21mlx24pck (11+1)</div>
+    <div class="print-item-unit">Pck</div>
+    <div class="print-item-qty">4,224</div>
+    <div class="print-item-price">29.75</div>
+    <div class="print-item-amount">125,664.00</div>
 
     <!-- TOTALS BLOCK -->
     <div class="print-totals-block">
