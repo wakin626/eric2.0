@@ -96,7 +96,7 @@
         /* ─── Item Row (single line) ─── */
         .print-item-row {
             position: absolute;
-            top: 2.85in;
+            top: 3.15in;
             left: 0.4in;
             width: 7.7in;
             font-family: 'Courier New', monospace;
