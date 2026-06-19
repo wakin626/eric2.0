@@ -32,10 +32,9 @@
             </div>
         </div>
 
-        <?php if (!empty($po_items)): ?>
         <div class="card data-card mb-4">
             <div class="card-header">
-                <i class="bi bi-box me-2"></i>PO Items
+                <i class="bi bi-box me-2"></i>Delivered Item
             </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -45,25 +44,25 @@
                             <th>Description</th>
                             <th>UOM</th>
                             <th>Size</th>
-                            <th>Qty</th>
+                            <th>Qty Ordered</th>
                             <th>Production Progress</th>
                             <th>Delivered</th>
                             <th>Remaining</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($po_items as $item):
-                            $qty = $item['quantity'] ?? 0;
-                            $itemProduced = $item['produced_quantity'] ?? 0;
-                            $itemDelivered = $item['delivered_quantity'] ?? 0;
+                        <?php if (!empty($poi_item)):
+                            $qty = $poi_item['quantity'] ?? 0;
+                            $itemProduced = $poi_item['produced_quantity'] ?? 0;
+                            $itemDelivered = $poi_item['delivered_quantity'] ?? 0;
                             $remaining = max(0, $qty - $itemDelivered);
                             $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
                         ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars($item['item_code']) ?></strong></td>
-                            <td><?= htmlspecialchars($item['item_description']) ?></td>
-                            <td><?= htmlspecialchars($item['item_uom']) ?></td>
-                            <td><?= htmlspecialchars($item['item_size'] ?? '-') ?></td>
+                            <td><strong><?= htmlspecialchars($poi_item['item_code']) ?></strong></td>
+                            <td><?= htmlspecialchars($poi_item['item_description']) ?></td>
+                            <td><?= htmlspecialchars($poi_item['item_uom']) ?></td>
+                            <td><?= htmlspecialchars($poi_item['item_size'] ?? '-') ?></td>
                             <td><?= $qty ?></td>
                             <td>
                                 <div class="d-flex align-items-center">
@@ -76,12 +75,13 @@
                             <td><small class="text-muted"><?= $itemDelivered ?>/<?= $qty ?></small></td>
                             <td><small class="badge <?= $remaining <= 0 ? 'bg-success' : 'bg-warning' ?>"><?= $remaining ?></small></td>
                         </tr>
-                        <?php endforeach; ?>
+                        <?php else: ?>
+                        <tr><td colspan="8" class="text-center text-muted py-3">Item not found</td></tr>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
-        <?php endif; ?>
 
     </div>
 

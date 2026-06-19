@@ -64,11 +64,14 @@ class FinanceModel extends BaseModel {
 
     public function getAllDeliveries() {
         $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, 
-                c.customer_name, u.full_name as delivered_by_name
+                c.customer_name, u.full_name as delivered_by_name,
+                i.item_code, i.item_description
                 FROM deliveries d 
                 LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON d.delivered_by = u.user_id 
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
                 WHERE d.`remove` = 0
                 ORDER BY d.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -79,14 +82,27 @@ class FinanceModel extends BaseModel {
     public function getDeliveryById($id) {
         $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity,
                 c.customer_name, c.customer_code, c.customer_address, c.customer_tin,
-                u.full_name as delivered_by_name
+                u.full_name as delivered_by_name,
+                i.item_code, i.item_description, i.item_uom, i.item_size
                 FROM deliveries d 
                 LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON d.delivered_by = u.user_id 
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
                 WHERE d.delivery_id = :id";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
+        return $stmt->fetch();
+    }
+
+    public function getDeliveryPoiItem($poi_id) {
+        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.item_size 
+                FROM purchase_order_items poi 
+                LEFT JOIN items i ON poi.item_id = i.item_id 
+                WHERE poi.poi_id = :poi_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id]);
         return $stmt->fetch();
     }
 

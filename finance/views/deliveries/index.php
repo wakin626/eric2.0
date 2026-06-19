@@ -15,10 +15,10 @@
                 <tr>
                     <th>PO Number</th>
                     <th>Customer</th>
+                    <th>Item</th>
                     <th>Delivery Date</th>
                     <th>Quantity</th>
                     <th>Delivered By</th>
-                    <th>Remarks</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -27,13 +27,13 @@
                 <tr>
                     <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                    <td><small><?= htmlspecialchars($d['item_description'] ?? '-') ?></small></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= $d['delivery_quantity'] ?? 0 ?></td>
                     <td><?= htmlspecialchars($d['delivered_by_name'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($d['remarks'] ?? '-') ?></td>
                     <td class="text-center">
-                        <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-success" title="View & Attach Receipt">
-                            <i class="bi bi-paperclip"></i>
+                        <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-primary" title="View Delivery">
+                            <i class="bi bi-eye"></i>
                         </a>
                     </td>
                 </tr>

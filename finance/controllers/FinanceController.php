@@ -69,8 +69,7 @@ class FinanceController {
         $id = $_GET['id'] ?? null;
         $data['delivery'] = $this->financeModel->getDeliveryById($id);
         $data['receipts'] = $this->financeModel->getReceiptsByDelivery($id);
-        $data['po'] = $this->financeModel->getPurchaseOrderById($data['delivery']['po_id'] ?? 0);
-        $data['po_items'] = $this->financeModel->getPurchaseOrderItems($data['delivery']['po_id'] ?? 0);
+        $data['poi_item'] = $this->financeModel->getDeliveryPoiItem($data['delivery']['poi_id'] ?? 0);
         $data['page_title'] = 'Delivery Details';
         $this->render('deliveries/view', $data);
     }
