@@ -2,9 +2,13 @@
     <div>
         <span class="text-muted">Showing <?= count($deliveries) ?> of <?= $total ?> deliveries</span>
     </div>
-    <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchDelivery" class="form-control" placeholder="Search delivery...">
+    <div class="d-flex gap-2">
+        <input type="date" id="filterDateFrom" class="form-control form-control-sm" style="width: 160px;" title="From date">
+        <input type="date" id="filterDateTo" class="form-control form-control-sm" style="width: 160px;" title="To date">
+        <div class="search-box" style="width: 250px;">
+            <i class="bi bi-search"></i>
+            <input type="text" id="searchDelivery" class="form-control" placeholder="Search delivery...">
+        </div>
     </div>
 </div>
 
@@ -13,18 +17,18 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
-                    <th>PO Number</th>
-                    <th>Customer</th>
-                    <th>Item</th>
-                    <th>Delivery Date</th>
-                    <th>Quantity</th>
-                    <th>Delivered By</th>
+                    <th class="sortable" data-sort="po_number">PO Number <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="date">Delivery Date <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="quantity">Quantity <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="by">Delivered By <i class="bi bi-chevron-expand"></i></th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody id="deliveryTableBody">
                 <?php foreach ($deliveries as $d): ?>
-                <tr>
+                <tr data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>">
                     <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><small><?= htmlspecialchars($d['item_description'] ?? '-') ?></small></td>
@@ -59,10 +63,50 @@
 <?php endif; ?>
 
 <script>
-document.getElementById('searchDelivery').addEventListener('keyup', function() {
-    const query = this.value.toLowerCase();
+function filterTable() {
+    const query = document.getElementById('searchDelivery').value.toLowerCase();
+    const dateFrom = document.getElementById('filterDateFrom').value;
+    const dateTo = document.getElementById('filterDateTo').value;
     document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
+        const text = row.textContent.toLowerCase();
+        const rowDate = row.getAttribute('data-date') || '';
+        const matchesSearch = text.includes(query);
+        const matchesFrom = !dateFrom || rowDate >= dateFrom;
+        const matchesTo = !dateTo || rowDate <= dateTo;
+        row.style.display = (matchesSearch && matchesFrom && matchesTo) ? '' : 'none';
+    });
+}
+
+document.getElementById('searchDelivery').addEventListener('keyup', filterTable);
+document.getElementById('filterDateFrom').addEventListener('change', filterTable);
+document.getElementById('filterDateTo').addEventListener('change', filterTable);
+
+document.querySelectorAll('.sortable').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', function() {
+        const table = document.querySelector('table');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const col = this.cellIndex;
+        const asc = !this.classList.contains('asc');
+
+        table.querySelectorAll('.sortable').forEach(h => {
+            h.classList.remove('asc', 'desc');
+            h.querySelector('i').className = 'bi bi-chevron-expand';
+        });
+
+        this.classList.add(asc ? 'asc' : 'desc');
+        this.querySelector('i').className = asc ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+
+        rows.sort((a, b) => {
+            let aVal = a.cells[col].textContent.trim();
+            let bVal = b.cells[col].textContent.trim();
+            if (!isNaN(aVal) && !isNaN(bVal)) {
+                return asc ? aVal - bVal : bVal - aVal;
+            }
+            return asc ? aVal.localeCompare(bVal, undefined, {numeric: true}) : bVal.localeCompare(aVal, undefined, {numeric: true});
+        });
+        rows.forEach(row => tbody.appendChild(row));
     });
 });
 </script>
