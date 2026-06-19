@@ -7,6 +7,11 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             font-family: 'Courier New', monospace;
             font-size: 11px;
@@ -144,13 +149,12 @@
         @media print {
             @page {
                 size: 8.5in 11in;
-                margin: 0;
+                margin: 0 !important;
             }
 
-            body {
-                background: none;
-                padding: 0;
-                margin: 0;
+            html, body {
+                padding: 0 !important;
+                margin: 0 !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
@@ -158,7 +162,8 @@
             .no-print { display: none !important; }
 
             .receipt-container {
-                margin: 0;
+                margin: 0 !important;
+                padding: 0 !important;
                 box-shadow: none;
                 background: #fff;
             }
