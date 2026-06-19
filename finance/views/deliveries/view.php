@@ -88,7 +88,7 @@
     <div class="col-md-4">
         <div class="card data-card mb-4">
             <div class="card-body">
-                <a href="?controller=finance&action=printSalesInvoice" target="_blank" class="btn btn-primary w-100">
+                <a href="?controller=finance&action=printSalesInvoice&t=<?= time() ?>" target="_blank" class="btn btn-primary w-100">
                     <i class="bi bi-printer me-2"></i>Print Sales Invoice
                 </a>
             </div>

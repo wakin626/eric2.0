@@ -259,7 +259,7 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
 document.querySelectorAll('.print-delivery-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
         var deliveryId = this.dataset.deliveryId;
-        window.open('?controller=warehouse&action=printDelivery&id=' + deliveryId, '_blank');
+        window.open('?controller=warehouse&action=printDelivery&id=' + deliveryId + '&t=' + Date.now(), '_blank');
     });
 });
 </script>
