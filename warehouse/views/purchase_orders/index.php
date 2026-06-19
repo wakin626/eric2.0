@@ -63,8 +63,9 @@
                         <td><?= htmlspecialchars($po['requested_by_name'] ?? '-') ?></td>
                         <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
                         <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
-                                <i class="bi bi-eye"></i>
+                            <button type="button" class="btn-anim-view view-po-btn" data-po-id="<?= $po['po_id'] ?>">
+                                <span class="text">View</span>
+                                <span class="icon"><i class="bi bi-eye"></i></span>
                             </button>
                         </td>
                     </tr>

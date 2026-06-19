@@ -137,7 +137,7 @@
         .print-item-unit {
             position: absolute;
             top: 3.85in;
-            left: 5.5in;
+            left: 5.3in;
             width: 0.6in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -148,7 +148,7 @@
         .print-item-qty {
             position: absolute;
             top: 3.85in;
-            left: 5.8in;
+            left: 5.6in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -159,7 +159,7 @@
         .print-item-price {
             position: absolute;
             top: 3.85in;
-            left: 6.4in;
+            left: 6.2in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
