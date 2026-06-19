@@ -13,7 +13,7 @@
         }
 
         body {
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             color: #000;
             background: #e0e0e0;
@@ -38,7 +38,7 @@
             overflow: hidden;
             background: #fff;
             margin: 10px auto;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             /* border removed for print */
             /*
             outline: 1px dashed red;
@@ -48,9 +48,9 @@
         /* ─── Date (top right) ─── */
         .print-date {
             position: absolute;
-            top: 1.5in;
+            top: 1.8in;
             right: 0.5in;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
             text-align: left;
@@ -59,9 +59,9 @@
         /* ─── Company Info (center-left) ─── */
         .print-company-info {
             position: absolute;
-            top: 1.9in;
+            top: 2.2in;
             left: 1.35in;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
             text-align: left;
@@ -71,9 +71,9 @@
         /* ─── Terms (right side, same row as company) ─── */
         .print-terms {
             position: absolute;
-            top: 1.9in;
+            top: 2.2in;
             right: 0.5in;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
             text-align: left;
@@ -82,9 +82,9 @@
         /* ─── Customer Code (right side, below terms) ─── */
         .print-customer-code {
             position: absolute;
-            top: 2.1in;
+            top: 2.4in;
             right: 0.5in;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
             text-align: left;
@@ -93,9 +93,9 @@
         /* ─── PO Number (right side, below customer code) ─── */
         .print-po-number {
             position: absolute;
-            top: 2.3in;
+            top: 2.6in;
             right: 0.5in;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
             text-align: left;
@@ -104,16 +104,16 @@
         /* ─── Item Row (single line) ─── */
         .print-item-row {
             position: absolute;
-            top: 3.85in;
+            top: 4.15in;
             left: 0.4in;
             width: 7.7in;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             display: flex;
             overflow: hidden;
         }
 
-        .print-item-row .col-desc     { flex: 1; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+        .print-item-row .col-desc     { flex: 1; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: clip; padding-left: 0.15in; }
         .print-item-row .col-unit     { width: 0.5in; text-align: center; flex-shrink: 0; }
         .print-item-row .col-qty      { width: 0.7in; text-align: right; flex-shrink: 0; }
         .print-item-row .col-price    { width: 0.7in; text-align: right; flex-shrink: 0; }
@@ -124,7 +124,7 @@
             position: absolute;
             bottom: 3.0in;
             left: 3.5in;
-            font-family: 'Courier New', monospace;
+            font-family: Calibri, sans-serif;
             font-size: 11px;
             line-height: 1.8;
         }
