@@ -45,16 +45,16 @@
         /* ─── Date (top right) ─── */
         .print-date {
             position: absolute;
-            top: 1.8in;
-            right: 0.5in;
+            top: 1.6in;
+            right: 0.7in;
             font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
             text-align: left;
         }
 
-        /* ─── Company Info (center-left) ─── */
-        .print-company-info {
+        /* ─── Company Name (center-left) ─── */
+        .print-company-name {
             position: absolute;
             top: 2.2in;
             left: 1.35in;
@@ -62,14 +62,35 @@
             font-size: 11px;
             font-weight: bold;
             text-align: left;
-            line-height: 1.5;
+        }
+
+        /* ─── Company TIN (center-left) ─── */
+        .print-company-tin {
+            position: absolute;
+            top: 2.4in;
+            left: 1.35in;
+            font-family: Calibri, sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        /* ─── Company Address (center-left) ─── */
+        .print-company-address {
+            position: absolute;
+            top: 2.6in;
+            left: 1.35in;
+            font-family: Calibri, sans-serif;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: left;
         }
 
         /* ─── Terms (right side, same row as company) ─── */
         .print-terms {
             position: absolute;
             top: 2.2in;
-            right: 0.5in;
+            right: 0.7in;
             font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
@@ -80,7 +101,7 @@
         .print-customer-code {
             position: absolute;
             top: 2.4in;
-            right: 0.5in;
+            right: 0.55in;
             font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
@@ -90,8 +111,8 @@
         /* ─── PO Number (right side, below customer code) ─── */
         .print-po-number {
             position: absolute;
-            top: 2.6in;
-            right: 0.5in;
+            top: 2.7in;
+            right: 0.71in;
             font-family: Calibri, sans-serif;
             font-size: 11px;
             font-weight: bold;
@@ -180,11 +201,9 @@
     <div class="print-date">3-Jun-2026</div>
 
     <!-- COMPANY INFO (center-left) -->
-    <div class="print-company-info">
-        <div>SKINTEC ADVANCE INCORPORATED</div>
-        <div>008-434-783-000</div>
-        <div>BYPASS ROAD BULIHAN PLARIDEL BULACAN 3004</div>
-    </div>
+    <div class="print-company-name">SKINTEC ADVANCE INCORPORATED</div>
+    <div class="print-company-tin">008-434-783-000</div>
+    <div class="print-company-address">BYPASS ROAD BULIHAN PLARIDEL BULACAN 3004</div>
 
     <!-- TERMS (right side) -->
     <div class="print-terms">90 DAYS</div>
