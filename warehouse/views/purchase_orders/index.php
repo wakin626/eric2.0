@@ -19,6 +19,7 @@
                         <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                         <th>Item</th>
                         <th>Status</th>
+                        <th>Type</th>
                         <th class="sortable" data-sort="created_by">Created By <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="date">Date Created <i class="bi bi-chevron-expand"></i></th>
                         <th class="text-center">Actions</th>
@@ -60,6 +61,13 @@
                                 <small class="text-muted">-</small>
                             <?php endif; ?>
                         </td>
+                        <td>
+                            <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
+                                <span class="badge bg-info">Advance</span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary">Normal</span>
+                            <?php endif; ?>
+                        </td>
                         <td><?= htmlspecialchars($po['requested_by_name'] ?? '-') ?></td>
                         <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
                         <td class="text-center">
@@ -70,7 +78,7 @@
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">No purchase orders found</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">No purchase orders found</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -144,13 +152,20 @@
                     </div>
 
                     <div class="row g-2 mb-4">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Customer PO Number</label>
                             <input type="text" name="customer_po_number" class="form-control" placeholder="Enter PO Number" required>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Customer PO Date</label>
                             <input type="date" name="customer_po_date" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Production Process</label>
+                            <select name="production_type" class="form-select" required>
+                                <option value="normal">Normal Production</option>
+                                <option value="advance">Advance Production</option>
+                            </select>
                         </div>
                     </div>
 

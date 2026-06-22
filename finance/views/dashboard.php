@@ -39,6 +39,7 @@
                     <th>Item</th>
                     <th>Production Progress</th>
                     <th>Available</th>
+                    <th>Type</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -92,6 +93,13 @@
                             <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
+                    <td>
+                        <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
+                            <span class="badge bg-info">Advance</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Normal</span>
+                        <?php endif; ?>
+                    </td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-outline-primary" onclick="viewPODetails(<?= $po['po_id'] ?>)" title="View Details">
                             <i class="bi bi-eye"></i>
@@ -100,7 +108,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($ready_to_deliver)): ?>
-                <tr><td colspan="6" class="text-center text-muted py-4">No POs ready to deliver</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">No POs ready to deliver</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

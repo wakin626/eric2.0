@@ -19,6 +19,7 @@
                     <th class="sortable" data-sort="total">Total Required <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="delivered">Delivered <i class="bi bi-chevron-expand"></i></th>
                     <th>Remaining Balance</th>
+                    <th>Type</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -88,6 +89,13 @@
                             <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
+                    <td>
+                        <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
+                            <span class="badge bg-info">Advance</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Normal</span>
+                        <?php endif; ?>
+                    </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
                             <i class="bi bi-eye"></i>
@@ -96,7 +104,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($purchase_orders)): ?>
-                <tr><td colspan="8" class="text-center text-muted py-4">No purchase orders found</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-4">No purchase orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

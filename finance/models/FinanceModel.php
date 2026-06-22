@@ -63,7 +63,7 @@ class FinanceModel extends BaseModel {
     }
 
     public function getAllDeliveries() {
-        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, 
+        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type,
                 c.customer_name, u.full_name as delivered_by_name,
                 i.item_code, i.item_description
                 FROM deliveries d 

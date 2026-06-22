@@ -28,15 +28,16 @@ class WarehouseModel extends BaseModel {
     }
 
     public function createPurchaseOrder($data) {
-        $sql = "INSERT INTO purchase_orders (customer_po_number, customer_po_date, customer_id, requested_by, customer_terms, date_created) 
-                VALUES (:customer_po_number, :customer_po_date, :customer_id, :requested_by, :customer_terms, NOW())";
+        $sql = "INSERT INTO purchase_orders (customer_po_number, customer_po_date, customer_id, requested_by, customer_terms, production_type, date_created) 
+                VALUES (:customer_po_number, :customer_po_date, :customer_id, :requested_by, :customer_terms, :production_type, NOW())";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'customer_po_number' => $data['customer_po_number'],
             'customer_po_date' => $data['customer_po_date'],
             'customer_id' => $data['customer_id'],
             'requested_by' => $data['requested_by'],
-            'customer_terms' => $data['customer_terms'] ?? 0
+            'customer_terms' => $data['customer_terms'] ?? 0,
+            'production_type' => $data['production_type'] ?? 'normal'
         ]);
         return self::getConnection()->lastInsertId();
     }
@@ -164,7 +165,7 @@ return $stmt->fetchAll();
     }
 
     public function getDeliveries() {
-        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, c.customer_name,
+        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type, c.customer_name,
                        poi.quantity as item_quantity, i.item_code, i.item_description
                 FROM deliveries d 
                 LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
@@ -210,19 +211,34 @@ return $stmt->fetchAll();
         return true;
     }
 
-    public function updateItemProducedQuantity($poi_id, $added_quantity) {
+    public function updateItemProducedQuantity($poi_id, $added_quantity, $user_id = null) {
         $conn = self::getConnection();
-        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity + :added WHERE poi_id = :poi_id")
-            ->execute(['added' => $added_quantity, 'poi_id' => $poi_id]);
 
-        $stmt = $conn->prepare("SELECT po_id FROM purchase_order_items WHERE poi_id = :poi_id");
+        $stmt = $conn->prepare("SELECT produced_quantity, po_id FROM purchase_order_items WHERE poi_id = :poi_id");
         $stmt->execute(['poi_id' => $poi_id]);
-        $row = $stmt->fetch();
-        if ($row) {
+        $item = $stmt->fetch();
+        $previous_quantity = $item['produced_quantity'] ?? 0;
+        $new_quantity = $previous_quantity + $added_quantity;
+
+        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
+            ->execute(['produced' => $new_quantity, 'poi_id' => $poi_id]);
+
+        if ($item) {
             $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
                 SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
             ) WHERE po_id = :po_id2")
-            ->execute(['po_id' => $row['po_id'], 'po_id2' => $row['po_id']]);
+            ->execute(['po_id' => $item['po_id'], 'po_id2' => $item['po_id']]);
+
+            if ($user_id) {
+                $conn->prepare("INSERT INTO production_history (po_id, user_id, previous_quantity, added_quantity, new_quantity, date_created) VALUES (:po_id, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())")
+                    ->execute([
+                        'po_id' => $item['po_id'],
+                        'user_id' => $user_id,
+                        'previous_quantity' => $previous_quantity,
+                        'added_quantity' => $added_quantity,
+                        'new_quantity' => $new_quantity
+                    ]);
+            }
         }
         return true;
     }
@@ -234,6 +250,30 @@ return $stmt->fetchAll();
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON ph.user_id = u.user_id 
                 ORDER BY ph.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getAdvanceProductionPOs() {
+        $sql = "SELECT po.*, c.customer_name, u.full_name as requested_by_name 
+                FROM purchase_orders po 
+                LEFT JOIN customers c ON po.customer_id = c.customer_id 
+                LEFT JOIN users u ON po.requested_by = u.user_id 
+                WHERE po.production_type = 'advance' AND po.`remove` = 0
+                ORDER BY po.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getNormalProductionPOs() {
+        $sql = "SELECT po.*, c.customer_name, u.full_name as requested_by_name 
+                FROM purchase_orders po 
+                LEFT JOIN customers c ON po.customer_id = c.customer_id 
+                LEFT JOIN users u ON po.requested_by = u.user_id 
+                WHERE po.production_type = 'normal' AND po.`remove` = 0
+                ORDER BY po.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();

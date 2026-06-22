@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     requested_by INT NOT NULL,
     total_quantity INT DEFAULT 0 COMMENT 'Total quantity for production tracking',
     customer_terms INT DEFAULT 0 COMMENT 'Payment terms in days',
+    production_type ENUM('normal','advance') DEFAULT 'normal' COMMENT 'normal=regular, advance=advance production',
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     active_status TINYINT(1) DEFAULT 1 COMMENT '0=inactive, 1=active',

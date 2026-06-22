@@ -34,6 +34,7 @@
                         <th>Item</th>
                         <th>Production Progress</th>
                         <th>Delivered</th>
+                        <th>Type</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -86,11 +87,18 @@
                                 <small class="text-muted">-</small>
                             <?php endif; ?>
                         </td>
+                        <td>
+                            <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
+                                <span class="badge bg-info">Advance</span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary">Normal</span>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-3">No customer PO yet</td>
+                        <td colspan="7" class="text-center text-muted py-3">No customer PO yet</td>
                     </tr>
                     <?php endif; ?>
                 </tbody>

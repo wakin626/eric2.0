@@ -52,7 +52,8 @@ class WarehouseController {
                 'customer_po_date' => $_POST['customer_po_date'],
                 'customer_id' => $_POST['customer_id'],
                 'requested_by' => $_SESSION['user_id'],
-                'customer_terms' => $_POST['customer_terms'] ?? 0
+                'customer_terms' => $_POST['customer_terms'] ?? 0,
+                'production_type' => $_POST['production_type'] ?? 'normal'
             ]);
 
             $items = json_decode($_POST['items_json'], true);

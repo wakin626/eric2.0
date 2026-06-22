@@ -33,6 +33,7 @@
                         <th>Customer</th>
                         <th>Item</th>
                         <th>Status</th>
+                        <th>Type</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -72,10 +73,17 @@
                                 <small class="text-muted">-</small>
                             <?php endif; ?>
                         </td>
+                        <td>
+                            <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
+                                <span class="badge bg-info">Advance</span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary">Normal</span>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-3">No purchase orders yet</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-3">No purchase orders yet</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -169,13 +177,20 @@
             <form method="POST" action="?controller=warehouse&action=createPO">
                 <div class="modal-body">
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">PO Number</label>
                             <input type="text" name="po_number" class="form-control" required>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">PO Date</label>
                             <input type="date" name="po_date" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Production Process</label>
+                            <select name="production_type" class="form-select" required>
+                                <option value="normal">Normal Production</option>
+                                <option value="advance">Advance Production</option>
+                            </select>
                         </div>
                     </div>
                     <div class="mb-3">

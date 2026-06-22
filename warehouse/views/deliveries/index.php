@@ -21,6 +21,7 @@
                     <th>Total Required</th>
                     <th>Delivered</th>
                     <th>Remaining Balance</th>
+                    <th>Type</th>
                     <th>Delivery Date</th>
                     <th>Remarks</th>
                     <th class="text-center">Action</th>
@@ -35,6 +36,13 @@
                     <td><?= $d['total_quantity'] ?? 0 ?></td>
                     <td><?= $d['delivery_quantity'] ?? 0 ?></td>
                     <td><?= ($d['total_quantity'] ?? 0) - ($d['delivered_quantity'] ?? 0) ?></td>
+                    <td>
+                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
+                            <span class="badge bg-info">Advance</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Normal</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= htmlspecialchars($d['remarks'] ?? '-') ?></td>
                     <td class="text-center">
@@ -45,7 +53,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="9" class="text-center text-muted py-4">No deliveries found</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No deliveries found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -78,8 +86,9 @@
                         <select name="po_id" id="poSelect" class="form-select" required>
                             <option value="">Select PO</option>
                             <?php foreach ($purchase_orders as $po): ?>
-                                <option value="<?= $po['po_id'] ?>">
+                                <option value="<?= $po['po_id'] ?>" data-type="<?= $po['production_type'] ?? 'normal' ?>">
                                     <?= $po['customer_po_number'] ?> - <?= $po['customer_name'] ?>
+                                    [<?= ($po['production_type'] ?? 'normal') === 'advance' ? 'Advance' : 'Normal' ?>]
                                 </option>
                             <?php endforeach; ?>
                         </select>

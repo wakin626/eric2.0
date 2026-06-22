@@ -63,6 +63,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link <?= strpos($page_title ?? '', 'Advance Production') !== false ? 'active' : '' ?>" href="?controller=production&action=advanceProduction">
+                            <i class="bi bi-lightning me-2"></i>Advance Production
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link <?= strpos($page_title ?? '', 'Production History') !== false ? 'active' : '' ?>" href="?controller=production&action=history">
                             <i class="bi bi-clock-history me-2"></i>Production History
                         </a>

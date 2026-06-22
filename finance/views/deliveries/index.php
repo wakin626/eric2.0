@@ -22,6 +22,7 @@
                     <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="date">Delivery Date <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="quantity">Quantity <i class="bi bi-chevron-expand"></i></th>
+                    <th>Type</th>
                     <th class="sortable" data-sort="by">Delivered By <i class="bi bi-chevron-expand"></i></th>
                     <th class="text-center">Actions</th>
                 </tr>
@@ -34,6 +35,13 @@
                     <td><small><?= htmlspecialchars($d['item_description'] ?? '-') ?></small></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= $d['delivery_quantity'] ?? 0 ?></td>
+                    <td>
+                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
+                            <span class="badge bg-info">Advance</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Normal</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($d['delivered_by_name'] ?? '-') ?></td>
                     <td class="text-center">
                         <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-primary" title="View Delivery">
@@ -43,7 +51,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="7" class="text-center text-muted py-4">No deliveries found</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-4">No deliveries found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

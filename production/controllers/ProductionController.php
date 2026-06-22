@@ -30,7 +30,7 @@ class ProductionController {
     }
 
     public function purchaseOrders() {
-        $allPOs = $this->warehouseModel->getPurchaseOrders();
+        $allPOs = $this->warehouseModel->getNormalProductionPOs();
         $pagination = Pagination::paginate($allPOs, 10);
         $poIds = array_column($pagination['items'], 'po_id');
         $data['purchase_orders'] = $pagination['items'];
@@ -51,14 +51,14 @@ class ProductionController {
                 $quantities = $_POST['added_quantity'];
                 foreach ($poi_ids as $i => $poi_id) {
                     if ($poi_id && isset($quantities[$i]) && $quantities[$i] > 0) {
-                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $quantities[$i]);
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $quantities[$i], $_SESSION['user_id']);
                     }
                 }
             } else {
                 $added_quantity = $_POST['added_quantity'];
                 $poi_id = $_POST['poi_id'] ?? null;
                 if ($poi_id) {
-                    $this->warehouseModel->updateItemProducedQuantity($poi_id, $added_quantity);
+                    $this->warehouseModel->updateItemProducedQuantity($poi_id, $added_quantity, $_SESSION['user_id']);
                 } else {
                     $this->warehouseModel->updateProducedQuantity($po_id, $added_quantity, $_SESSION['user_id']);
                 }
@@ -79,6 +79,19 @@ class ProductionController {
         $data['total'] = $pagination['total'];
         $data['page_title'] = 'Production History';
         $this->render('history/index', $data);
+    }
+
+    public function advanceProduction() {
+        $allPOs = $this->warehouseModel->getAdvanceProductionPOs();
+        $pagination = Pagination::paginate($allPOs, 10);
+        $poIds = array_column($pagination['items'], 'po_id');
+        $data['purchase_orders'] = $pagination['items'];
+        $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+        $data['page'] = $pagination['page'];
+        $data['totalPages'] = $pagination['totalPages'];
+        $data['total'] = $pagination['total'];
+        $data['page_title'] = 'Advance Production';
+        $this->render('advance_production/index', $data);
     }
 
     public function getPODetails() {

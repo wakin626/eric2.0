@@ -18,6 +18,7 @@
                     <th>Item</th>
                     <th class="sortable" data-sort="produced">Production Progress</th>
                     <th class="sortable" data-sort="delivered">Delivered</th>
+                    <th>Type</th>
                     <th class="sortable" data-sort="date">Date Created</th>
                     <th class="text-center">Actions</th>
                 </tr>
@@ -71,6 +72,13 @@
                             <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
+                    <td>
+                        <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
+                            <span class="badge bg-info">Advance</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Normal</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-outline-primary" onclick="viewPODetails(<?= $po['po_id'] ?>)" title="View Details">
@@ -80,7 +88,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($purchase_orders)): ?>
-                <tr><td colspan="7" class="text-center text-muted py-4">No purchase orders found</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-4">No purchase orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
