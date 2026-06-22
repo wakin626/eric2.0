@@ -65,7 +65,8 @@ class ProductionController {
             }
 
             $_SESSION['success'] = 'Production quantity updated successfully';
-            header('Location: ?controller=production&action=purchaseOrders');
+            $from = $_POST['from'] ?? 'purchaseOrders';
+            header('Location: ?controller=production&action=' . $from);
             exit;
         }
     }

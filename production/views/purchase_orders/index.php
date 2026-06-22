@@ -180,6 +180,7 @@
                 </div>
                 <form method="POST" action="?controller=production&action=updateQuantity" id="updatePOForm">
                     <input type="hidden" name="po_id" id="updatePoIdInput" value="">
+                    <input type="hidden" name="from" value="purchaseOrders">
 
                     <!-- Single item mode -->
                     <div id="singleItemGroup">
