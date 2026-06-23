@@ -1,7 +1,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeliveryModal">
-            <i class="bi bi-plus-circle me-1"></i> Create PO Delivery
+            <i class="bi bi-plus-circle me-1"></i> Create Delivery Receipt
         </button>
     </div>
     <div class="search-box" style="width: 300px;">
@@ -144,7 +144,7 @@
                         <input type="hidden" id="itemDelivered" value="0">
                     </div>
                     <div class="mb-3" id="itemQtyRow" style="display: none;">
-                        <label class="form-label">Item Quantity</label>
+                        <label class="form-label">PO Quantity</label>
                         <input type="text" id="itemQtyDisplay" class="form-control" readonly>
                     </div>
                     <div class="mb-3" id="availableRow" style="display: none;">

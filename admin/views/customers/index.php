@@ -8,7 +8,7 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
-                    <th>Code</th><th>Name</th><th>Delivery Address</th><th>TIN</th>
+                    <th>Code</th><th>Name</th><th>Delivery Address</th><th>Type</th><th>TIN</th>
                     <th>Status</th><th>Created</th><th>Updated</th><th>Actions</th>
                 </tr>
             </thead>
@@ -18,12 +18,19 @@
                     <td><strong class="text-primary"><?= $c['customer_code'] ?></strong></td>
                     <td><?= $c['customer_name'] ?></td>
                     <td><small><?= $c['customer_address'] ?? '-' ?></small></td>
+                    <td>
+                        <?php if (($c['customer_type'] ?? 'vat') === 'vat'): ?>
+                            <span class="badge bg-primary">VAT %</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Non-VAT</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= $c['customer_tin'] ?? '-' ?></td>
                     <td><span class="badge bg-<?= $c['status'] ? 'success' : 'secondary' ?>"><?= $c['status'] ? 'Active' : 'Inactive' ?></span></td>
                     <td><?= date('Y-m-d', strtotime($c['date_created'])) ?></td>
                     <td><?= date('Y-m-d H:i', strtotime($c['last_update'])) ?></td>
                     <td>
-                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#customerEditModal" data-id="<?= $c['customer_id'] ?>" data-code="<?= htmlspecialchars($c['customer_code']) ?>" data-name="<?= htmlspecialchars($c['customer_name']) ?>" data-address="<?= htmlspecialchars($c['customer_address'] ?? '') ?>" data-tin="<?= htmlspecialchars($c['customer_tin'] ?? '') ?>"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#customerEditModal" data-id="<?= $c['customer_id'] ?>" data-code="<?= htmlspecialchars($c['customer_code']) ?>" data-name="<?= htmlspecialchars($c['customer_name']) ?>" data-address="<?= htmlspecialchars($c['customer_address'] ?? '') ?>" data-type="<?= htmlspecialchars($c['customer_type'] ?? 'vat') ?>" data-tin="<?= htmlspecialchars($c['customer_tin'] ?? '') ?>"><i class="bi bi-pencil"></i></button>
                         <a href="?controller=admin&action=customerToggleStatus&id=<?= $c['customer_id'] ?>" class="btn btn-sm btn-warning"><i class="bi bi-toggle-on"></i></a>
                         <a href="?controller=admin&action=customerDelete&id=<?= $c['customer_id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
                     </td>
@@ -55,6 +62,7 @@
                     <div class="mb-3"><label class="form-label">Customer Code *</label><input type="text" name="customer_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Customer Name *</label><input type="text" name="customer_name" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Delivery Address</label><textarea name="customer_address" class="form-control"></textarea></div>
+                    <div class="mb-3"><label class="form-label">Type</label><select name="customer_type" class="form-select" required><option value="vat">VAT %</option><option value="non_vat">Non-VAT</option></select></div>
                     <div class="mb-3"><label class="form-label">TIN</label><input type="text" name="customer_tin" class="form-control"></div>
                 </div>
                 <div class="modal-footer">
@@ -76,6 +84,7 @@
                     <div class="mb-3"><label class="form-label">Customer Code *</label><input type="text" name="customer_code" id="edit_customer_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Customer Name *</label><input type="text" name="customer_name" id="edit_customer_name" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Delivery Address</label><textarea name="customer_address" id="edit_customer_address" class="form-control"></textarea></div>
+                    <div class="mb-3"><label class="form-label">Type</label><select name="customer_type" id="edit_customer_type" class="form-select" required><option value="vat">VAT %</option><option value="non_vat">Non-VAT</option></select></div>
                     <div class="mb-3"><label class="form-label">TIN</label><input type="text" name="customer_tin" id="edit_customer_tin" class="form-control"></div>
                 </div>
                 <div class="modal-footer">
@@ -99,6 +108,7 @@ document.getElementById('customerEditModal').addEventListener('show.bs.modal', f
     document.getElementById('edit_customer_code').value = button.getAttribute('data-code');
     document.getElementById('edit_customer_name').value = button.getAttribute('data-name');
     document.getElementById('edit_customer_address').value = button.getAttribute('data-address');
+    document.getElementById('edit_customer_type').value = button.getAttribute('data-type') || 'vat';
     document.getElementById('edit_customer_tin').value = button.getAttribute('data-tin');
 });
 </script>

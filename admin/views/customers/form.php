@@ -23,6 +23,13 @@
                               placeholder="Enter full address"><?= htmlspecialchars($customer['customer_address'] ?? '') ?></textarea>
                 </div>
                 <div class="col-md-4">
+                    <label class="form-label">Type</label>
+                    <select name="customer_type" class="form-select">
+                        <option value="vat" <?= ($customer['customer_type'] ?? 'vat') === 'vat' ? 'selected' : '' ?>>VAT %</option>
+                        <option value="non_vat" <?= ($customer['customer_type'] ?? '') === 'non_vat' ? 'selected' : '' ?>>Non-VAT</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
                     <label class="form-label">TIN Number</label>
                     <input type="text" name="customer_tin" class="form-control" 
                            value="<?= htmlspecialchars($customer['customer_tin'] ?? '') ?>" 

@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS customers (
     customer_code VARCHAR(50) NOT NULL UNIQUE,
     customer_name VARCHAR(255) NOT NULL,
     customer_address TEXT,
+    customer_type ENUM('vat','non_vat') DEFAULT 'vat' COMMENT 'vat=VAT registered, non_vat=Non-VAT',
     customer_tin VARCHAR(50),
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
     status TINYINT(1) DEFAULT 1 COMMENT '0=inactive, 1=active',

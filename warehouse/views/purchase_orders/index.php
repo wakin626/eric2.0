@@ -18,7 +18,7 @@
                         <th class="sortable" data-sort="po_number">PO Number <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                         <th>Item</th>
-                        <th>Status</th>
+                        <th>Production Status</th>
                         <th>Type</th>
                         <th class="sortable" data-sort="created_by">Created By <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="date">Date Created <i class="bi bi-chevron-expand"></i></th>
