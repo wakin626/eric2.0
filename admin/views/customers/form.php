@@ -18,7 +18,7 @@
                            placeholder="Enter customer name" required>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Address</label>
+                    <label class="form-label">Delivery Address</label>
                     <textarea name="customer_address" class="form-control" rows="2" 
                               placeholder="Enter full address"><?= htmlspecialchars($customer['customer_address'] ?? '') ?></textarea>
                 </div>

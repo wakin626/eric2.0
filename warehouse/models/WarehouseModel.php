@@ -165,14 +165,14 @@ return $stmt->fetchAll();
     }
 
     public function getDeliveries() {
-        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type, c.customer_name,
-                       poi.quantity as item_quantity, i.item_code, i.item_description
-                FROM deliveries d 
-                LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
-                LEFT JOIN customers c ON po.customer_id = c.customer_id 
-                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
-                LEFT JOIN items i ON poi.item_id = i.item_id
-                ORDER BY d.date_created DESC";
+    $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type, c.customer_name,
+                   poi.quantity as item_quantity, i.item_code, i.item_description
+            FROM deliveries d 
+            LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
+            LEFT JOIN customers c ON po.customer_id = c.customer_id 
+            LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+            LEFT JOIN items i ON poi.item_id = i.item_id
+            ORDER BY d.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -277,5 +277,29 @@ return $stmt->fetchAll();
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    public function updateDRNumber($delivery_id, $dr_number) {
+        $sql = "UPDATE deliveries SET dr_number = :dr_number WHERE delivery_id = :delivery_id";
+        $stmt = self::getConnection()->prepare($sql);
+        return $stmt->execute([
+            'dr_number' => $dr_number,
+            'delivery_id' => $delivery_id
+        ]);
+    }
+
+    public function getDRNumbersByPOIds($poIds) {
+        if (empty($poIds)) return [];
+        $placeholders = implode(',', array_fill(0, count($poIds), '?'));
+        $sql = "SELECT po_id, dr_number FROM deliveries 
+                WHERE po_id IN ($placeholders) AND dr_number IS NOT NULL AND dr_number != '' AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($poIds);
+        $rows = $stmt->fetchAll();
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[$row['po_id']][] = $row['dr_number'];
+        }
+        return $grouped;
     }
 }

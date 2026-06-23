@@ -142,6 +142,23 @@ class WarehouseController {
         exit;
     }
 
+    public function updateDRNumber() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+        $delivery_id = $_POST['delivery_id'] ?? null;
+        $dr_number = trim($_POST['dr_number'] ?? '');
+        if (!$delivery_id) {
+            echo json_encode(['success' => false, 'message' => 'Delivery ID is required']);
+            exit;
+        }
+        $this->warehouseModel->updateDRNumber($delivery_id, $dr_number);
+        echo json_encode(['success' => true, 'dr_number' => $dr_number]);
+        exit;
+    }
+
     private function render($view, $data = []) {
         extract($data);
         ob_start();

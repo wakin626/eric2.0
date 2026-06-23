@@ -20,7 +20,7 @@
                         <p><strong>PO Number:</strong> <?= htmlspecialchars($delivery['customer_po_number'] ?? '-') ?></p>
                         <p><strong>Customer:</strong> <?= htmlspecialchars($delivery['customer_name'] ?? '-') ?></p>
                         <p><strong>Customer Code:</strong> <?= htmlspecialchars($delivery['customer_code'] ?? '-') ?></p>
-                        <p><strong>Customer Address:</strong> <?= htmlspecialchars($delivery['customer_address'] ?? '-') ?></p>
+                        <p><strong>Delivery Address:</strong> <?= htmlspecialchars($delivery['customer_address'] ?? '-') ?></p>
                     </div>
                     <div class="col-md-6">
                         <p><strong>Delivery Date:</strong> <?= date('F d, Y', strtotime($delivery['delivery_date'])) ?></p>

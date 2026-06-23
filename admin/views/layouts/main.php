@@ -104,28 +104,29 @@
                     <small><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
 <ul class="nav flex-column mt-2 sidebar-menu">
+<?php $currentAction = $_GET['action'] ?? ''; ?>
 <li class="nav-item">
-<a class="nav-link <?= $page_title == 'Admin Dashboard' ? 'active' : '' ?>" href="?controller=admin">
+<a class="nav-link <?= $currentAction === '' ? 'active' : '' ?>" href="?controller=admin">
 <i class="bi bi-speedometer2 me-2"></i>Dashboard
 </a>
 </li>
 <li class="nav-item">
-<a class="nav-link <?= ($page_title ?? '') === 'Customer PO' ? 'active' : '' ?>" href="?controller=admin&action=purchaseOrders">
+<a class="nav-link <?= $currentAction === 'purchaseOrders' ? 'active' : '' ?>" href="?controller=admin&action=purchaseOrders">
 <i class="bi bi-cart3 me-2"></i>Customer PO
 </a>
 </li>
 <li class="nav-item">
-<a class="nav-link <?= ($page_title ?? '') === 'Delivered PO' ? 'active' : '' ?>" href="?controller=admin&action=delivered">
+<a class="nav-link <?= $currentAction === 'delivered' ? 'active' : '' ?>" href="?controller=admin&action=delivered">
 <i class="bi bi-truck me-2"></i>Delivered
 </a>
 </li>
 <li class="nav-item">
-<a class="nav-link <?= strpos($page_title ?? '', 'Customers') !== false && ($page_title ?? '') !== 'Customer PO' ? 'active' : '' ?>" href="?controller=admin&action=customers">
+<a class="nav-link <?= in_array($currentAction, ['customers', 'customerCreate', 'customerEdit', 'customerDelete', 'customerUpdate', 'customerToggleStatus']) ? 'active' : '' ?>" href="?controller=admin&action=customers">
 <i class="bi bi-people me-2"></i>Customers
 </a>
 </li>
 <li class="nav-item">
-<a class="nav-link <?= strpos($page_title ?? '', 'Item') !== false ? 'active' : '' ?>" href="?controller=admin&action=items">
+<a class="nav-link <?= in_array($currentAction, ['items', 'itemCreate', 'itemEdit', 'itemDelete', 'itemToggleStatus', 'itemUpdate']) ? 'active' : '' ?>" href="?controller=admin&action=items">
 <i class="bi bi-box-seam me-2"></i>Items
 </a>
 </li>

@@ -51,19 +51,20 @@
                     <h5><?= ucfirst($_SESSION['department'] ?? 'Warehouse') ?></h5>
                     <small><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
+                <?php $currentAction = $_GET['action'] ?? ''; ?>
                 <ul class="nav flex-column mt-2 sidebar-menu">
                     <li class="nav-item">
-                        <a class="nav-link <?= $page_title == 'Warehouse Dashboard' ? 'active' : '' ?>" href="?controller=warehouse">
+                        <a class="nav-link <?= $currentAction === '' ? 'active' : '' ?>" href="?controller=warehouse">
                             <i class="bi bi-speedometer2 me-2"></i>Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= strpos($page_title ?? '', 'Customer PO') !== false ? 'active' : '' ?>" href="?controller=warehouse&action=purchaseOrders">
+                        <a class="nav-link <?= $currentAction === 'purchaseOrders' ? 'active' : '' ?>" href="?controller=warehouse&action=purchaseOrders">
                             <i class="bi bi-cart3 me-2"></i>Customer PO
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= strpos($page_title ?? '', 'Delivery') !== false ? 'active' : '' ?>" href="?controller=warehouse&action=deliveries">
+                        <a class="nav-link <?= in_array($currentAction, ['deliveries', 'createDelivery']) ? 'active' : '' ?>" href="?controller=warehouse&action=deliveries">
                             <i class="bi bi-truck me-2"></i>Deliveries
                         </a>
                     </li>

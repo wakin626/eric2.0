@@ -135,7 +135,7 @@
                             <input type="text" id="customerName" class="form-control" readonly>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Customer Address</label>
+                            <label class="form-label">Delivery Address</label>
                             <input type="text" id="customerAddress" class="form-control" readonly>
                         </div>
                         <div class="col-md-2">

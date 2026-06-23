@@ -141,7 +141,7 @@
                 <div class="modal-body">
                     <div class="mb-3"><label class="form-label">Customer Code *</label><input type="text" name="customer_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Customer Name *</label><input type="text" name="customer_name" class="form-control" required></div>
-                    <div class="mb-3"><label class="form-label">Address</label><textarea name="customer_address" class="form-control"></textarea></div>
+                    <div class="mb-3"><label class="form-label">Delivery Address</label><textarea name="customer_address" class="form-control"></textarea></div>
                     <div class="mb-3"><label class="form-label">TIN</label><input type="text" name="customer_tin" class="form-control"></div>
                 </div>
                 <div class="modal-footer">

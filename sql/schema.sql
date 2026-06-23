@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS deliveries (
     delivered_by INT NOT NULL,
     delivery_date DATE NOT NULL,
     delivery_quantity INT DEFAULT 0,
+    dr_number VARCHAR(50) NULL COMMENT 'Delivery Receipt number',
     remarks TEXT,
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
     active_status TINYINT(1) DEFAULT 1 COMMENT '0=inactive, 1=active',

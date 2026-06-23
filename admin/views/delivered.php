@@ -16,10 +16,11 @@
                     <th class="sortable" data-sort="po_date">PO Date <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                     <th>Item</th>
-                    <th class="sortable" data-sort="total">Total Required <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="total">PO Quantity <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="delivered">Delivered <i class="bi bi-chevron-expand"></i></th>
                     <th>Remaining Balance</th>
                     <th>Type</th>
+                    <th>DR Number</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -96,6 +97,16 @@
                             <span class="badge bg-secondary">Normal</span>
                         <?php endif; ?>
                     </td>
+                    <td>
+                        <?php
+                        $drNumbers = $dr_numbers_map[$po['po_id']] ?? [];
+                        if (!empty($drNumbers)):
+                        ?>
+                            <small><?= htmlspecialchars(implode(', ', $drNumbers)) ?></small>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
                             <i class="bi bi-eye"></i>
@@ -104,7 +115,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($purchase_orders)): ?>
-                <tr><td colspan="9" class="text-center text-muted py-4">No purchase orders found</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No purchase orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

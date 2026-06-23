@@ -32,7 +32,8 @@
                         <th>PO Date</th>
                         <th>Customer</th>
                         <th>Item</th>
-                        <th>Status</th>
+                        <th>Production Status</th>
+                        <th>Delivery Status</th>
                         <th>Type</th>
                     </tr>
                 </thead>
@@ -74,6 +75,26 @@
                             <?php endif; ?>
                         </td>
                         <td>
+                            <?php if (!empty($items)): ?>
+                                <?php foreach ($items as $idx => $item):
+                                    $qty = $item['quantity'] ?? 0;
+                                    $itemDelivered = $item['delivered_quantity'] ?? 0;
+                                    $remaining = $qty - $itemDelivered;
+                                ?>
+                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                    <?php if ($qty > 0 && $itemDelivered >= $qty): ?>
+                                        <span class="badge bg-success">Fully Delivered</span>
+                                    <?php elseif ($itemDelivered > 0): ?>
+                                        <span class="badge bg-warning text-dark">Partial (<?= $remaining ?> left)</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary">Pending</span>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <small class="text-muted">-</small>
+                            <?php endif; ?>
+                        </td>
+                        <td>
                             <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
                                 <span class="badge bg-info">Advance</span>
                             <?php else: ?>
@@ -83,7 +104,7 @@
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
-                    <tr><td colspan="6" class="text-center text-muted py-3">No purchase orders yet</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-3">No purchase orders yet</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -101,19 +122,45 @@
                 <tr>
                     <th>PO Number</th>
                     <th>Customer</th>
+                    <th>Item</th>
+                    <th>PO Quantity</th>
+                    <th>Delivered</th>
+                    <th>Remaining</th>
+                    <th>Type</th>
                     <th>Delivery Date</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach (array_slice($deliveries ?? [], 0, 5) as $d): ?>
+                <?php foreach (array_slice($deliveries ?? [], 0, 5) as $d):
+                    $dItemQty = $d['item_quantity'] ?? 0;
+                    $dDelivered = $d['delivery_quantity'] ?? 0;
+                    $dRemaining = $dItemQty - $dDelivered;
+                ?>
                 <tr>
                     <td><strong><?= $d['customer_po_number'] ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                    <td><small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small></td>
+                    <td><?= $dItemQty ?></td>
+                    <td><?= $dDelivered ?></td>
+                    <td>
+                        <?php if ($dRemaining <= 0): ?>
+                            <span class="badge bg-success">Complete</span>
+                        <?php else: ?>
+                            <span class="badge bg-warning text-dark"><?= $dRemaining ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
+                            <span class="badge bg-info">Advance</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Normal</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="3" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-3">No deliveries yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

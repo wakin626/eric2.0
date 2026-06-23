@@ -196,6 +196,7 @@ public function delivered() {
     $poIds = array_column($pagination['items'], 'po_id');
     $data['purchase_orders'] = $pagination['items'];
     $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+    $data['dr_numbers_map'] = $this->warehouseModel->getDRNumbersByPOIds($poIds);
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
