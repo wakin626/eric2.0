@@ -3,6 +3,9 @@
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeliveryModal">
             <i class="bi bi-plus-circle me-1"></i> Create Delivery Receipt
         </button>
+        <a href="?controller=warehouse&action=printDR" class="btn btn-outline-primary ms-2">
+            <i class="bi bi-printer me-1"></i> Print DR
+        </a>
     </div>
     <div class="search-box" style="width: 300px;">
         <i class="bi bi-search"></i>

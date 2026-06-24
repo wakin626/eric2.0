@@ -398,4 +398,56 @@ return $stmt->fetchAll();
         $row = $stmt->fetch();
         return max(0, $lot['quantity_produced'] - ($row['total_delivered'] ?? 0));
     }
+
+    public function getLotsByPOForPrint($po_id) {
+        $sql = "SELECT l.*, 
+                    poi.quantity AS poi_quantity, poi.unit_price, poi.item_id,
+                    i.item_code, i.item_description, i.item_uom, i.uom_conversion,
+                    l.quantity_produced - COALESCE(
+                        (SELECT SUM(d.delivery_quantity) FROM deliveries d 
+                         WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
+                    ) AS available_quantity
+                FROM production_lots l
+                LEFT JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE l.po_id = :po_id AND l.`remove` = 0
+                ORDER BY i.item_description ASC, l.lot_number ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_id' => $po_id]);
+        $rows = $stmt->fetchAll();
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $itemId = $row['item_id'];
+            if (!isset($grouped[$itemId])) {
+                $grouped[$itemId] = [
+                    'item_id' => $itemId,
+                    'item_code' => $row['item_code'],
+                    'item_description' => $row['item_description'],
+                    'item_uom' => $row['item_uom'],
+                    'uom_conversion' => $row['uom_conversion'],
+                    'unit_price' => $row['unit_price'],
+                    'lots' => []
+                ];
+            }
+            $grouped[$itemId]['lots'][] = $row;
+        }
+        return $grouped;
+    }
+
+    public function getLotsByIds($lotIds) {
+        if (empty($lotIds)) return [];
+        $placeholders = implode(',', array_fill(0, count($lotIds), '?'));
+        $sql = "SELECT l.*, 
+                    poi.quantity AS poi_quantity, poi.unit_price, poi.item_id,
+                    i.item_code, i.item_description, i.item_uom, i.uom_conversion
+                FROM production_lots l
+                LEFT JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE l.lot_id IN ($placeholders) AND l.`remove` = 0
+                ORDER BY i.item_description ASC, l.lot_number ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($lotIds);
+        return $stmt->fetchAll();
+    }
 }

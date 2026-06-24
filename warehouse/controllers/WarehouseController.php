@@ -172,6 +172,49 @@ class WarehouseController {
         exit;
     }
 
+    public function getLotsForPrint() {
+        header('Content-Type: application/json');
+        $po_id = $_GET['po_id'] ?? null;
+        if (!$po_id) {
+            echo json_encode([]);
+            exit;
+        }
+        $lots = $this->warehouseModel->getLotsByPOForPrint($po_id);
+        echo json_encode($lots);
+        exit;
+    }
+
+    public function printDR() {
+        $data['purchase_orders'] = $this->warehouseModel->getPurchaseOrders();
+        $data['page_title'] = 'Print Delivery Receipt';
+        $selectedPoId = $_GET['po_id'] ?? null;
+        $data['selected_po_id'] = $selectedPoId;
+        $data['lots_by_item'] = [];
+        if ($selectedPoId) {
+            $data['lots_by_item'] = $this->warehouseModel->getLotsByPOForPrint($selectedPoId);
+        }
+        $this->render('deliveries/print_dr', $data);
+    }
+
+    public function printDRPreview() {
+        $po_id = $_GET['po_id'] ?? null;
+        $lotIds = $_GET['lots'] ?? '';
+        if (!$po_id || empty($lotIds)) {
+            header('Location: ?controller=warehouse&action=printDR');
+            exit;
+        }
+        $lotIdArray = array_map('intval', explode(',', $lotIds));
+        $lotIdArray = array_filter($lotIdArray);
+        if (empty($lotIdArray)) {
+            header('Location: ?controller=warehouse&action=printDR');
+            exit;
+        }
+        $data['po'] = $this->warehouseModel->getPurchaseOrderById($po_id);
+        $data['selected_lots'] = $this->warehouseModel->getLotsByIds($lotIdArray);
+        include __DIR__ . "/../views/deliveries/print_dr_preview.php";
+        exit;
+    }
+
     private function render($view, $data = []) {
         extract($data);
         ob_start();
