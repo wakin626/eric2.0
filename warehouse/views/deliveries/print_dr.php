@@ -1,5 +1,8 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0"><i class="bi bi-printer me-2"></i>Print Delivery Receipt</h4>
+    <div class="d-flex align-items-center">
+        <a href="?controller=warehouse&action=deliveries" class="btn btn-secondary me-3"><i class="bi bi-arrow-left me-1"></i> Back</a>
+        <h4 class="mb-0"><i class="bi bi-printer me-2"></i>Print Delivery Receipt</h4>
+    </div>
 </div>
 
 <div class="card data-card">
