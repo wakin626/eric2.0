@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS production_lots (
     lot_date DATE NULL,
     created_by INT NULL,
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `remove` TINYINT(1) DEFAULT 0 COMMENT '0=active, 1=soft deleted',
+    `is_removed` TINYINT(1) DEFAULT 0 COMMENT '0=active, 1=soft deleted',
     last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id),
     FOREIGN KEY (poi_id) REFERENCES purchase_order_items(poi_id),

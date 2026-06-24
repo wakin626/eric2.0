@@ -335,7 +335,7 @@ return $stmt->fetchAll();
     public function updateLotQuantity($poi_id, $lot_number, $added_quantity, $user_id, $po_id = null) {
         $conn = self::getConnection();
         $sql = "SELECT lot_id, quantity_produced FROM production_lots 
-                WHERE poi_id = :poi_id AND lot_number = :lot_number AND `remove` = 0";
+                WHERE poi_id = :poi_id AND lot_number = :lot_number AND `is_removed` = 0";
         $stmt = $conn->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id, 'lot_number' => $lot_number]);
         $lot = $stmt->fetch();
@@ -359,7 +359,7 @@ return $stmt->fetchAll();
 
     public function getLotsByPOItem($poi_id) {
         $sql = "SELECT * FROM production_lots 
-                WHERE poi_id = :poi_id AND `remove` = 0 
+                WHERE poi_id = :poi_id AND `is_removed` = 0 
                 ORDER BY lot_number ASC, date_created ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
@@ -373,7 +373,7 @@ return $stmt->fetchAll();
                          WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
                     ) AS available_quantity
                 FROM production_lots l 
-                WHERE l.poi_id = :poi_id AND l.`remove` = 0 
+                WHERE l.poi_id = :poi_id AND l.`is_removed` = 0 
                 HAVING available_quantity > 0
                 ORDER BY l.lot_number ASC";
         $stmt = self::getConnection()->prepare($sql);
@@ -382,7 +382,7 @@ return $stmt->fetchAll();
     }
 
     public function getLotById($lot_id) {
-        $sql = "SELECT * FROM production_lots WHERE lot_id = :lot_id AND `remove` = 0";
+        $sql = "SELECT * FROM production_lots WHERE lot_id = :lot_id AND `is_removed` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['lot_id' => $lot_id]);
         return $stmt->fetch();
@@ -410,7 +410,7 @@ return $stmt->fetchAll();
                 FROM production_lots l
                 LEFT JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
-                WHERE l.po_id = :po_id AND l.`remove` = 0
+                WHERE l.po_id = :po_id AND l.`is_removed` = 0
                 ORDER BY i.item_description ASC, l.lot_number ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
@@ -444,7 +444,7 @@ return $stmt->fetchAll();
                 FROM production_lots l
                 LEFT JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
-                WHERE l.lot_id IN ($placeholders) AND l.`remove` = 0
+                WHERE l.lot_id IN ($placeholders) AND l.`is_removed` = 0
                 ORDER BY i.item_description ASC, l.lot_number ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute($lotIds);
