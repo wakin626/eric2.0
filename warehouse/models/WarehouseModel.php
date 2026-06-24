@@ -133,12 +133,13 @@ return $stmt->fetchAll();
     public function createDelivery($data) {
         $conn = self::getConnection();
         
-        $sql = "INSERT INTO deliveries (po_id, poi_id, delivered_by, delivery_date, delivery_quantity, remarks) 
-                VALUES (:po_id, :poi_id, :delivered_by, :delivery_date, :delivery_quantity, :remarks)";
+        $sql = "INSERT INTO deliveries (po_id, poi_id, lot_id, delivered_by, delivery_date, delivery_quantity, remarks) 
+                VALUES (:po_id, :poi_id, :lot_id, :delivered_by, :delivery_date, :delivery_quantity, :remarks)";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'po_id' => $data['po_id'],
             'poi_id' => $data['poi_id'] ?? null,
+            'lot_id' => $data['lot_id'] ?? null,
             'delivered_by' => $data['delivered_by'],
             'delivery_date' => $data['delivery_date'],
             'delivery_quantity' => $data['delivery_quantity'],

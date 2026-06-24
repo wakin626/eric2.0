@@ -110,6 +110,7 @@ class WarehouseController {
             $this->warehouseModel->createDelivery([
                 'po_id' => $_POST['po_id'],
                 'poi_id' => $_POST['poi_id'] ?? null,
+                'lot_id' => $_POST['lot_id'] ?? null,
                 'delivered_by' => $_SESSION['user_id'],
                 'delivery_date' => $_POST['delivery_date'],
                 'delivery_quantity' => $_POST['delivery_quantity'],
@@ -156,6 +157,18 @@ class WarehouseController {
         }
         $this->warehouseModel->updateDRNumber($delivery_id, $dr_number);
         echo json_encode(['success' => true, 'dr_number' => $dr_number]);
+        exit;
+    }
+
+    public function getAvailableLots() {
+        header('Content-Type: application/json');
+        $poi_id = $_GET['poi_id'] ?? null;
+        if (!$poi_id) {
+            echo json_encode([]);
+            exit;
+        }
+        $lots = $this->warehouseModel->getAvailableLotsForDelivery($poi_id);
+        echo json_encode($lots);
         exit;
     }
 

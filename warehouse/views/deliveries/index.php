@@ -143,6 +143,12 @@
                         <input type="hidden" id="itemProduced" value="0">
                         <input type="hidden" id="itemDelivered" value="0">
                     </div>
+                    <div class="mb-3" id="lotRow" style="display: none;">
+                        <label class="form-label">Lot Number *</label>
+                        <select name="lot_id" id="lotSelect" class="form-select">
+                            <option value="">Select Lot</option>
+                        </select>
+                    </div>
                     <div class="mb-3" id="itemQtyRow" style="display: none;">
                         <label class="form-label">PO Quantity</label>
                         <input type="text" id="itemQtyDisplay" class="form-control" readonly>
@@ -201,6 +207,8 @@ document.getElementById('poSelect').addEventListener('change', function() {
     document.getElementById('deliveryQty').value = '';
     document.getElementById('deliveryQty').classList.remove('is-invalid');
     document.getElementById('deliveryError').textContent = '';
+    document.getElementById('lotRow').style.display = 'none';
+    document.getElementById('lotSelect').innerHTML = '<option value="">Select Lot</option>';
 
     if (!poId) return;
 
@@ -244,16 +252,41 @@ document.getElementById('poSelect').addEventListener('change', function() {
                 hiddenPoi.value = item.poi_id;
                 poiSelect.parentNode.appendChild(hiddenPoi);
                 itemRow.style.display = 'block';
+
+                fetch('?controller=warehouse&action=getAvailableLots&poi_id=' + item.poi_id)
+                    .then(function(response) { return response.json(); })
+                    .then(function(lots) {
+                        var lotRow = document.getElementById('lotRow');
+                        var lotSelect = document.getElementById('lotSelect');
+                        lotSelect.innerHTML = '<option value="">Select Lot</option>';
+                        if (lots && lots.length > 0) {
+                            lots.forEach(function(lot) {
+                                var opt = document.createElement('option');
+                                opt.value = lot.lot_id;
+                                opt.textContent = lot.lot_number + ' (Available: ' + lot.available_quantity + ')';
+                                opt.dataset.available = lot.available_quantity;
+                                lotSelect.appendChild(opt);
+                            });
+                            lotRow.style.display = 'block';
+                        } else {
+                            lotRow.style.display = 'none';
+                        }
+                    });
             }
         });
 });
 
 document.getElementById('poiSelect').addEventListener('change', function() {
     const selected = this.options[this.selectedIndex];
+    const lotRow = document.getElementById('lotRow');
+    const lotSelect = document.getElementById('lotSelect');
+
     if (!this.value) {
         document.getElementById('itemQtyRow').style.display = 'none';
         document.getElementById('availableRow').style.display = 'none';
         document.getElementById('deliveryQty').value = '';
+        lotRow.style.display = 'none';
+        lotSelect.innerHTML = '<option value="">Select Lot</option>';
         return;
     }
 
@@ -269,6 +302,48 @@ document.getElementById('poiSelect').addEventListener('change', function() {
     document.getElementById('itemQtyRow').style.display = 'block';
     document.getElementById('availableRow').style.display = 'block';
 
+    document.getElementById('deliveryQty').value = '';
+    document.getElementById('deliveryQty').classList.remove('is-invalid');
+    document.getElementById('deliveryError').textContent = '';
+
+    fetch('?controller=warehouse&action=getAvailableLots&poi_id=' + this.value)
+        .then(function(response) { return response.json(); })
+        .then(function(lots) {
+            lotSelect.innerHTML = '<option value="">Select Lot</option>';
+            if (lots && lots.length > 0) {
+                lots.forEach(function(lot) {
+                    const opt = document.createElement('option');
+                    opt.value = lot.lot_id;
+                    opt.textContent = lot.lot_number + ' (Available: ' + lot.available_quantity + ')';
+                    opt.dataset.available = lot.available_quantity;
+                    lotSelect.appendChild(opt);
+                });
+                lotRow.style.display = 'block';
+            } else {
+                lotRow.style.display = 'none';
+            }
+        });
+});
+
+document.getElementById('lotSelect').addEventListener('change', function() {
+    const selected = this.options[this.selectedIndex];
+    if (this.value && selected.dataset.available) {
+        const lotAvailable = parseInt(selected.dataset.available) || 0;
+        document.getElementById('availableQty').value = lotAvailable;
+        document.getElementById('deliveryQty').max = lotAvailable;
+        document.getElementById('deliveryQty').value = '';
+    } else {
+        const poiSelect = document.getElementById('poiSelect');
+        const selectedPoi = poiSelect.options[poiSelect.selectedIndex];
+        if (poiSelect.value && selectedPoi) {
+            const qty = parseInt(selectedPoi.dataset.qty) || 0;
+            const produced = parseInt(selectedPoi.dataset.produced) || 0;
+            const delivered = parseInt(selectedPoi.dataset.delivered) || 0;
+            const available = Math.max(0, produced - delivered);
+            document.getElementById('availableQty').value = available;
+            document.getElementById('deliveryQty').max = available;
+        }
+    }
     document.getElementById('deliveryQty').value = '';
     document.getElementById('deliveryQty').classList.remove('is-invalid');
     document.getElementById('deliveryError').textContent = '';
