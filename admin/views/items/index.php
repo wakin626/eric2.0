@@ -8,7 +8,7 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
-                    <th>Code</th><th>Description</th><th>UOM</th>
+                    <th>Code</th><th>Description</th><th>UOM</th><th>Conv.</th>
                     <th>Status</th><th>Created</th><th>Updated</th><th>Actions</th>
                 </tr>
             </thead>
@@ -18,11 +18,12 @@
                     <td><strong class="text-primary"><?= $item['item_code'] ?></strong></td>
                     <td><?= $item['item_description'] ?></td>
                     <td><span class="badge bg-info"><?= $item['item_uom'] ?></span></td>
+                    <td><?= $item['uom_conversion'] ? $item['uom_conversion'] : '—' ?></td>
                     <td><span class="badge bg-<?= $item['status'] ? 'success' : 'secondary' ?>"><?= $item['status'] ? 'Active' : 'Inactive' ?></span></td>
                     <td><?= date('Y-m-d', strtotime($item['date_created'])) ?></td>
                     <td><?= date('Y-m-d H:i', strtotime($item['last_update'])) ?></td>
                     <td>
-                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#itemEditModal" data-id="<?= $item['item_id'] ?>" data-code="<?= htmlspecialchars($item['item_code']) ?>" data-desc="<?= htmlspecialchars($item['item_description']) ?>" data-uom="<?= $item['item_uom'] ?>"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#itemEditModal" data-id="<?= $item['item_id'] ?>" data-code="<?= htmlspecialchars($item['item_code']) ?>" data-desc="<?= htmlspecialchars($item['item_description']) ?>" data-uom="<?= $item['item_uom'] ?>" data-conversion="<?= $item['uom_conversion'] ?? '' ?>"><i class="bi bi-pencil"></i></button>
                         <a href="?controller=admin&action=itemToggleStatus&id=<?= $item['item_id'] ?>" class="btn btn-sm btn-warning"><i class="bi bi-toggle-on"></i></a>
                         <a href="?controller=admin&action=itemDelete&id=<?= $item['item_id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
                     </td>
@@ -53,7 +54,8 @@
                 <div class="modal-body">
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" class="form-control" required></div>
-                    <div class="mb-3"><label class="form-label">UOM *</label><select name="item_uom" class="form-select" required><option value="">Select</option><option>PCS</option><option>PCKS</option><option>CS</option></select></div>
+                    <div class="mb-3"><label class="form-label">UOM *</label><select name="item_uom" id="add_item_uom" class="form-select" required><option value="">Select</option><option>PCS</option><option>PCKS</option><option>CS</option></select></div>
+                    <div class="mb-3" id="addConversionGroup" style="display:none;"><label class="form-label">Conversion (per case)</label><input type="number" name="uom_conversion" id="add_uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -74,6 +76,7 @@
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" id="edit_item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" id="edit_item_description" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">UOM *</label><select name="item_uom" id="edit_item_uom" class="form-select" required><option value="">Select</option><option>PCS</option><option>PCKS</option><option>CS</option></select></div>
+                    <div class="mb-3" id="editConversionGroup" style="display:none;"><label class="form-label">Conversion (per case)</label><input type="number" name="uom_conversion" id="edit_uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -90,11 +93,25 @@ document.getElementById('searchItem').onkeyup = function() {
     document.querySelectorAll('#itemTableBody tr').forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none');
 };
 
+function toggleConversionGroup(uomVal, groupId) {
+    document.getElementById(groupId).style.display = (uomVal === 'PCS' || uomVal === 'PCKS') ? '' : 'none';
+}
+
+document.getElementById('add_item_uom').addEventListener('change', function() {
+    toggleConversionGroup(this.value, 'addConversionGroup');
+});
+
 document.getElementById('itemEditModal').addEventListener('show.bs.modal', function(event) {
     const button = event.relatedTarget;
     document.getElementById('edit_item_id').value = button.getAttribute('data-id');
     document.getElementById('edit_item_code').value = button.getAttribute('data-code');
     document.getElementById('edit_item_description').value = button.getAttribute('data-desc');
     document.getElementById('edit_item_uom').value = button.getAttribute('data-uom');
+    document.getElementById('edit_uom_conversion').value = button.getAttribute('data-conversion') || '';
+    toggleConversionGroup(button.getAttribute('data-uom'), 'editConversionGroup');
+});
+
+document.getElementById('edit_item_uom').addEventListener('change', function() {
+    toggleConversionGroup(this.value, 'editConversionGroup');
 });
 </script>

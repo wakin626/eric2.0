@@ -19,12 +19,18 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Unit of Measurement <span class="text-danger">*</span></label>
-                    <select name="item_uom" class="form-select" required>
+                    <select name="item_uom" id="form_item_uom" class="form-select" required>
                         <option value="">Select UOM</option>
                         <?php foreach ($uoms as $uom): ?>
                             <option value="<?= $uom ?>" <?= ($item['item_uom'] ?? '') == $uom ? 'selected' : '' ?>><?= $uom ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+                <div class="col-md-4" id="formConversionGroup" style="display:none;">
+                    <label class="form-label">Conversion (per case)</label>
+                    <input type="number" name="uom_conversion" class="form-control" min="1"
+                           value="<?= htmlspecialchars($item['uom_conversion'] ?? '') ?>"
+                           placeholder="e.g. 10 means 10 PCS = 1 CS">
                 </div>
                 <?php if (isset($item)): ?>
                 <div class="col-md-4">
@@ -45,3 +51,15 @@
         </form>
     </div>
 </div>
+
+<script>
+(function() {
+    var uomSel = document.getElementById('form_item_uom');
+    var convGroup = document.getElementById('formConversionGroup');
+    function toggleConversion() {
+        convGroup.style.display = (uomSel.value === 'PCS' || uomSel.value === 'PCKS') ? '' : 'none';
+    }
+    uomSel.addEventListener('change', toggleConversion);
+    toggleConversion();
+})();
+</script>

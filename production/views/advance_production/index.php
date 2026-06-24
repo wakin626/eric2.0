@@ -17,7 +17,6 @@
                     <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                     <th>Item</th>
                     <th class="sortable" data-sort="progress">Production Progress <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="status">Status <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="delivered">Delivered <i class="bi bi-chevron-expand"></i></th>
                     <th class="text-center">Actions</th>
                 </tr>
@@ -60,30 +59,17 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php $produced = $po['produced_quantity'] ?? 0; $total = $po['total_quantity'] ?? 0; ?>
-                        <span class="badge <?= $produced >= $total ? 'bg-success' : 'bg-warning' ?>">
-                            <?= $produced >= $total ? 'Completed' : 'In Progress' ?>
-                        </span>
-                    </td>
-                    <td>
-                        <?php if (!empty($items)):
-                            $poTotal = $po['total_quantity'] ?? 0;
-                            $poDelivered = $po['delivered_quantity'] ?? 0;
-                            $allocated = 0;
-                            $itemCount = count($items);
-                        ?>
+                        <?php if (!empty($items)): ?>
                             <?php foreach ($items as $idx => $item):
-                                $qty = $item['quantity'] ?? 0;
-                                $isLast = ($idx === $itemCount - 1);
-                                $itemDelivered = $isLast ? ($poDelivered - $allocated) : ($poTotal > 0 ? round($poDelivered * ($qty / $poTotal)) : 0);
-                                if ($itemDelivered < 0) $itemDelivered = 0;
-                                if ($itemDelivered > $qty) $itemDelivered = $qty;
-                                $allocated += $itemDelivered;
+                                $itemQty = $item['quantity'] ?? 0;
+                                $itemDelivered = $item['delivered_quantity'] ?? 0;
+                                $itemRemaining = max(0, $itemQty - $itemDelivered);
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <div class="d-flex align-items-center">
-                                    <small class="text-nowrap"><?= $itemDelivered ?>/<?= $qty ?></small>
-                                </div>
+                                <small class="text-nowrap"><?= $itemDelivered ?>/<?= $itemQty ?></small>
+                                <?php if ($itemRemaining > 0): ?>
+                                    <small class="text-warning ms-1">(<?= $itemRemaining ?> left)</small>
+                                <?php endif; ?>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>
@@ -100,7 +86,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($purchase_orders)): ?>
-                <tr><td colspan="8" class="text-center text-muted py-4">No advance production orders found</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">No advance production orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

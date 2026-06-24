@@ -32,13 +32,14 @@ class ItemModel extends BaseModel {
     }
 
     public function create($data) {
-        $sql = "INSERT INTO {$this->table} (item_code, item_description, item_uom, item_size, item_amount) 
-                VALUES (:item_code, :item_description, :item_uom, :item_size, :item_amount)";
+        $sql = "INSERT INTO {$this->table} (item_code, item_description, item_uom, uom_conversion, item_size, item_amount) 
+                VALUES (:item_code, :item_description, :item_uom, :uom_conversion, :item_size, :item_amount)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'item_code' => $data['item_code'],
             'item_description' => $data['item_description'],
             'item_uom' => $data['item_uom'],
+            'uom_conversion' => !empty($data['uom_conversion']) ? $data['uom_conversion'] : null,
             'item_size' => $data['item_size'] ?? null,
             'item_amount' => $data['item_amount'] ?? 0.00
         ]);
@@ -50,6 +51,7 @@ class ItemModel extends BaseModel {
                 item_code = :item_code, 
                 item_description = :item_description, 
                 item_uom = :item_uom, 
+                uom_conversion = :uom_conversion,
                 item_size = :item_size,
                 item_amount = :item_amount,
                 status = :status
@@ -60,6 +62,7 @@ class ItemModel extends BaseModel {
             'item_code' => $data['item_code'],
             'item_description' => $data['item_description'],
             'item_uom' => $data['item_uom'],
+            'uom_conversion' => !empty($data['uom_conversion']) ? $data['uom_conversion'] : null,
             'item_size' => $data['item_size'] ?? null,
             'item_amount' => $data['item_amount'] ?? 0.00,
             'status' => $data['status'] ?? 1

@@ -33,7 +33,6 @@
                         <th>Customer</th>
                         <th>Item</th>
                         <th>Production Progress</th>
-                        <th>Status</th>
                         <th>Delivered</th>
                         <th>Type</th>
                     </tr>
@@ -76,16 +75,21 @@
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php $produced = $po['produced_quantity'] ?? 0; $total = $po['total_quantity'] ?? 0; ?>
-                            <span class="badge <?= $produced >= $total ? 'bg-success' : 'bg-warning' ?>">
-                                <?= $produced ?>/<?= $total ?>
-                            </span>
-                        </td>
-                        <td>
-                            <?php $delivered = $po['delivered_quantity'] ?? 0; ?>
-                            <span class="badge bg-info">
-                                <?= $delivered ?>/<?= $total ?>
-                            </span>
+                            <?php if (!empty($items)): ?>
+                                <?php foreach ($items as $idx => $item):
+                                    $itemQty = $item['quantity'] ?? 0;
+                                    $itemDelivered = $item['delivered_quantity'] ?? 0;
+                                    $itemRemaining = max(0, $itemQty - $itemDelivered);
+                                ?>
+                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                    <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?></small>
+                                    <?php if ($itemRemaining > 0): ?>
+                                        <small class="text-warning ms-1">(<?= $itemRemaining ?> left)</small>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <small class="text-muted">-</small>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
@@ -97,7 +101,7 @@
                     </tr>
                     <?php endforeach; ?>
 <?php if (empty($purchase_orders)): ?>
-<tr><td colspan="8" class="text-center text-muted py-3">No customer PO yet</td></tr>
+<tr><td colspan="7" class="text-center text-muted py-3">No customer PO yet</td></tr>
 <?php endif; ?>
                 </tbody>
             </table>

@@ -162,7 +162,8 @@
                 <div class="modal-body">
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" class="form-control" required></div>
-                    <div class="mb-3"><label class="form-label">UOM *</label><select name="item_uom" class="form-select" required><option value="">Select</option><option>PCS</option><option>PCKS</option><option>CS</option></select></div>
+                    <div class="mb-3"><label class="form-label">UOM *</label><select name="item_uom" id="dash_item_uom" class="form-select" required><option value="">Select</option><option>PCS</option><option>PCKS</option><option>CS</option></select></div>
+                    <div class="mb-3" id="dashConversionGroup" style="display:none;"><label class="form-label">Conversion (per case)</label><input type="number" name="uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -172,3 +173,9 @@
         </div>
     </div>
 </div>
+
+<script>
+document.getElementById('dash_item_uom').addEventListener('change', function() {
+    document.getElementById('dashConversionGroup').style.display = (this.value === 'PCS' || this.value === 'PCKS') ? '' : 'none';
+});
+</script>
