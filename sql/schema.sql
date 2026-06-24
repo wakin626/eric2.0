@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS items (
     item_code VARCHAR(50) NOT NULL UNIQUE,
     item_description VARCHAR(255) NOT NULL,
     item_uom VARCHAR(50) NOT NULL COMMENT 'PCS, PCKS, CS',
+    uom_conversion INT NULL DEFAULT NULL COMMENT 'Units per case, e.g. 10 means 10 PCS = 1 CS. NULL when UOM is CS',
     item_size VARCHAR(50),
     item_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
