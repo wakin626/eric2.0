@@ -171,6 +171,7 @@ class WarehouseController {
         $data['page_title'] = 'Print Delivery Receipt';
         $selectedPoId = $_GET['po_id'] ?? null;
         $data['selected_po_id'] = $selectedPoId;
+        $data['dr_number'] = $_GET['dr_number'] ?? '';
         $data['lots_by_item'] = [];
         if ($selectedPoId) {
             $data['lots_by_item'] = $this->warehouseModel->getLotsByPOForPrint($selectedPoId);
@@ -181,6 +182,7 @@ class WarehouseController {
     public function printDRPreview() {
         $po_id = $_GET['po_id'] ?? null;
         $lotIds = $_GET['lots'] ?? '';
+        $dr_number = $_GET['dr_number'] ?? '';
         if (!$po_id || empty($lotIds)) {
             header('Location: ?controller=warehouse&action=printDR');
             exit;
@@ -193,6 +195,7 @@ class WarehouseController {
         }
         $data['po'] = $this->warehouseModel->getPurchaseOrderById($po_id);
         $data['selected_lots'] = $this->warehouseModel->getLotsByIds($lotIdArray);
+        $data['dr_number'] = $dr_number;
         include __DIR__ . "/../views/deliveries/print_dr_preview.php";
         exit;
     }

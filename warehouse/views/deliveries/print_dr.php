@@ -18,6 +18,12 @@
                 <?php endforeach; ?>
             </select>
         </div>
+        <?php if ($dr_number): ?>
+        <div class="mb-3">
+            <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i>DR Number: <?= htmlspecialchars($dr_number) ?></span>
+        </div>
+        <?php endif; ?>
+        <input type="hidden" id="drNumberValue" value="<?= htmlspecialchars($dr_number) ?>">
 
         <div id="lotSelectionArea" style="display: <?= $selected_po_id ? 'block' : 'none' ?>;">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -125,10 +131,12 @@
 <script>
 document.getElementById('printDRPoSelect').addEventListener('change', function() {
     const poId = this.value;
+    const drNum = document.getElementById('drNumberValue').value;
+    const drParam = drNum ? '&dr_number=' + encodeURIComponent(drNum) : '';
     if (poId) {
-        window.location.href = '?controller=warehouse&action=printDR&po_id=' + poId;
+        window.location.href = '?controller=warehouse&action=printDR&po_id=' + poId + drParam;
     } else {
-        window.location.href = '?controller=warehouse&action=printDR';
+        window.location.href = '?controller=warehouse&action=printDR' + drParam;
     }
 });
 
@@ -176,7 +184,9 @@ document.getElementById('generateReceiptBtn').addEventListener('click', function
     });
 
     const poId = document.getElementById('printDRPoSelect').value;
-    const url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',');
+    const drNum = document.getElementById('drNumberValue').value;
+    const drParam = drNum ? '&dr_number=' + encodeURIComponent(drNum) : '';
+    const url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
     window.open(url, '_blank');
 });
 </script>

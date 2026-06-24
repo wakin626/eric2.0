@@ -121,6 +121,9 @@
         </div>
         <div class="po-info">
             Date: <?= date('d-M-Y') ?><br>
+            <?php if (!empty($dr_number)): ?>
+            DR Number: <strong><?= htmlspecialchars($dr_number) ?></strong><br>
+            <?php endif; ?>
             PO Number: <?= htmlspecialchars($po['customer_po_number'] ?? '') ?><br>
             Terms: <?= htmlspecialchars($po['customer_terms'] ?? '') ?> DAYS
         </div>

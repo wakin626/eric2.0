@@ -3,9 +3,9 @@
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeliveryModal">
             <i class="bi bi-plus-circle me-1"></i> Create Delivery Receipt
         </button>
-        <a href="?controller=warehouse&action=printDR" class="btn btn-outline-primary ms-2">
+        <button type="button" class="btn btn-outline-primary ms-2" id="printDRBtn">
             <i class="bi bi-printer me-1"></i> Print DR
-        </a>
+        </button>
     </div>
     <div class="search-box" style="width: 300px;">
         <i class="bi bi-search"></i>
@@ -70,6 +70,45 @@
     </ul>
 </nav>
 <?php endif; ?>
+
+<!-- DR Number Input Modal -->
+<div class="modal fade" id="drInputModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Enter DR Number</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="drNumberInput" class="form-control" placeholder="Enter DR Number" autofocus>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="drInputOkBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DR Number Confirm Modal -->
+<div class="modal fade" id="drConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-question-circle me-2"></i>Confirm DR Number</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure for this DR number?</p>
+                <p class="fw-bold text-primary mb-0" id="drConfirmNumber">-</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" id="drConfirmEditBtn"><i class="bi bi-pencil me-1"></i>Edit</button>
+                <button type="button" class="btn btn-primary" id="drConfirmYesBtn"><i class="bi bi-check-lg me-1"></i>Yes</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="createDeliveryModal">
     <div class="modal-dialog">
@@ -337,5 +376,46 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         alert('Delivery quantity must be at least 1');
         return;
     }
+});
+
+var drInputModal, drConfirmModal;
+var drState = { drNumber: '' };
+
+document.getElementById('printDRBtn').addEventListener('click', function() {
+    document.getElementById('drNumberInput').value = '';
+    drInputModal = new bootstrap.Modal(document.getElementById('drInputModal'));
+    drInputModal.show();
+});
+
+document.getElementById('drInputOkBtn').addEventListener('click', function() {
+    var value = document.getElementById('drNumberInput').value.trim();
+    if (value === '') {
+        alert('Please enter a DR number');
+        return;
+    }
+    drState.drNumber = value;
+    drInputModal.hide();
+    document.getElementById('drConfirmNumber').textContent = value;
+    drConfirmModal = new bootstrap.Modal(document.getElementById('drConfirmModal'));
+    drConfirmModal.show();
+});
+
+document.getElementById('drNumberInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('drInputOkBtn').click();
+    }
+});
+
+document.getElementById('drConfirmEditBtn').addEventListener('click', function() {
+    drConfirmModal.hide();
+    document.getElementById('drNumberInput').value = drState.drNumber;
+    drInputModal = new bootstrap.Modal(document.getElementById('drInputModal'));
+    drInputModal.show();
+});
+
+document.getElementById('drConfirmYesBtn').addEventListener('click', function() {
+    drConfirmModal.hide();
+    window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drState.drNumber);
 });
 </script>
