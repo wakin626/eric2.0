@@ -108,6 +108,7 @@
 <body>
 
 <div class="no-print">
+    <a href="?controller=warehouse&action=printDR&po_id=<?= htmlspecialchars($po['po_id'] ?? '') ?>" class="btn btn-secondary" style="margin-right: 10px;"><i class="bi bi-arrow-left me-1"></i> Back</a>
     <button onclick="window.print()"><i class="bi bi-printer"></i> Print Delivery Receipt</button>
 </div>
 
