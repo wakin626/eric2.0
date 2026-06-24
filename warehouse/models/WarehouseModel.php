@@ -450,4 +450,48 @@ return $stmt->fetchAll();
         $stmt->execute($lotIds);
         return $stmt->fetchAll();
     }
+
+    public function getDeliveriesByDRNumber($dr_number) {
+        $sql = "SELECT d.*, l.lot_number, l.poi_id AS lot_poi_id,
+                    poi.item_id, i.item_description, i.item_uom
+                FROM deliveries d
+                LEFT JOIN production_lots l ON d.lot_id = l.lot_id
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE d.dr_number = :dr_number AND d.`remove` = 0
+                ORDER BY d.date_created ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['dr_number' => $dr_number]);
+        return $stmt->fetchAll();
+    }
+
+    public function getLotsByDRNumber($dr_number) {
+        $sql = "SELECT l.lot_id
+                FROM deliveries d
+                LEFT JOIN production_lots l ON d.lot_id = l.lot_id
+                WHERE d.dr_number = :dr_number AND d.`remove` = 0 AND d.lot_id IS NOT NULL";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['dr_number' => $dr_number]);
+        return array_column($stmt->fetchAll(), 'lot_id');
+    }
+
+    public function saveDRNumberForLots($lotIds, $dr_number) {
+        if (empty($lotIds)) return;
+        $placeholders = implode(',', array_fill(0, count($lotIds), '?'));
+        $sql = "UPDATE deliveries SET dr_number = :dr_number WHERE lot_id IN ($placeholders) AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $params = array_merge([$dr_number], $lotIds);
+        $stmt->execute($params);
+    }
+
+    public function checkDRNumber($dr_number) {
+        $sql = "SELECT DISTINCT po_id FROM deliveries WHERE dr_number = :dr_number AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['dr_number' => $dr_number]);
+        $rows = $stmt->fetchAll();
+        return [
+            'exists' => count($rows) > 0,
+            'po_ids' => array_column($rows, 'po_id')
+        ];
+    }
 }

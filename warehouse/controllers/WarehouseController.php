@@ -166,16 +166,36 @@ class WarehouseController {
         exit;
     }
 
+    public function checkDRNumber() {
+        header('Content-Type: application/json');
+        $dr_number = $_GET['dr_number'] ?? '';
+        if (empty($dr_number)) {
+            echo json_encode(['exists' => false]);
+            exit;
+        }
+        $result = $this->warehouseModel->checkDRNumber($dr_number);
+        echo json_encode($result);
+        exit;
+    }
+
     public function printDR() {
         $data['purchase_orders'] = $this->warehouseModel->getPurchaseOrders();
         $data['page_title'] = 'Print Delivery Receipt';
         $selectedPoId = $_GET['po_id'] ?? null;
+        $dr_number = $_GET['dr_number'] ?? '';
+        $data['dr_number'] = $dr_number;
         $data['selected_po_id'] = $selectedPoId;
-        $data['dr_number'] = $_GET['dr_number'] ?? '';
+        $data['existing_lot_ids'] = [];
         $data['lots_by_item'] = [];
+
         if ($selectedPoId) {
             $data['lots_by_item'] = $this->warehouseModel->getLotsByPOForPrint($selectedPoId);
         }
+
+        if (!empty($dr_number) && $selectedPoId) {
+            $data['existing_lot_ids'] = $this->warehouseModel->getLotsByDRNumber($dr_number);
+        }
+
         $this->render('deliveries/print_dr', $data);
     }
 
@@ -197,6 +217,25 @@ class WarehouseController {
         $data['selected_lots'] = $this->warehouseModel->getLotsByIds($lotIdArray);
         $data['dr_number'] = $dr_number;
         include __DIR__ . "/../views/deliveries/print_dr_preview.php";
+        exit;
+    }
+
+    public function saveDRNumberForLots() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false]);
+            exit;
+        }
+        $lotIds = $_POST['lot_ids'] ?? '';
+        $dr_number = trim($_POST['dr_number'] ?? '');
+        if (empty($lotIds) || empty($dr_number)) {
+            echo json_encode(['success' => false]);
+            exit;
+        }
+        $lotIdArray = array_map('intval', explode(',', $lotIds));
+        $lotIdArray = array_filter($lotIdArray);
+        $this->warehouseModel->saveDRNumberForLots($lotIdArray, $dr_number);
+        echo json_encode(['success' => true]);
         exit;
     }
 

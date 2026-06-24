@@ -415,7 +415,20 @@ document.getElementById('drConfirmEditBtn').addEventListener('click', function()
 });
 
 document.getElementById('drConfirmYesBtn').addEventListener('click', function() {
+    var drNumber = drState.drNumber;
     drConfirmModal.hide();
-    window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drState.drNumber);
+
+    fetch('?controller=warehouse&action=checkDRNumber&dr_number=' + encodeURIComponent(drNumber))
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.exists && data.po_ids && data.po_ids.length > 0) {
+                window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drNumber) + '&po_id=' + data.po_ids[0];
+            } else {
+                window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drNumber);
+            }
+        })
+        .catch(function() {
+            window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drNumber);
+        });
 });
 </script>

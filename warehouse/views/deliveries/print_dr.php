@@ -69,15 +69,17 @@
                                             $remaining = $lot['available_quantity'];
                                             $conv = $item['uom_conversion'] ?? null;
                                             $cases = ($conv && $item['item_uom'] !== 'CS') ? round($remaining / $conv, 2) : null;
+                                            $isExisting = in_array($lot['lot_id'], $existing_lot_ids);
                                         ?>
-                                            <tr class="<?= $remaining <= 0 ? 'table-secondary' : '' ?>">
+                                            <tr class="<?= $remaining <= 0 && !$isExisting ? 'table-secondary' : '' ?>">
                                                 <td>
                                                     <input type="checkbox" class="form-check-input lot-checkbox"
                                                            name="selected_lots[]"
                                                            value="<?= $lot['lot_id'] ?>"
                                                            data-remaining="<?= $remaining ?>"
                                                            data-item="<?= $item['item_id'] ?>"
-                                                           <?= $remaining <= 0 ? 'disabled' : '' ?>>
+                                                           <?= ($remaining <= 0 && !$isExisting) || ($remaining <= 0 && !$isExisting) ? 'disabled' : '' ?>
+                                                           <?= $isExisting ? 'checked' : '' ?>>
                                                 </td>
                                                 <td><strong><?= htmlspecialchars($lot['lot_number']) ?></strong></td>
                                                 <td class="text-right"><?= number_format($lot['quantity_produced']) ?></td>
@@ -186,7 +188,27 @@ document.getElementById('generateReceiptBtn').addEventListener('click', function
     const poId = document.getElementById('printDRPoSelect').value;
     const drNum = document.getElementById('drNumberValue').value;
     const drParam = drNum ? '&dr_number=' + encodeURIComponent(drNum) : '';
-    const url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
-    window.open(url, '_blank');
+
+    if (drNum) {
+        var formData = new FormData();
+        formData.append('lot_ids', lotIds.join(','));
+        formData.append('dr_number', drNum);
+
+        fetch('?controller=warehouse&action=saveDRNumberForLots', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function() {
+            var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
+            window.open(url, '_blank');
+        })
+        .catch(function() {
+            var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
+            window.open(url, '_blank');
+        });
+    } else {
+        var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
+        window.open(url, '_blank');
+    }
 });
 </script>
