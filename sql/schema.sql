@@ -81,11 +81,29 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     FOREIGN KEY (item_id) REFERENCES items(item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Production Lots Table
+CREATE TABLE IF NOT EXISTS production_lots (
+    lot_id INT AUTO_INCREMENT PRIMARY KEY,
+    po_id INT NOT NULL,
+    poi_id INT NOT NULL,
+    lot_number VARCHAR(100) NOT NULL,
+    quantity_produced INT NOT NULL DEFAULT 0,
+    lot_date DATE NULL,
+    created_by INT NULL,
+    date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `remove` TINYINT(1) DEFAULT 0 COMMENT '0=active, 1=soft deleted',
+    last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id),
+    FOREIGN KEY (poi_id) REFERENCES purchase_order_items(poi_id),
+    FOREIGN KEY (created_by) REFERENCES users(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Deliveries Table (from Warehouse)
 CREATE TABLE IF NOT EXISTS deliveries (
     delivery_id INT AUTO_INCREMENT PRIMARY KEY,
     po_id INT NOT NULL,
     poi_id INT NULL,
+    lot_id INT NULL,
     delivered_by INT NOT NULL,
     delivery_date DATE NOT NULL,
     delivery_quantity INT DEFAULT 0,
@@ -97,6 +115,7 @@ CREATE TABLE IF NOT EXISTS deliveries (
     last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id),
     FOREIGN KEY (poi_id) REFERENCES purchase_order_items(poi_id),
+    FOREIGN KEY (lot_id) REFERENCES production_lots(lot_id),
     FOREIGN KEY (delivered_by) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
