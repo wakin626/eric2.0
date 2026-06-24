@@ -18,6 +18,7 @@
                     <th>Item</th>
                     <th class="sortable" data-sort="progress">Production Progress <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="delivered">Delivered <i class="bi bi-chevron-expand"></i></th>
+                    <th>Cases</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -75,6 +76,23 @@
                             <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
+                    <td>
+                        <?php if (!empty($items)): ?>
+                            <?php foreach ($items as $idx => $item):
+                                $itemQty = $item['quantity'] ?? 0;
+                                $conv = $item['uom_conversion'] ?? null;
+                            ?>
+                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                <?php if ($conv && $item['item_uom'] !== 'CS'): ?>
+                                    <small><?= round($itemQty / $conv, 2) ?> CS</small>
+                                <?php else: ?>
+                                    <small class="text-muted">—</small>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <small class="text-muted">—</small>
+                        <?php endif; ?>
+                    </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
                             <i class="bi bi-eye"></i>
@@ -86,7 +104,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($purchase_orders)): ?>
-                <tr><td colspan="7" class="text-center text-muted py-4">No advance production orders found</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-4">No advance production orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

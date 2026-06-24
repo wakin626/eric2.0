@@ -93,7 +93,7 @@ return $stmt->fetchAll();
     }
 
     public function getPurchaseOrderItems($po_id) {
-        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom 
+        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.uom_conversion 
                 FROM purchase_order_items poi 
                 LEFT JOIN items i ON poi.item_id = i.item_id 
                 WHERE poi.po_id = :po_id";
@@ -105,7 +105,7 @@ return $stmt->fetchAll();
     public function getPurchaseOrderItemsByPOIds($poIds) {
         if (empty($poIds)) return [];
         $placeholders = implode(',', array_fill(0, count($poIds), '?'));
-        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom 
+        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.uom_conversion 
                 FROM purchase_order_items poi 
                 LEFT JOIN items i ON poi.item_id = i.item_id 
                 WHERE poi.po_id IN ($placeholders)
