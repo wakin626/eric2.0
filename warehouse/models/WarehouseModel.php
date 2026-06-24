@@ -162,13 +162,16 @@ return $stmt->fetchAll();
                        po.customer_terms, po.customer_id,
                        c.customer_name, c.customer_code, c.customer_address, c.customer_tin,
                        u.full_name as delivered_by_name,
-                       i.item_code as delivery_item_code, i.item_description as delivery_item_description
+                       i.item_code as delivery_item_code, i.item_description as delivery_item_description,
+                       i.item_uom, i.uom_conversion,
+                       l.lot_number
                 FROM deliveries d 
                 LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON d.delivered_by = u.user_id
                 LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
+                LEFT JOIN production_lots l ON d.lot_id = l.lot_id
                 WHERE d.delivery_id = :delivery_id AND d.`remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['delivery_id' => $delivery_id]);

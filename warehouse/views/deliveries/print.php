@@ -6,19 +6,13 @@
     <title>Delivery Receipt</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        html, body {
-            margin: 0;
-            padding: 0;
-        }
-
+        html, body { margin: 0; padding: 0; }
         body {
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             color: #000;
             background: #e0e0e0;
         }
-
         .no-print { display: block; text-align: center; padding: 12px; }
         .no-print button {
             padding: 10px 30px;
@@ -30,7 +24,6 @@
             border-radius: 5px;
         }
         .no-print button:hover { background: #0b5ed7; }
-
         .receipt-container {
             width: 8.5in;
             height: 11in;
@@ -39,195 +32,111 @@
             background: #fff;
             margin: 10px auto;
             font-family: Calibri, sans-serif;
-            /* border removed for print */
-            /*
-            outline: 1px dashed red;
-            */
         }
-
-        /* ─── Date (top right) ─── */
         .print-date {
             position: absolute;
             top: 1.8in;
             right: 0.5in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
-            text-align: left;
         }
-
-        /* ─── Company Name (center-left) ─── */
         .print-company-name {
             position: absolute;
             top: 2.2in;
             left: 1.35in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
-            text-align: left;
         }
-
-        /* ─── Company TIN (center-left) ─── */
         .print-company-tin {
             position: absolute;
             top: 2.4in;
             left: 1.35in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
-            text-align: left;
         }
-
-        /* ─── Company Address (center-left) ─── */
         .print-company-address {
             position: absolute;
             top: 2.6in;
             left: 1.35in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
-            text-align: left;
         }
-
-        /* ─── Terms (right side, same row as company) ─── */
         .print-terms {
             position: absolute;
             top: 2.2in;
             right: 0.5in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
-            text-align: left;
         }
-
-        /* ─── Customer Code (right side, below terms) ─── */
         .print-customer-code {
             position: absolute;
             top: 2.4in;
             right: 0.5in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
-            text-align: left;
         }
-
-        /* ─── PO Number (right side, below customer code) ─── */
         .print-po-number {
             position: absolute;
             top: 2.6in;
             right: 0.5in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
-            text-align: left;
         }
-
-        /* ─── Item Description ─── */
-        .print-item-desc {
+        .print-items-area {
             position: absolute;
-            top: 4.15in;
+            top: 3.8in;
             left: 0.55in;
-            width: 4.2in;
-            font-family: Calibri, sans-serif;
+            width: 7.4in;
+        }
+        .print-items-area table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 11pt;
+        }
+        .print-items-area th {
             text-align: left;
-            overflow: hidden;
-            white-space: nowrap;
-            text-overflow: clip;
+            border-bottom: 1px solid #000;
+            padding: 4px 2px;
+            font-size: 10pt;
         }
-
-        /* ─── Item Unit ─── */
-        .print-item-unit {
-            position: absolute;
-            top: 4.15in;
-            left: 5.0in;
-            width: 0.6in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            text-align: center;
+        .print-items-area td {
+            padding: 4px 2px;
+            vertical-align: top;
         }
-
-        /* ─── Item Qty ─── */
-        .print-item-qty {
-            position: absolute;
-            top: 4.15in;
-            left: 5.6in;
-            width: 0.8in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            text-align: right;
+        .print-items-area .text-right { text-align: right; }
+        .print-items-area .text-center { text-align: center; }
+        .lot-header {
+            font-weight: bold;
+            background: #f0f0f0;
+            padding: 3px 2px;
+            margin-top: 8px;
+            border-bottom: 1px solid #999;
         }
-
-        /* ─── Item Price ─── */
-        .print-item-price {
-            position: absolute;
-            top: 4.15in;
-            left: 6.3in;
-            width: 0.8in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            text-align: right;
-        }
-
-        /* ─── Item Amount ─── */
-        .print-item-amount {
-            position: absolute;
-            top: 4.15in;
-            left: 7.0in;
-            width: 1.1in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            text-align: right;
-        }
-
-        /* ─── Totals Block (lower right) ─── */
         .print-totals-block {
             position: absolute;
             bottom: 3.0in;
             left: 3.5in;
-            font-family: Calibri, sans-serif;
             font-size: 11pt;
             line-height: 1.8;
         }
-
         .print-totals-block .totals-row {
             display: flex;
             justify-content: flex-end;
             width: 4.2in;
         }
-
         .print-totals-block .totals-row .totals-value {
             text-align: right;
             min-width: 1.5in;
         }
-
         .print-totals-block .totals-grand {
             font-weight: bold;
             margin-top: 2px;
         }
-
-        /* ─── Print Styles ─── */
         @media print {
-            @page {
-                size: 8.5in 11in;
-                margin: 0 !important;
-            }
-
-            html, body {
-                padding: 0 !important;
-                margin: 0 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-
+            @page { size: 8.5in 11in; margin: 0 !important; }
+            html, body { padding: 0 !important; margin: 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
-
-            .receipt-container {
-                margin: 0 !important;
-                padding: 0 !important;
-                box-shadow: none;
-                background: #fff;
-            }
+            .receipt-container { margin: 0 !important; padding: 0 !important; box-shadow: none; background: #fff; }
         }
     </style>
 </head>
@@ -238,50 +147,60 @@
 </div>
 
 <div class="receipt-container">
+    <div class="print-date"><?= date('d-M-Y', strtotime($delivery['delivery_date'])) ?></div>
 
-    <!-- DATE (top right) -->
-    <div class="print-date">3-Jun-2026</div>
-
-    <!-- COMPANY INFO (center-left) -->
     <div class="print-company-name">SKINTEC ADVANCE INCORPORATED</div>
     <div class="print-company-tin">008-434-783-000</div>
     <div class="print-company-address">BYPASS ROAD BULIHAN PLARIDEL BULACAN 3004</div>
 
-    <!-- TERMS (right side) -->
-    <div class="print-terms">90 DAYS</div>
+    <div class="print-terms"><?= htmlspecialchars($delivery['customer_terms'] ?? '') ?> DAYS</div>
+    <div class="print-customer-code"><?= htmlspecialchars($delivery['customer_code'] ?? '') ?></div>
+    <div class="print-po-number"><?= htmlspecialchars($delivery['customer_po_number'] ?? '') ?></div>
 
-    <!-- CUSTOMER CODE (right side) -->
-    <div class="print-customer-code">SKI-CC-02199</div>
-
-    <!-- PO NUMBER (right side) -->
-    <div class="print-po-number">16529</div>
-
-    <!-- ITEM ROW (individual elements) -->
-    <div class="print-item-desc">Empress Shampoo Long and Healthy 21mlx24pck (11+1)</div>
-    <div class="print-item-unit">Pck</div>
-    <div class="print-item-qty">4,224</div>
-    <div class="print-item-price">29.75</div>
-    <div class="print-item-amount">125,664.00</div>
-
-    <!-- TOTALS BLOCK -->
-    <div class="print-totals-block">
-        <div class="totals-row">
-            <span class="totals-value">112,200.00</span>
-        </div>
-        <div class="totals-row">
-            <span class="totals-value">13,464.00</span>
-        </div>
-        <div class="totals-row">
-            <span class="totals-value">-</span>
-        </div>
-        <div class="totals-row">
-            <span class="totals-value">-</span>
-        </div>
-        <div class="totals-row totals-grand">
-            <span class="totals-value">125,664.00</span>
-        </div>
+    <div class="print-items-area">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:45%">Item Description</th>
+                    <th class="text-center" style="width:10%">UOM</th>
+                    <th class="text-right" style="width:15%">Quantity</th>
+                    <th class="text-right" style="width:15%">Price</th>
+                    <th class="text-right" style="width:15%">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($delivery['lot_number'])): ?>
+                <tr>
+                    <td colspan="5" class="lot-header">Lot: <?= htmlspecialchars($delivery['lot_number']) ?></td>
+                </tr>
+                <?php endif; ?>
+                <?php
+                $itemDesc = $delivery['delivery_item_description'] ?? '-';
+                $itemUom = $delivery['item_uom'] ?? '';
+                $itemQty = $delivery['delivery_quantity'] ?? 0;
+                $conv = $delivery['uom_conversion'] ?? null;
+                $cases = '';
+                if ($conv && $itemUom !== 'CS') {
+                    $cases = ' / ' . round($itemQty / $conv, 2) . ' CS';
+                }
+                $grandTotal = $itemQty * ($po_items[0]['unit_price'] ?? 0);
+                ?>
+                <tr>
+                    <td><?= htmlspecialchars($itemDesc) ?></td>
+                    <td class="text-center"><?= htmlspecialchars($itemUom) ?><?= $cases ?></td>
+                    <td class="text-right"><?= number_format($itemQty) ?></td>
+                    <td class="text-right"><?= number_format($po_items[0]['unit_price'] ?? 0, 2) ?></td>
+                    <td class="text-right"><?= number_format($grandTotal, 2) ?></td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
+    <div class="print-totals-block">
+        <div class="totals-row totals-grand">
+            <span class="totals-value"><?= number_format($grandTotal, 2) ?></span>
+        </div>
+    </div>
 </div>
 
 </body>
