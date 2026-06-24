@@ -302,4 +302,86 @@ return $stmt->fetchAll();
         }
         return $grouped;
     }
+
+    public function createLot($data) {
+        $sql = "INSERT INTO production_lots (po_id, poi_id, lot_number, quantity_produced, lot_date, created_by)
+                VALUES (:po_id, :poi_id, :lot_number, :quantity_produced, :lot_date, :created_by)";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute([
+            'po_id' => $data['po_id'],
+            'poi_id' => $data['poi_id'],
+            'lot_number' => $data['lot_number'],
+            'quantity_produced' => $data['quantity_produced'] ?? 0,
+            'lot_date' => $data['lot_date'] ?? date('Y-m-d'),
+            'created_by' => $data['created_by'] ?? null
+        ]);
+        return self::getConnection()->lastInsertId();
+    }
+
+    public function updateLotQuantity($poi_id, $lot_number, $added_quantity, $user_id, $po_id = null) {
+        $conn = self::getConnection();
+        $sql = "SELECT lot_id, quantity_produced FROM production_lots 
+                WHERE poi_id = :poi_id AND lot_number = :lot_number AND `remove` = 0";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id, 'lot_number' => $lot_number]);
+        $lot = $stmt->fetch();
+
+        if ($lot) {
+            $newQty = $lot['quantity_produced'] + $added_quantity;
+            $sql = "UPDATE production_lots SET quantity_produced = :qty WHERE lot_id = :lot_id";
+            $stmt = $conn->prepare($sql);
+            $stmt->execute(['qty' => $newQty, 'lot_id' => $lot['lot_id']]);
+            return $lot['lot_id'];
+        } else {
+            return $this->createLot([
+                'po_id' => $po_id,
+                'poi_id' => $poi_id,
+                'lot_number' => $lot_number,
+                'quantity_produced' => $added_quantity,
+                'created_by' => $user_id
+            ]);
+        }
+    }
+
+    public function getLotsByPOItem($poi_id) {
+        $sql = "SELECT * FROM production_lots 
+                WHERE poi_id = :poi_id AND `remove` = 0 
+                ORDER BY lot_number ASC, date_created ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getAvailableLotsForDelivery($poi_id) {
+        $sql = "SELECT l.*, 
+                    l.quantity_produced - COALESCE(
+                        (SELECT SUM(d.delivery_quantity) FROM deliveries d 
+                         WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
+                    ) AS available_quantity
+                FROM production_lots l 
+                WHERE l.poi_id = :poi_id AND l.`remove` = 0 
+                HAVING available_quantity > 0
+                ORDER BY l.lot_number ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getLotById($lot_id) {
+        $sql = "SELECT * FROM production_lots WHERE lot_id = :lot_id AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['lot_id' => $lot_id]);
+        return $stmt->fetch();
+    }
+
+    public function getLotRemaining($lot_id) {
+        $lot = $this->getLotById($lot_id);
+        if (!$lot) return 0;
+        $sql = "SELECT COALESCE(SUM(delivery_quantity), 0) AS total_delivered 
+                FROM deliveries WHERE lot_id = :lot_id AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['lot_id' => $lot_id]);
+        $row = $stmt->fetch();
+        return max(0, $lot['quantity_produced'] - ($row['total_delivered'] ?? 0));
+    }
 }
