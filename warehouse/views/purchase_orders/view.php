@@ -27,6 +27,7 @@
                         <th>Description</th>
                         <th>UOM</th>
                         <th>Quantity</th>
+                        <th>Cases</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -36,10 +37,18 @@
                         <td><?= htmlspecialchars($item['item_description']) ?></td>
                         <td><?= htmlspecialchars($item['item_uom']) ?></td>
                         <td><?= $item['quantity'] ?></td>
+                        <td>
+                            <?php $conv = $item['uom_conversion'] ?? null; ?>
+                            <?php if ($conv && $item['item_uom'] !== 'CS'): ?>
+                                <?= round($item['quantity'] / $conv, 2) ?> CS
+                            <?php else: ?>
+                                —
+                            <?php endif; ?>
+                        </td>
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($po_items)): ?>
-                    <tr><td colspan="4" class="text-center text-muted py-3">No items found</td></tr>
+                    <tr><td colspan="5" class="text-center text-muted py-3">No items found</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

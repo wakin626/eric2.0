@@ -261,6 +261,7 @@
                                 <th>Description</th>
                                 <th>UOM</th>
                                 <th>Quantity</th>
+                                <th>Cases</th>
                                 <th>Progress</th>
                             </tr>
                         </thead>
@@ -467,11 +468,17 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                         const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
                         const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
                         const lineTotal = item.quantity * item.unit_price;
+                        const conv = item.uom_conversion || null;
+                        let casesHtml = '—';
+                        if (conv && item.item_uom !== 'CS') {
+                            casesHtml = (qty / conv).toFixed(2) + ' CS';
+                        }
                         const row = '<tr>' +
                             '<td>' + (item.item_code || '-') + '</td>' +
                             '<td>' + (item.item_description || '-') + '</td>' +
                             '<td>' + (item.item_uom || '-') + '</td>' +
                             '<td>' + qty + '</td>' +
+                            '<td>' + casesHtml + '</td>' +
                             '<td>' +
                                 '<div class="d-flex align-items-center">' +
                                     '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
@@ -484,7 +491,7 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                         tbody.innerHTML += row;
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No items found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No items found</td></tr>';
                 }
                 
                 const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
