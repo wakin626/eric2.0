@@ -21,6 +21,7 @@
                     <th>PO Number</th>
                     <th>Customer</th>
                     <th>Item</th>
+                    <th>Lot Number</th>
                     <th>DR Number</th>
                     <th>PO Quantity</th>
                     <th>Delivered</th>
@@ -36,6 +37,7 @@
                     <td><strong class="text-primary"><?= $d['customer_po_number'] ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small></td>
+                    <td><small><?= htmlspecialchars($d['lot_number'] ?? '-') ?></small></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
                     <td><?= $d['total_quantity'] ?? 0 ?></td>
                     <td><?= $d['delivery_quantity'] ?? 0 ?></td>
@@ -52,7 +54,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="10" class="text-center text-muted py-4">No deliveries found</td></tr>
+                <tr><td colspan="11" class="text-center text-muted py-4">No deliveries found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -232,13 +234,11 @@ document.getElementById('poSelect').addEventListener('change', function() {
                 document.getElementById('itemProduced').value = item.produced_quantity || 0;
                 document.getElementById('itemDelivered').value = item.delivered_quantity || 0;
 
-                const itemAvailable = Math.max(0, (item.produced_quantity || 0) - (item.delivered_quantity || 0));
                 document.getElementById('itemQtyDisplay').value = item.quantity || 0;
-                document.getElementById('availableQty').value = itemAvailable;
-                document.getElementById('deliveryQty').max = itemAvailable;
+                document.getElementById('availableQty').value = '';
 
                 itemQtyRow.style.display = 'block';
-                availableRow.style.display = 'block';
+                availableRow.style.display = 'none';
 
                 poiSelect.innerHTML = '<option value="' + item.poi_id + '">' + (item.item_description || '-') + '</option>';
                 poiSelect.value = item.poi_id;
@@ -293,11 +293,10 @@ document.getElementById('poiSelect').addEventListener('change', function() {
     const available = Math.max(0, produced - delivered);
 
     document.getElementById('itemQtyDisplay').value = qty;
-    document.getElementById('availableQty').value = available;
-    document.getElementById('deliveryQty').max = available;
 
     document.getElementById('itemQtyRow').style.display = 'block';
-    document.getElementById('availableRow').style.display = 'block';
+    document.getElementById('availableRow').style.display = 'none';
+    document.getElementById('availableQty').value = '';
 
     document.getElementById('deliveryQty').value = '';
     document.getElementById('deliveryQty').classList.remove('is-invalid');
@@ -324,25 +323,21 @@ document.getElementById('poiSelect').addEventListener('change', function() {
 
 document.getElementById('lotSelect').addEventListener('change', function() {
     const selected = this.options[this.selectedIndex];
+    const availableRow = document.getElementById('availableRow');
+    const deliveryQty = document.getElementById('deliveryQty');
     if (this.value && selected.dataset.available) {
         const lotAvailable = parseInt(selected.dataset.available) || 0;
         document.getElementById('availableQty').value = lotAvailable;
-        document.getElementById('deliveryQty').max = lotAvailable;
-        document.getElementById('deliveryQty').value = '';
+        deliveryQty.max = lotAvailable;
+        deliveryQty.value = '';
+        availableRow.style.display = 'block';
     } else {
-        const poiSelect = document.getElementById('poiSelect');
-        const selectedPoi = poiSelect.options[poiSelect.selectedIndex];
-        if (poiSelect.value && selectedPoi) {
-            const qty = parseInt(selectedPoi.dataset.qty) || 0;
-            const produced = parseInt(selectedPoi.dataset.produced) || 0;
-            const delivered = parseInt(selectedPoi.dataset.delivered) || 0;
-            const available = Math.max(0, produced - delivered);
-            document.getElementById('availableQty').value = available;
-            document.getElementById('deliveryQty').max = available;
-        }
+        document.getElementById('availableQty').value = '';
+        deliveryQty.value = '';
+        deliveryQty.removeAttribute('max');
+        availableRow.style.display = 'none';
     }
-    document.getElementById('deliveryQty').value = '';
-    document.getElementById('deliveryQty').classList.remove('is-invalid');
+    deliveryQty.classList.remove('is-invalid');
     document.getElementById('deliveryError').textContent = '';
 });
 
@@ -358,6 +353,14 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
     if (poiSelect.offsetParent !== null && !poiSelect.value) {
         e.preventDefault();
         alert('Please select an item');
+        return;
+    }
+
+    const lotRow = document.getElementById('lotRow');
+    const lotSelect = document.getElementById('lotSelect');
+    if (lotRow.style.display !== 'none' && !lotSelect.value) {
+        e.preventDefault();
+        alert('Please select a lot number');
         return;
     }
 

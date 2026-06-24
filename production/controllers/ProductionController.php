@@ -44,11 +44,11 @@ class ProductionController {
 
     public function updateQuantity() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $po_id = $_POST['po_id'];
+            $po_id = $_POST['po_id'] ?? '';
 
-            if (is_array($_POST['added_quantity'] ?? null)) {
-                $poi_ids = $_POST['poi_id'] ?? [];
-                $quantities = $_POST['added_quantity'];
+            if (is_array($_POST['poi_id'] ?? null)) {
+                $poi_ids = $_POST['poi_id'];
+                $quantities = $_POST['added_quantity'] ?? [];
                 $lot_numbers = $_POST['lot_number'] ?? [];
                 foreach ($poi_ids as $i => $poi_id) {
                     if ($poi_id && isset($quantities[$i]) && $quantities[$i] > 0) {
@@ -61,17 +61,20 @@ class ProductionController {
                     }
                 }
             } else {
-                $added_quantity = $_POST['added_quantity'];
-                $lot_number = $_POST['lot_number'] ?? null;
                 $poi_id = $_POST['poi_id'] ?? null;
-                if ($poi_id) {
-                    $this->warehouseModel->updateItemProducedQuantity($poi_id, $added_quantity, $_SESSION['user_id']);
-                    if ($lot_number && $lot_number !== '') {
-                        $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
-                        $this->warehouseModel->updateLotQuantity($poi_id, $lot_number, $added_quantity, $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
+                $quantities = $_POST['added_quantity'] ?? [];
+                $lot_numbers = $_POST['lot_number'] ?? [];
+                if (!is_array($quantities)) $quantities = [$quantities];
+                if (!is_array($lot_numbers)) $lot_numbers = [$lot_numbers];
+                foreach ($quantities as $i => $qty) {
+                    if ($poi_id && $qty > 0) {
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $qty, $_SESSION['user_id']);
+                        $lot = $lot_numbers[$i] ?? null;
+                        if ($lot && $lot !== '') {
+                            $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
+                            $this->warehouseModel->updateLotQuantity($poi_id, $lot, $qty, $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
+                        }
                     }
-                } else {
-                    $this->warehouseModel->updateProducedQuantity($po_id, $added_quantity, $_SESSION['user_id']);
                 }
             }
 

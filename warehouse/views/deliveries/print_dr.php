@@ -71,17 +71,21 @@
                                             $cases = ($conv && $item['item_uom'] !== 'CS') ? round($remaining / $conv, 2) : null;
                                             $isExisting = in_array($lot['lot_id'], $existing_lot_ids);
                                         ?>
-                                            <tr class="<?= $remaining <= 0 && !$isExisting ? 'table-secondary' : '' ?>">
+                                            <tr class="<?= $remaining <= 0 && !$isExisting ? 'table-secondary' : '' ?>" style="<?= $remaining <= 0 && !$isExisting ? 'opacity:0.6' : '' ?>">
                                                 <td>
                                                     <input type="checkbox" class="form-check-input lot-checkbox"
                                                            name="selected_lots[]"
                                                            value="<?= $lot['lot_id'] ?>"
                                                            data-remaining="<?= $remaining ?>"
                                                            data-item="<?= $item['item_id'] ?>"
-                                                           <?= ($remaining <= 0 && !$isExisting) || ($remaining <= 0 && !$isExisting) ? 'disabled' : '' ?>
+                                                           <?= ($remaining <= 0 && !$isExisting) ? 'disabled' : '' ?>
                                                            <?= $isExisting ? 'checked' : '' ?>>
                                                 </td>
-                                                <td><strong><?= htmlspecialchars($lot['lot_number']) ?></strong></td>
+                                                <td><strong><?= htmlspecialchars($lot['lot_number']) ?></strong>
+                                                    <?php if ($remaining <= 0 && !$isExisting): ?>
+                                                        <i class="bi bi-lock-fill text-muted ms-1" title="Fully delivered"></i>
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td class="text-right"><?= number_format($lot['quantity_produced']) ?></td>
                                                 <td class="text-right"><?= number_format($lot['quantity_produced'] - $remaining) ?></td>
                                                 <td class="text-right">
@@ -187,28 +191,27 @@ document.getElementById('generateReceiptBtn').addEventListener('click', function
 
     const poId = document.getElementById('printDRPoSelect').value;
     const drNum = document.getElementById('drNumberValue').value;
-    const drParam = drNum ? '&dr_number=' + encodeURIComponent(drNum) : '';
 
-    if (drNum) {
-        var formData = new FormData();
-        formData.append('lot_ids', lotIds.join(','));
-        formData.append('dr_number', drNum);
-
-        fetch('?controller=warehouse&action=saveDRNumberForLots', {
-            method: 'POST',
-            body: formData
-        })
-        .then(function() {
-            var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
-            window.open(url, '_blank');
-        })
-        .catch(function() {
-            var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
-            window.open(url, '_blank');
-        });
-    } else {
-        var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&lots=' + lotIds.join(',') + drParam;
-        window.open(url, '_blank');
+    if (!drNum) {
+        alert('Please enter a DR number first');
+        return;
     }
+
+    var formData = new FormData();
+    formData.append('lot_ids', lotIds.join(','));
+    formData.append('dr_number', drNum);
+
+    fetch('?controller=warehouse&action=saveDRNumberForLots', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function() {
+        var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&dr_number=' + encodeURIComponent(drNum);
+        window.open(url, '_blank');
+    })
+    .catch(function() {
+        var url = '?controller=warehouse&action=printDRPreview&po_id=' + poId + '&dr_number=' + encodeURIComponent(drNum);
+        window.open(url, '_blank');
+    });
 });
 </script>

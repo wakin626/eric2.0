@@ -180,12 +180,13 @@ return $stmt->fetchAll();
 
     public function getDeliveries() {
     $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type, c.customer_name,
-                   poi.quantity as item_quantity, i.item_code, i.item_description
+                   poi.quantity as item_quantity, i.item_code, i.item_description, pl.lot_number
             FROM deliveries d 
             LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
             LEFT JOIN customers c ON po.customer_id = c.customer_id 
             LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
             LEFT JOIN items i ON poi.item_id = i.item_id
+            LEFT JOIN production_lots pl ON d.lot_id = pl.lot_id
             ORDER BY d.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
@@ -440,7 +441,8 @@ return $stmt->fetchAll();
         $placeholders = implode(',', array_fill(0, count($lotIds), '?'));
         $sql = "SELECT l.*, 
                     poi.quantity AS poi_quantity, poi.unit_price, poi.item_id,
-                    i.item_code, i.item_description, i.item_uom, i.uom_conversion
+                    i.item_code, i.item_description, i.item_uom, i.uom_conversion,
+                    COALESCE((SELECT SUM(d.delivery_quantity) FROM deliveries d WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0) AS total_delivered
                 FROM production_lots l
                 LEFT JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
@@ -453,13 +455,14 @@ return $stmt->fetchAll();
 
     public function getDeliveriesByDRNumber($dr_number) {
         $sql = "SELECT d.*, l.lot_number, l.poi_id AS lot_poi_id,
-                    poi.item_id, i.item_description, i.item_uom
+                    poi.item_id, poi.unit_price, poi.quantity AS poi_quantity,
+                    i.item_code, i.item_description, i.item_uom, i.uom_conversion
                 FROM deliveries d
                 LEFT JOIN production_lots l ON d.lot_id = l.lot_id
                 LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
                 WHERE d.dr_number = :dr_number AND d.`remove` = 0
-                ORDER BY d.date_created ASC";
+                ORDER BY i.item_description ASC, l.lot_number ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['dr_number' => $dr_number]);
         return $stmt->fetchAll();
@@ -478,7 +481,7 @@ return $stmt->fetchAll();
     public function saveDRNumberForLots($lotIds, $dr_number) {
         if (empty($lotIds)) return;
         $placeholders = implode(',', array_fill(0, count($lotIds), '?'));
-        $sql = "UPDATE deliveries SET dr_number = :dr_number WHERE lot_id IN ($placeholders) AND `remove` = 0";
+        $sql = "UPDATE deliveries SET dr_number = ? WHERE lot_id IN ($placeholders) AND `remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $params = array_merge([$dr_number], $lotIds);
         $stmt->execute($params);

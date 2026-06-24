@@ -201,21 +201,15 @@ class WarehouseController {
 
     public function printDRPreview() {
         $po_id = $_GET['po_id'] ?? null;
-        $lotIds = $_GET['lots'] ?? '';
         $dr_number = $_GET['dr_number'] ?? '';
-        if (!$po_id || empty($lotIds)) {
-            header('Location: ?controller=warehouse&action=printDR');
-            exit;
-        }
-        $lotIdArray = array_map('intval', explode(',', $lotIds));
-        $lotIdArray = array_filter($lotIdArray);
-        if (empty($lotIdArray)) {
+        if (!$dr_number) {
             header('Location: ?controller=warehouse&action=printDR');
             exit;
         }
         $data['po'] = $this->warehouseModel->getPurchaseOrderById($po_id);
-        $data['selected_lots'] = $this->warehouseModel->getLotsByIds($lotIdArray);
+        $data['dr_deliveries'] = $this->warehouseModel->getDeliveriesByDRNumber($dr_number);
         $data['dr_number'] = $dr_number;
+        extract($data);
         include __DIR__ . "/../views/deliveries/print_dr_preview.php";
         exit;
     }

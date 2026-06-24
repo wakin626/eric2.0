@@ -147,34 +147,38 @@
             </tr>
         </thead>
         <tbody>
+            <?php if (empty($dr_deliveries)): ?>
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">No deliveries found for DR number: <?= htmlspecialchars($dr_number) ?></td>
+                </tr>
+            <?php else: ?>
             <?php
             $grandTotalQty = 0;
             $grandTotalAmount = 0;
             $grandTotalCases = 0;
             $prevItemId = null;
 
-            foreach ($selected_lots as $lot):
-                $remaining = max(0, ($lot['quantity_produced'] ?? 0) - $lot['total_delivered'] ?? 0);
-                $qty = min($remaining, $lot['quantity_produced'] ?? 0);
-                $amount = $qty * ($lot['unit_price'] ?? 0);
-                $conv = $lot['uom_conversion'] ?? null;
-                $cases = ($conv && ($lot['item_uom'] ?? '') !== 'CS') ? round($qty / $conv, 2) : 0;
+            foreach ($dr_deliveries as $d):
+                $qty = $d['delivery_quantity'] ?? 0;
+                $amount = $qty * ($d['unit_price'] ?? 0);
+                $conv = $d['uom_conversion'] ?? null;
+                $cases = ($conv && ($d['item_uom'] ?? '') !== 'CS') ? round($qty / $conv, 2) : 0;
 
                 $grandTotalQty += $qty;
                 $grandTotalAmount += $amount;
                 $grandTotalCases += $cases;
             ?>
-                <?php if ($prevItemId !== null && $prevItemId != $lot['item_id']): ?>
+                <?php if ($prevItemId !== null && $prevItemId != $d['item_id']): ?>
                     <tr class="item-separator">
                         <td colspan="7"></td>
                     </tr>
                 <?php endif; ?>
                 <tr class="lot-row">
-                    <td><strong><?= htmlspecialchars($lot['lot_number']) ?></strong></td>
-                    <td><?= htmlspecialchars($lot['item_description'] ?? '') ?></td>
-                    <td class="text-center"><?= htmlspecialchars($lot['item_uom'] ?? '') ?></td>
+                    <td><strong><?= htmlspecialchars($d['lot_number'] ?? '-') ?></strong></td>
+                    <td><?= htmlspecialchars($d['item_description'] ?? '') ?></td>
+                    <td class="text-center"><?= htmlspecialchars($d['item_uom'] ?? '') ?></td>
                     <td class="text-right"><?= number_format($qty) ?></td>
-                    <td class="text-right"><?= number_format($lot['unit_price'] ?? 0, 2) ?></td>
+                    <td class="text-right"><?= number_format($d['unit_price'] ?? 0, 2) ?></td>
                     <td class="text-right"><?= number_format($amount, 2) ?></td>
                     <td class="text-right">
                         <?php if ($cases > 0): ?>
@@ -184,11 +188,13 @@
                         <?php endif; ?>
                     </td>
                 </tr>
-                <?php $prevItemId = $lot['item_id']; ?>
+                <?php $prevItemId = $d['item_id']; ?>
             <?php endforeach; ?>
+            <?php endif; ?>
         </tbody>
     </table>
 
+    <?php if (!empty($dr_deliveries)): ?>
     <div class="receipt-totals">
         <table>
             <tr>
@@ -207,6 +213,7 @@
             </tr>
         </table>
     </div>
+    <?php endif; ?>
 </div>
 
 </body>

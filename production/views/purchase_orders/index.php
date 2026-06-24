@@ -182,7 +182,7 @@
                 <div class="mb-3">
                     <p class="mb-1"><strong>Customer:</strong> <span id="updateCustomerName"></span></p>
                 </div>
-                <form method="POST" action="?controller=production&action=updateQuantity" id="updatePOForm">
+                <form method="POST" action="?controller=production&action=updateQuantity" id="updatePOForm" novalidate>
                     <input type="hidden" name="po_id" id="updatePoIdInput" value="">
                     <input type="hidden" name="from" value="purchaseOrders">
 
@@ -419,6 +419,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         window._currentBulkItems = items;
 
                         document.getElementById('updatePoiIdInput').disabled = true;
+                        singleLotContainer.querySelectorAll('input').forEach(function(el) { el.disabled = true; });
 
                         const firstRow = createBulkRow();
                         const firstSelect = firstRow.querySelector('.bulk-item-select');
@@ -431,6 +432,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (items.length === 1) {
                         singleGroup.classList.remove('d-none');
                         bulkGroup.classList.add('d-none');
+                        bulkContainer.innerHTML = '';
                         window._currentBulkItems = [];
                         const item = items[0];
                         document.getElementById('updatePoiIdInput').disabled = false;
@@ -447,6 +449,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         singleGroup.classList.remove('d-none');
                         bulkGroup.classList.add('d-none');
+                        bulkContainer.innerHTML = '';
                         window._currentBulkItems = [];
                         document.getElementById('updatePoiIdInput').disabled = false;
                         singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
@@ -492,15 +495,45 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('updatePOForm').addEventListener('submit', function(e) {
+        const singleGroup = document.getElementById('singleItemGroup');
         const bulkGroup = document.getElementById('bulkItemsGroup');
+
         if (!bulkGroup.classList.contains('d-none')) {
             let hasSelection = false;
+            let hasQuantity = false;
             document.querySelectorAll('.bulk-item-select').forEach(function(sel) {
                 if (sel.value) hasSelection = true;
+            });
+            document.querySelectorAll('.bulk-qty').forEach(function(inp) {
+                if (inp.value && parseInt(inp.value) > 0) hasQuantity = true;
             });
             if (!hasSelection) {
                 e.preventDefault();
                 alert('Please select at least one item.');
+                return;
+            }
+            if (!hasQuantity) {
+                e.preventDefault();
+                alert('Please enter a quantity for at least one item.');
+                return;
+            }
+        } else {
+            let hasLot = false;
+            let hasQty = false;
+            document.querySelectorAll('#singleLotContainer input[name="lot_number[]"]').forEach(function(inp) {
+                if (inp.value.trim()) hasLot = true;
+            });
+            document.querySelectorAll('#singleLotContainer input[name="added_quantity[]"]').forEach(function(inp) {
+                if (inp.value && parseInt(inp.value) > 0) hasQty = true;
+            });
+            if (!hasLot) {
+                e.preventDefault();
+                alert('Please enter a lot number.');
+                return;
+            }
+            if (!hasQty) {
+                e.preventDefault();
+                alert('Please enter an add quantity.');
                 return;
             }
         }
