@@ -102,6 +102,16 @@ return $stmt->fetchAll();
         return $stmt->fetchAll();
     }
 
+    public function getPurchaseOrderItemById($poi_id) {
+        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.uom_conversion 
+                FROM purchase_order_items poi 
+                LEFT JOIN items i ON poi.item_id = i.item_id 
+                WHERE poi.poi_id = :poi_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id]);
+        return $stmt->fetch();
+    }
+
     public function getPurchaseOrderItemsByPOIds($poIds) {
         if (empty($poIds)) return [];
         $placeholders = implode(',', array_fill(0, count($poIds), '?'));
