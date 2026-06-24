@@ -125,24 +125,6 @@ class WarehouseController {
         $this->render('deliveries/create', $data);
     }
 
-    public function printDelivery() {
-        $id = $_GET['id'] ?? null;
-        if (!$id) {
-            header('Location: ?controller=warehouse&action=deliveries');
-            exit;
-        }
-        $delivery = $this->warehouseModel->getDeliveryById($id);
-        if (!$delivery) {
-            $_SESSION['error'] = 'Delivery not found';
-            header('Location: ?controller=warehouse&action=deliveries');
-            exit;
-        }
-        $po = $this->warehouseModel->getPurchaseOrderById($delivery['po_id']);
-        $po_items = $this->warehouseModel->getPurchaseOrderItems($delivery['po_id']);
-        include __DIR__ . "/../views/deliveries/print.php";
-        exit;
-    }
-
     public function updateDRNumber() {
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

@@ -28,7 +28,6 @@
                     <th>Type</th>
                     <th>Delivery Date</th>
                     <th>Remarks</th>
-                    <th class="text-center">Action</th>
                 </tr>
             </thead>
             <tbody id="deliveryTableBody">
@@ -50,15 +49,10 @@
                     </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= htmlspecialchars($d['remarks'] ?? '-') ?></td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-secondary print-delivery-btn" data-po-id="<?= $d['po_id'] ?>" data-delivery-id="<?= $d['delivery_id'] ?>" data-dr-number="<?= htmlspecialchars($d['dr_number'] ?? '') ?>">
-                            <i class="bi bi-printer"></i>
-                        </button>
-                    </td>
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="11" class="text-center text-muted py-4">No deliveries found</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No deliveries found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -76,45 +70,6 @@
     </ul>
 </nav>
 <?php endif; ?>
-
-<!-- DR Number Input Modal -->
-<div class="modal fade" id="drInputModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Enter DR Number</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="text" id="drNumberInput" class="form-control" placeholder="Enter DR Number" autofocus>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="drInputOkBtn">OK</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- DR Number Confirm Modal -->
-<div class="modal fade" id="drConfirmModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-question-circle me-2"></i>Confirm DR Number</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure for this DR number?</p>
-                <p class="fw-bold text-primary mb-0" id="drConfirmNumber">-</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" id="drConfirmEditBtn"><i class="bi bi-pencil me-1"></i>Edit</button>
-                <button type="button" class="btn btn-primary" id="drConfirmYesBtn"><i class="bi bi-check-lg me-1"></i>Yes</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <div class="modal fade" id="createDeliveryModal">
     <div class="modal-dialog">
@@ -382,91 +337,5 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         alert('Delivery quantity must be at least 1');
         return;
     }
-});
-
-document.querySelectorAll('.print-delivery-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        var deliveryId = this.dataset.deliveryId;
-        var currentDr = this.dataset.drNumber || '';
-        var printUrl = '?controller=warehouse&action=printDelivery&id=' + deliveryId + '&t=' + Date.now();
-
-        if (currentDr.trim() === '') {
-            openDRInputModal(deliveryId, '', printUrl);
-        } else {
-            openDRConfirmModal(deliveryId, currentDr, printUrl, true);
-        }
-    });
-});
-
-var drInputModal, drConfirmModal;
-var drState = { deliveryId: null, drNumber: '', printUrl: '', isExisting: false };
-
-function openDRInputModal(deliveryId, prefilledValue, printUrl) {
-    drState = { deliveryId: deliveryId, drNumber: prefilledValue, printUrl: printUrl, isExisting: false };
-    document.getElementById('drNumberInput').value = prefilledValue;
-    drInputModal = new bootstrap.Modal(document.getElementById('drInputModal'));
-    drInputModal.show();
-}
-
-function openDRConfirmModal(deliveryId, drNumber, printUrl, isExisting) {
-    drState = { deliveryId: deliveryId, drNumber: drNumber, printUrl: printUrl, isExisting: isExisting };
-    document.getElementById('drConfirmNumber').textContent = drNumber;
-    drConfirmModal = new bootstrap.Modal(document.getElementById('drConfirmModal'));
-    drConfirmModal.show();
-}
-
-document.getElementById('drInputOkBtn').addEventListener('click', function() {
-    var value = document.getElementById('drNumberInput').value.trim();
-    if (value === '') {
-        alert('Please enter a DR number');
-        return;
-    }
-    drInputModal.hide();
-    openDRConfirmModal(drState.deliveryId, value, drState.printUrl, false);
-});
-
-document.getElementById('drNumberInput').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        document.getElementById('drInputOkBtn').click();
-    }
-});
-
-document.getElementById('drConfirmEditBtn').addEventListener('click', function() {
-    drConfirmModal.hide();
-    openDRInputModal(drState.deliveryId, drState.drNumber, drState.printUrl);
-});
-
-document.getElementById('drConfirmYesBtn').addEventListener('click', function() {
-    var deliveryId = drState.deliveryId;
-    var drNumber = drState.drNumber;
-    var printUrl = drState.printUrl;
-
-    var formData = new FormData();
-    formData.append('delivery_id', deliveryId);
-    formData.append('dr_number', drNumber);
-
-    fetch('?controller=warehouse&action=updateDRNumber', {
-        method: 'POST',
-        body: formData
-    })
-    .then(function(response) { return response.json(); })
-    .then(function(data) {
-        if (data.success) {
-            var btn = document.querySelector('.print-delivery-btn[data-delivery-id="' + deliveryId + '"]');
-            if (btn) {
-                btn.dataset.drNumber = drNumber;
-                var td = btn.closest('tr').cells[3];
-                td.innerHTML = drNumber ? drNumber : '<span class="text-muted">-</span>';
-            }
-            drConfirmModal.hide();
-            window.open(printUrl, '_blank');
-        } else {
-            alert('Failed to save DR number: ' + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(function() {
-        alert('Failed to save DR number. Please try again.');
-    });
 });
 </script>
