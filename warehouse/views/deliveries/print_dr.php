@@ -3,6 +3,7 @@
     Print Delivery Receipt – UI for selecting a PO, entering a DR number, and picking lots.
     Updated to include a visible DR number input (top) and to send PO ID via POST.
 */
+if (function_exists('opcache_reset')) { opcache_reset(); }
 ?>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div class="d-flex align-items-center">
