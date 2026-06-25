@@ -222,13 +222,32 @@ class WarehouseController {
         }
         $lotIds = $_POST['lot_ids'] ?? '';
         $dr_number = trim($_POST['dr_number'] ?? '');
-        if (empty($lotIds) || empty($dr_number)) {
-            echo json_encode(['success' => false]);
+        $po_id = $_POST['po_id'] ?? null;
+        if (empty($lotIds) || empty($dr_number) || empty($po_id)) {
+            echo json_encode(['success' => false, 'message' => 'Missing parameters']);
             exit;
         }
         $lotIdArray = array_map('intval', explode(',', $lotIds));
         $lotIdArray = array_filter($lotIdArray);
-        $this->warehouseModel->saveDRNumberForLots($lotIdArray, $dr_number);
+        foreach ($lotIdArray as $lotId) {
+            // Fetch lot to know its associated poi_id (if any) and remaining quantity
+            $lot = $this->warehouseModel->getLotById($lotId);
+            if (!$lot) continue;
+            $remaining = $this->warehouseModel->getLotRemaining($lotId);
+            if ($remaining <= 0) continue; // nothing to deliver
+            // Insert a new delivery row for this lot (include poi_id if present)
+            $deliveryId = $this->warehouseModel->createDelivery([
+                'po_id' => $po_id,
+                'poi_id' => $lot['poi_id'] ?? null,
+                'lot_id' => $lotId,
+                'delivered_by' => $_SESSION['user_id'],
+                'delivery_date' => date('Y-m-d'),
+                'delivery_quantity' => $remaining,
+                'remarks' => ''
+            ]);
+            // Assign the DR number to the newly created delivery
+            $this->warehouseModel->updateDRNumber($deliveryId, $dr_number);
+        }
         echo json_encode(['success' => true]);
         exit;
     }

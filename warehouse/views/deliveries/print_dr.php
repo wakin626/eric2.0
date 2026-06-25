@@ -1,3 +1,9 @@
+<?php
+/*
+    Print Delivery Receipt – UI for selecting a PO, entering a DR number, and picking lots.
+    Updated to include a visible DR number input (top) and to send PO ID via POST.
+*/
+?>
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div class="d-flex align-items-center">
         <a href="?controller=warehouse&action=deliveries" class="btn btn-secondary me-3"><i class="bi bi-arrow-left me-1"></i> Back</a>
@@ -7,6 +13,12 @@
 
 <div class="card data-card">
     <div class="card-body">
+        <!-- DR Number Input (always visible) -->
+        <div class="mb-4">
+            <label class="form-label">Delivery Receipt (DR) Number</label>
+            <input type="text" id="drNumberInput" class="form-control" placeholder="Enter DR number" value="<?= htmlspecialchars($dr_number ?? '') ?>">
+        </div>
+
         <div class="mb-4">
             <label class="form-label">Select Purchase Order</label>
             <select id="printDRPoSelect" class="form-select" style="max-width: 500px;">
@@ -18,12 +30,15 @@
                 <?php endforeach; ?>
             </select>
         </div>
+
         <?php if ($dr_number): ?>
         <div class="mb-3">
             <span class="badge bg-success fs-6"><i class="bi bi-check-circle me-1"></i>DR Number: <?= htmlspecialchars($dr_number) ?></span>
         </div>
         <?php endif; ?>
-        <input type="hidden" id="drNumberValue" value="<?= htmlspecialchars($dr_number) ?>">
+        
+        <!-- Hidden Po ID – used when posting the receipt -->
+        <input type="hidden" id="hiddenPoId" value="<?= htmlspecialchars($selected_po_id ?? '') ?>">
 
         <div id="lotSelectionArea" style="display: <?= $selected_po_id ? 'block' : 'none' ?>;">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -135,14 +150,16 @@
 </div>
 
 <script>
+// Update PO selection – keep the DR number typed
 document.getElementById('printDRPoSelect').addEventListener('change', function() {
     const poId = this.value;
-    const drNum = document.getElementById('drNumberValue').value;
-    const drParam = drNum ? '&dr_number=' + encodeURIComponent(drNum) : '';
+    const drNum = document.getElementById('drNumberInput').value.trim();
+    // Preserve PO ID in hidden field for later POST
+    document.getElementById('hiddenPoId').value = poId;
     if (poId) {
-        window.location.href = '?controller=warehouse&action=printDR&po_id=' + poId + drParam;
+        window.location.href = '?controller=warehouse&action=printDR&po_id=' + poId + (drNum ? '&dr_number=' + encodeURIComponent(drNum) : '');
     } else {
-        window.location.href = '?controller=warehouse&action=printDR' + drParam;
+        window.location.href = '?controller=warehouse&action=printDR' + (drNum ? '&dr_number=' + encodeURIComponent(drNum) : '');
     }
 });
 
@@ -190,16 +207,23 @@ document.getElementById('generateReceiptBtn').addEventListener('click', function
     });
 
     const poId = document.getElementById('printDRPoSelect').value;
-    const drNum = document.getElementById('drNumberValue').value;
+    const drNum = document.getElementById('drNumberInput').value.trim();
 
     if (!drNum) {
         alert('Please enter a DR number first');
+        return;
+    }
+    if (!poId) {
+        alert('Please select a Purchase Order first');
         return;
     }
 
     var formData = new FormData();
     formData.append('lot_ids', lotIds.join(','));
     formData.append('dr_number', drNum);
+    formData.append('po_id', poId);
+    // Use today's date for delivery_date (server can also set it)
+    formData.append('delivery_date', new Date().toISOString().split('T')[0]);
 
     fetch('?controller=warehouse&action=saveDRNumberForLots', {
         method: 'POST',
