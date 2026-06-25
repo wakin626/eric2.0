@@ -536,13 +536,13 @@ document.getElementById('drConfirmYesBtn').addEventListener('click', function() 
         .then(function(response) { return response.json(); })
         .then(function(data) {
             if (data.exists && data.po_ids && data.po_ids.length > 0) {
-                window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drNumber) + '&po_id=' + data.po_ids[0];
+                window.location.href = '?controller=warehouse&action=printDRPreview&dr_number=' + encodeURIComponent(drNumber) + '&po_id=' + data.po_ids[0];
             } else {
-                window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drNumber);
+                alert('Error: DR number "' + drNumber + '" not found. Please check the DR number and try again.');
             }
         })
         .catch(function() {
-            window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drNumber);
+            alert('Error: Could not verify DR number. Please try again.');
         });
 });
 

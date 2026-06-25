@@ -18,6 +18,7 @@ if (function_exists('opcache_reset')) { opcache_reset(); }
         <div class="mb-4">
             <label class="form-label">Delivery Receipt (DR) Number</label>
             <input type="text" id="drNumberInput" class="form-control" placeholder="Enter DR number" value="<?= htmlspecialchars($dr_number ?? '') ?>">
+            <div id="drNumberFeedback" class="mt-1"></div>
         </div>
 
         <div class="mb-4">
@@ -151,6 +152,22 @@ if (function_exists('opcache_reset')) { opcache_reset(); }
 </div>
 
 <script>
+document.getElementById('drNumberInput').addEventListener('blur', function() {
+    var drVal = this.value.trim();
+    var feedback = document.getElementById('drNumberFeedback');
+    if (!drVal) { feedback.innerHTML = ''; return; }
+    fetch('?controller=warehouse&action=checkDRNumber&dr_number=' + encodeURIComponent(drVal))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.exists) {
+                feedback.innerHTML = '<small class="text-success"><i class="bi bi-check-circle me-1"></i>DR exists. <a href="?controller=warehouse&action=printDRPreview&dr_number=' + encodeURIComponent(drVal) + (data.po_ids && data.po_ids[0] ? '&po_id=' + data.po_ids[0] : '') + '" target="_blank">View/Print</a></small>';
+            } else {
+                feedback.innerHTML = '<small class="text-muted">New DR number - proceed to select lots.</small>';
+            }
+        })
+        .catch(function() { feedback.innerHTML = ''; });
+});
+
 // Update PO selection – keep the DR number typed
 document.getElementById('printDRPoSelect').addEventListener('change', function() {
     const poId = this.value;

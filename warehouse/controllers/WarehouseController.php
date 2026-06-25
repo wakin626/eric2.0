@@ -249,8 +249,16 @@ class WarehouseController {
             header('Location: ?controller=warehouse&action=printDR');
             exit;
         }
-        $data['po'] = $this->warehouseModel->getPurchaseOrderById($po_id);
-        $data['dr_deliveries'] = $this->warehouseModel->getDeliveriesByDRNumber($dr_number);
+        $dr_deliveries = $this->warehouseModel->getDeliveriesByDRNumber($dr_number);
+        if (empty($dr_deliveries)) {
+            echo "<div class='container mt-5'><div class='alert alert-danger'>Error: DR number \"" . htmlspecialchars($dr_number) . "\" not found.</div><a href='?controller=warehouse&action=deliveries' class='btn btn-secondary'>Back</a></div>";
+            exit;
+        }
+        if (!$po_id && !empty($dr_deliveries[0]['po_id'])) {
+            $po_id = $dr_deliveries[0]['po_id'];
+        }
+        $data['po'] = $po_id ? $this->warehouseModel->getPurchaseOrderById($po_id) : null;
+        $data['dr_deliveries'] = $dr_deliveries;
         $data['dr_number'] = $dr_number;
         extract($data);
         include __DIR__ . "/../views/deliveries/print_dr_preview.php";
