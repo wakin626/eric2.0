@@ -198,10 +198,19 @@ document.getElementById('searchDelivery').addEventListener('keyup', function() {
 
 let poItemsCache = [];
 
-function renderLotCheckboxes(lots, lotRow, lotContainer) {
-    lotContainer.innerHTML = '';
+function renderLotCheckboxes(lots, lotRow, lotContainer, itemName) {
     if (lots && lots.length > 0) {
-        lots.forEach(function(lot) {
+        var hasNew = false;
+        for (var i = 0; i < lots.length; i++) {
+            if (document.getElementById('lotChk_' + lots[i].lot_id)) continue;
+            if (!hasNew && itemName) {
+                var hdr = document.createElement('div');
+                hdr.className = 'fw-bold text-primary small mb-1 mt-2';
+                hdr.textContent = itemName;
+                lotContainer.appendChild(hdr);
+            }
+            hasNew = true;
+            var lot = lots[i];
             const wrapper = document.createElement('div');
             wrapper.className = 'd-flex align-items-center mb-2 p-2 border rounded bg-light';
             const checkbox = document.createElement('input');
@@ -241,10 +250,12 @@ function renderLotCheckboxes(lots, lotRow, lotContainer) {
                     qtyInput.focus();
                 }
             });
-        });
+        }
         lotRow.style.display = 'block';
     } else {
-        lotRow.style.display = 'none';
+        if (lotContainer.children.length === 0) {
+            lotRow.style.display = 'none';
+        }
     }
 }
 
@@ -314,7 +325,7 @@ document.getElementById('poSelect').addEventListener('change', function() {
                 fetch('?controller=warehouse&action=getAvailableLots&poi_id=' + item.poi_id)
                     .then(function(response) { return response.json(); })
                     .then(function(lots) {
-                        renderLotCheckboxes(lots, lotRow, lotContainer);
+                        renderLotCheckboxes(lots, lotRow, lotContainer, item.item_description || '-');
                     });
             }
         });
@@ -329,12 +340,11 @@ document.getElementById('poiSelect').addEventListener('change', function() {
         document.getElementById('itemQtyRow').style.display = 'none';
         document.getElementById('availableRow').style.display = 'none';
         document.getElementById('deliveryQty').value = '';
-        lotRow.style.display = 'none';
-        lotContainer.innerHTML = '';
         return;
     }
 
     const qty = parseInt(selected.dataset.qty) || 0;
+    const itemName = selected.textContent.trim();
 
     document.getElementById('itemQtyDisplay').value = qty;
     document.getElementById('itemQtyRow').style.display = 'block';
@@ -348,7 +358,7 @@ document.getElementById('poiSelect').addEventListener('change', function() {
     fetch('?controller=warehouse&action=getAvailableLots&poi_id=' + this.value)
         .then(function(response) { return response.json(); })
         .then(function(lots) {
-            renderLotCheckboxes(lots, lotRow, lotContainer);
+            renderLotCheckboxes(lots, lotRow, lotContainer, itemName);
         });
 });
 
@@ -360,15 +370,7 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         return;
     }
 
-    const itemRow = document.getElementById('itemRow');
-    const poiSelect = document.getElementById('poiSelect');
-    if (itemRow.style.display !== 'none' && !poiSelect.value) {
-        e.preventDefault();
-        alert('Please select an item');
-        return;
-    }
-
-    const checkedBoxes = document.querySelectorAll('#lotCheckboxContainer input:checked');
+    const checkedBoxes = document.querySelectorAll('#lotCheckboxContainer input[type="checkbox"]:checked');
     if (checkedBoxes.length === 0) {
         e.preventDefault();
         alert('Please select at least one lot');
