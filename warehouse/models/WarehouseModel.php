@@ -133,8 +133,8 @@ return $stmt->fetchAll();
     public function createDelivery($data) {
         $conn = self::getConnection();
         
-        $sql = "INSERT INTO deliveries (po_id, poi_id, lot_id, delivered_by, delivery_date, delivery_quantity, remarks) 
-                VALUES (:po_id, :poi_id, :lot_id, :delivered_by, :delivery_date, :delivery_quantity, :remarks)";
+        $sql = "INSERT INTO deliveries (po_id, poi_id, lot_id, delivered_by, delivery_date, delivery_quantity, dr_number, lot_items, remarks) 
+                VALUES (:po_id, :poi_id, :lot_id, :delivered_by, :delivery_date, :delivery_quantity, :dr_number, :lot_items, :remarks)";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'po_id' => $data['po_id'],
@@ -143,6 +143,8 @@ return $stmt->fetchAll();
             'delivered_by' => $data['delivered_by'],
             'delivery_date' => $data['delivery_date'],
             'delivery_quantity' => $data['delivery_quantity'],
+            'dr_number' => $data['dr_number'] ?? null,
+            'lot_items' => $data['lot_items'] ?? null,
             'remarks' => $data['remarks'] ?? ''
         ]);
         
@@ -154,7 +156,7 @@ return $stmt->fetchAll();
                 ->execute(['added' => $data['delivery_quantity'], 'poi_id' => $data['poi_id']]);
         }
         
-        return self::getConnection()->lastInsertId();
+        return $conn->lastInsertId();
     }
 
     public function getDeliveryById($delivery_id) {
@@ -187,6 +189,7 @@ return $stmt->fetchAll();
             LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
             LEFT JOIN items i ON poi.item_id = i.item_id
             LEFT JOIN production_lots pl ON d.lot_id = pl.lot_id
+            WHERE d.`remove` = 0
             ORDER BY d.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
@@ -372,14 +375,45 @@ return $stmt->fetchAll();
                     l.quantity_produced - COALESCE(
                         (SELECT SUM(d.delivery_quantity) FROM deliveries d 
                          WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
-                    ) AS available_quantity
+                    ) AS delivered_legacy
                 FROM production_lots l 
-                WHERE l.poi_id = :poi_id AND l.`is_removed` = 0 
-                HAVING available_quantity > 0
-                ORDER BY l.lot_number ASC";
+                WHERE l.poi_id = :poi_id AND l.`is_removed` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
-        return $stmt->fetchAll();
+        $lots = $stmt->fetchAll();
+        $conn = self::getConnection();
+        $stmt2 = $conn->prepare("SELECT lot_items FROM deliveries 
+                WHERE lot_items IS NOT NULL AND `remove` = 0");
+        $stmt2->execute();
+        $jsonDelivered = [];
+        while ($r = $stmt2->fetch()) {
+            $items = json_decode($r['lot_items'], true);
+            if (!is_array($items)) continue;
+            foreach ($items as $li) {
+                if (isset($li['lot_id'])) {
+                    $lid = intval($li['lot_id']);
+                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                }
+            }
+        }
+        $result = [];
+        foreach ($lots as $lot) {
+            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($lot['delivered_legacy'] ?? 0) - ($jsonDelivered[$lot['lot_id']] ?? 0));
+            if ($lot['available_quantity'] > 0) $result[] = $lot;
+        }
+        usort($result, function($a, $b) { return strcmp($a['lot_number'], $b['lot_number']); });
+        return $result;
+    }
+
+    public function getItemByPoiId($poi_id) {
+        if (!$poi_id) return null;
+        $sql = "SELECT i.item_id, i.item_code, i.item_description, i.item_uom, i.uom_conversion, poi.unit_price
+                FROM purchase_order_items poi
+                JOIN items i ON poi.item_id = i.item_id
+                WHERE poi.poi_id = :poi_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id]);
+        return $stmt->fetch();
     }
 
     public function getLotById($lot_id) {
@@ -392,12 +426,26 @@ return $stmt->fetchAll();
     public function getLotRemaining($lot_id) {
         $lot = $this->getLotById($lot_id);
         if (!$lot) return 0;
-        $sql = "SELECT COALESCE(SUM(delivery_quantity), 0) AS total_delivered 
-                FROM deliveries WHERE lot_id = :lot_id AND `remove` = 0";
-        $stmt = self::getConnection()->prepare($sql);
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT COALESCE(SUM(delivery_quantity), 0) AS total_delivered 
+                FROM deliveries WHERE lot_id = :lot_id AND `remove` = 0");
         $stmt->execute(['lot_id' => $lot_id]);
         $row = $stmt->fetch();
-        return max(0, $lot['quantity_produced'] - ($row['total_delivered'] ?? 0));
+        $deliveredLegacy = $row['total_delivered'] ?? 0;
+        $stmt2 = $conn->prepare("SELECT lot_items FROM deliveries 
+                WHERE lot_items IS NOT NULL AND `remove` = 0");
+        $stmt2->execute();
+        $deliveredJson = 0;
+        while ($r = $stmt2->fetch()) {
+            $items = json_decode($r['lot_items'], true);
+            if (!is_array($items)) continue;
+            foreach ($items as $li) {
+                if (isset($li['lot_id']) && intval($li['lot_id']) === intval($lot_id)) {
+                    $deliveredJson += intval($li['qty'] ?? 0);
+                }
+            }
+        }
+        return max(0, $lot['quantity_produced'] - $deliveredLegacy - $deliveredJson);
     }
 
     public function getLotsByPOForPrint($po_id) {
@@ -407,7 +455,7 @@ return $stmt->fetchAll();
                     l.quantity_produced - COALESCE(
                         (SELECT SUM(d.delivery_quantity) FROM deliveries d 
                          WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
-                    ) AS available_quantity
+                    ) AS delivered_legacy
                 FROM production_lots l
                 LEFT JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
@@ -416,6 +464,25 @@ return $stmt->fetchAll();
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
         $rows = $stmt->fetchAll();
+        $conn = self::getConnection();
+        $stmt2 = $conn->prepare("SELECT lot_items FROM deliveries 
+                WHERE lot_items IS NOT NULL AND `remove` = 0");
+        $stmt2->execute();
+        $jsonDelivered = [];
+        while ($r = $stmt2->fetch()) {
+            $items = json_decode($r['lot_items'], true);
+            if (!is_array($items)) continue;
+            foreach ($items as $li) {
+                if (isset($li['lot_id'])) {
+                    $lid = intval($li['lot_id']);
+                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                }
+            }
+        }
+        foreach ($rows as &$row) {
+            $row['available_quantity'] = max(0, $row['quantity_produced'] - ($row['delivered_legacy'] ?? 0) - ($jsonDelivered[$row['lot_id']] ?? 0));
+        }
+        unset($row);
 
         $grouped = [];
         foreach ($rows as $row) {
@@ -454,18 +521,46 @@ return $stmt->fetchAll();
     }
 
     public function getDeliveriesByDRNumber($dr_number) {
-        $sql = "SELECT d.*, l.lot_number, l.poi_id AS lot_poi_id,
-                    poi.item_id, poi.unit_price, poi.quantity AS poi_quantity,
-                    i.item_code, i.item_description, i.item_uom, i.uom_conversion
+        $sql = "SELECT d.*, po.customer_po_number, po.customer_terms, c.customer_name, c.customer_code, c.customer_address, c.customer_tin
                 FROM deliveries d
-                LEFT JOIN production_lots l ON d.lot_id = l.lot_id
-                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
-                LEFT JOIN items i ON poi.item_id = i.item_id
+                LEFT JOIN purchase_orders po ON d.po_id = po.po_id
+                LEFT JOIN customers c ON po.customer_id = c.customer_id
                 WHERE d.dr_number = :dr_number AND d.`remove` = 0
-                ORDER BY i.item_description ASC, l.lot_number ASC";
+                ORDER BY d.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['dr_number' => $dr_number]);
-        return $stmt->fetchAll();
+        $deliveries = $stmt->fetchAll();
+        $result = [];
+        foreach ($deliveries as $d) {
+            $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+            if (is_array($lotItems) && count($lotItems) > 0) {
+                foreach ($lotItems as $li) {
+                    $result[] = [
+                        'delivery_id' => $d['delivery_id'],
+                        'po_id' => $d['po_id'],
+                        'lot_number' => $li['lot_number'] ?? '',
+                        'item_code' => $li['item_code'] ?? '',
+                        'item_description' => $li['item_description'] ?? '',
+                        'delivery_quantity' => $li['qty'] ?? 0,
+                        'delivery_date' => $d['delivery_date'],
+                        'dr_number' => $d['dr_number'],
+                        'customer_po_number' => $d['customer_po_number'] ?? '',
+                        'customer_name' => $d['customer_name'] ?? '',
+                        'customer_code' => $d['customer_code'] ?? '',
+                        'customer_address' => $d['customer_address'] ?? '',
+                        'customer_tin' => $d['customer_tin'] ?? '',
+                        'customer_terms' => $d['customer_terms'] ?? 0,
+                        'unit_price' => $li['unit_price'] ?? 0,
+                        'item_uom' => $li['item_uom'] ?? '',
+                        'uom_conversion' => $li['uom_conversion'] ?? null,
+                        'item_id' => $li['item_id'] ?? null,
+                    ];
+                }
+            } else {
+                $result[] = $d;
+            }
+        }
+        return $result;
     }
 
     public function getLotsByDRNumber($dr_number) {

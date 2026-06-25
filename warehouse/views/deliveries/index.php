@@ -20,28 +20,45 @@
                 <tr>
                     <th>PO Number</th>
                     <th>Customer</th>
-                    <th>Item</th>
-                    <th>Lot Number</th>
+                    <th>Items / Lots</th>
                     <th>DR Number</th>
-                    <th>PO Quantity</th>
-                    <th>Delivered</th>
-                    <th>Remaining Balance</th>
+                    <th>Total Delivered</th>
                     <th>Type</th>
                     <th>Delivery Date</th>
                     <th>Remarks</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody id="deliveryTableBody">
                 <?php foreach ($deliveries as $d): ?>
+                <?php
+                    $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                    $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
+                    $itemSummary = '';
+                    if ($hasLotItems) {
+                        $grouped = [];
+                        foreach ($lotItems as $li) {
+                            $key = $li['item_description'] ?? $li['item_code'] ?? 'Unknown';
+                            if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'lots' => []];
+                            $grouped[$key]['qty'] += $li['qty'] ?? 0;
+                            $grouped[$key]['lots'][] = $li['lot_number'] ?? '?';
+                        }
+                        $parts = [];
+                        foreach ($grouped as $desc => $info) {
+                            $parts[] = htmlspecialchars($desc) . ' (' . $info['qty'] . ' - ' . implode(', ', $info['lots']) . ')';
+                        }
+                        $itemSummary = implode('<br>', $parts);
+                    } else {
+                        $itemSummary = htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? ''));
+                        if (!empty($d['lot_number'])) $itemSummary .= '<br><small>' . htmlspecialchars($d['lot_number']) . '</small>';
+                    }
+                ?>
                 <tr>
                     <td><strong class="text-primary"><?= $d['customer_po_number'] ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
-                    <td><small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small></td>
-                    <td><small><?= htmlspecialchars($d['lot_number'] ?? '-') ?></small></td>
+                    <td><small><?= $itemSummary ?></small></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
-                    <td><?= $d['total_quantity'] ?? 0 ?></td>
                     <td><?= $d['delivery_quantity'] ?? 0 ?></td>
-                    <td><?= ($d['total_quantity'] ?? 0) - ($d['delivered_quantity'] ?? 0) ?></td>
                     <td>
                         <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
                             <span class="badge bg-info">Advance</span>
@@ -51,10 +68,25 @@
                     </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= htmlspecialchars($d['remarks'] ?? '-') ?></td>
+                    <td>
+                        <?php if ($hasLotItems): ?>
+                        <button type="button" class="btn btn-sm btn-outline-primary viewDeliveryBtn"
+                            data-bs-toggle="modal" data-bs-target="#viewDeliveryModal"
+                            data-dr="<?= htmlspecialchars($d['dr_number']) ?>"
+                            data-po="<?= htmlspecialchars($d['customer_po_number']) ?>"
+                            data-customer="<?= htmlspecialchars($d['customer_name'] ?? '') ?>"
+                            data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>"
+                            data-remarks="<?= htmlspecialchars($d['remarks'] ?? '') ?>"
+                            data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
+                            data-delivered-by="<?= htmlspecialchars($d['delivered_by_name'] ?? '') ?>">
+                            <i class="bi bi-eye"></i> View
+                        </button>
+                        <?php endif; ?>
+                    </td>
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="11" class="text-center text-muted py-4">No deliveries found</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-4">No deliveries found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -184,6 +216,64 @@
                     <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Save Delivery</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Delivery Modal -->
+<div class="modal fade" id="viewDeliveryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Delivery Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>DR Number:</strong> <span id="viewDrNumber">-</span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>PO Number:</strong> <span id="viewPoNumber">-</span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Customer:</strong> <span id="viewCustomer">-</span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Delivery Date:</strong> <span id="viewDate">-</span>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Remarks:</strong> <span id="viewRemarks">-</span>
+                    </div>
+                </div>
+                <hr>
+                <h6 class="mb-3">Lot Items</h6>
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Item Code</th>
+                            <th>Item Description</th>
+                            <th>Lot Number</th>
+                            <th class="text-end">Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="viewLotItemsBody">
+                    </tbody>
+                    <tfoot id="viewLotItemsFoot">
+                        <tr class="table-light fw-bold">
+                            <td colspan="3" class="text-end">Total:</td>
+                            <td class="text-end" id="viewTotalQty">0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
         </div>
     </div>
 </div>
@@ -454,5 +544,29 @@ document.getElementById('drConfirmYesBtn').addEventListener('click', function() 
         .catch(function() {
             window.location.href = '?controller=warehouse&action=printDR&dr_number=' + encodeURIComponent(drNumber);
         });
+});
+
+document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('viewDrNumber').textContent = this.dataset.dr || '-';
+        document.getElementById('viewPoNumber').textContent = this.dataset.po || '-';
+        document.getElementById('viewCustomer').textContent = this.dataset.customer || '-';
+        document.getElementById('viewDate').textContent = this.dataset.date || '-';
+        document.getElementById('viewRemarks').textContent = this.dataset.remarks || '-';
+        var lotItems = JSON.parse(this.dataset.lotItems || '[]');
+        var tbody = document.getElementById('viewLotItemsBody');
+        tbody.innerHTML = '';
+        var total = 0;
+        lotItems.forEach(function(item) {
+            total += item.qty || 0;
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + (item.item_code || '-') + '</td>' +
+                '<td>' + (item.item_description || '-') + '</td>' +
+                '<td>' + (item.lot_number || '-') + '</td>' +
+                '<td class="text-end">' + (item.qty || 0) + '</td>';
+            tbody.appendChild(tr);
+        });
+        document.getElementById('viewTotalQty').textContent = total;
+    });
 });
 </script>

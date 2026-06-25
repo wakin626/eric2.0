@@ -121,6 +121,9 @@ class WarehouseController {
             exit;
         }
         $pairs = explode(',', $lotIdsRaw);
+        $lotItems = [];
+        $totalQty = 0;
+        $firstPoiId = null;
         foreach ($pairs as $pair) {
             $parts = explode(':', $pair);
             if (count($parts) !== 2) continue;
@@ -132,18 +135,35 @@ class WarehouseController {
             $remaining = $this->warehouseModel->getLotRemaining($lotId);
             if ($deliveryQty > $remaining) $deliveryQty = $remaining;
             if ($deliveryQty <= 0) continue;
-            $deliveryId = $this->warehouseModel->createDelivery([
-                'po_id' => $po_id,
-                'poi_id' => $lot['poi_id'] ?? null,
+            $poiId = $lot['poi_id'] ?? null;
+            $item = $this->warehouseModel->getItemByPoiId($poiId);
+            $lotItems[] = [
                 'lot_id' => $lotId,
-                'delivered_by' => $_SESSION['user_id'],
-                'delivery_date' => $delivery_date,
-                'delivery_quantity' => $deliveryQty,
-                'remarks' => $remarks
-            ]);
-            $this->warehouseModel->updateDRNumber($deliveryId, $dr_number);
+                'poi_id' => $poiId,
+                'lot_number' => $lot['lot_number'] ?? '',
+                'item_code' => $item['item_code'] ?? '',
+                'item_description' => $item['item_description'] ?? '',
+                'qty' => $deliveryQty
+            ];
+            $totalQty += $deliveryQty;
+            if (!$firstPoiId) $firstPoiId = $poiId;
         }
-        $_SESSION['success'] = "Delivery(ies) recorded successfully for DR {$dr_number}.";
+        if (empty($lotItems)) {
+            $_SESSION['error'] = 'No valid lots selected for delivery.';
+            header('Location: ?controller=warehouse&action=deliveries');
+            exit;
+        }
+        $deliveryId = $this->warehouseModel->createDelivery([
+            'po_id' => $po_id,
+            'poi_id' => $firstPoiId,
+            'delivered_by' => $_SESSION['user_id'],
+            'delivery_date' => $delivery_date,
+            'delivery_quantity' => $totalQty,
+            'dr_number' => $dr_number,
+            'lot_items' => json_encode($lotItems),
+            'remarks' => $remarks
+        ]);
+        $_SESSION['success'] = "Delivery recorded successfully for DR {$dr_number}.";
         header('Location: ?controller=warehouse&action=deliveries');
         exit;
     }
@@ -252,25 +272,45 @@ class WarehouseController {
         }
         $lotIdArray = array_map('intval', explode(',', $lotIds));
         $lotIdArray = array_filter($lotIdArray);
+        $lotItems = [];
+        $totalQty = 0;
+        $firstPoiId = null;
         foreach ($lotIdArray as $lotId) {
-            // Fetch lot to know its associated poi_id (if any) and remaining quantity
             $lot = $this->warehouseModel->getLotById($lotId);
             if (!$lot) continue;
             $remaining = $this->warehouseModel->getLotRemaining($lotId);
-            if ($remaining <= 0) continue; // nothing to deliver
-            // Insert a new delivery row for this lot (include poi_id if present)
-            $deliveryId = $this->warehouseModel->createDelivery([
-                'po_id' => $po_id,
-                'poi_id' => $lot['poi_id'] ?? null,
+            if ($remaining <= 0) continue;
+            $poiId = $lot['poi_id'] ?? null;
+            $item = $this->warehouseModel->getItemByPoiId($poiId);
+            $lotItems[] = [
                 'lot_id' => $lotId,
-                'delivered_by' => $_SESSION['user_id'],
-                'delivery_date' => date('Y-m-d'),
-                'delivery_quantity' => $remaining,
-                'remarks' => ''
-            ]);
-            // Assign the DR number to the newly created delivery
-            $this->warehouseModel->updateDRNumber($deliveryId, $dr_number);
+                'poi_id' => $poiId,
+                'lot_number' => $lot['lot_number'] ?? '',
+                'item_code' => $item['item_code'] ?? '',
+                'item_description' => $item['item_description'] ?? '',
+                'qty' => $remaining,
+                'unit_price' => $item['unit_price'] ?? 0,
+                'item_uom' => $item['item_uom'] ?? '',
+                'uom_conversion' => $item['uom_conversion'] ?? null,
+                'item_id' => $item['item_id'] ?? null,
+            ];
+            $totalQty += $remaining;
+            if (!$firstPoiId) $firstPoiId = $poiId;
         }
+        if (empty($lotItems)) {
+            echo json_encode(['success' => false, 'message' => 'No available lots found']);
+            exit;
+        }
+        $this->warehouseModel->createDelivery([
+            'po_id' => $po_id,
+            'poi_id' => $firstPoiId,
+            'delivered_by' => $_SESSION['user_id'],
+            'delivery_date' => date('Y-m-d'),
+            'delivery_quantity' => $totalQty,
+            'dr_number' => $dr_number,
+            'lot_items' => json_encode($lotItems),
+            'remarks' => ''
+        ]);
         echo json_encode(['success' => true]);
         exit;
     }
