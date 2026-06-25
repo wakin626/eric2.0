@@ -198,12 +198,39 @@ document.getElementById('searchDelivery').addEventListener('keyup', function() {
 
 let poItemsCache = [];
 
+function renderLotCheckboxes(lots, lotRow, lotContainer) {
+    lotContainer.innerHTML = '';
+    if (lots && lots.length > 0) {
+        lots.forEach(function(lot) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'form-check';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-check-input';
+            checkbox.value = lot.lot_id;
+            checkbox.id = 'lotChk_' + lot.lot_id;
+            const label = document.createElement('label');
+            label.className = 'form-check-label';
+            label.htmlFor = checkbox.id;
+            label.textContent = lot.lot_number + ' (Available: ' + lot.available_quantity + ')';
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(label);
+            lotContainer.appendChild(wrapper);
+        });
+        lotRow.style.display = 'block';
+    } else {
+        lotRow.style.display = 'none';
+    }
+}
+
 document.getElementById('poSelect').addEventListener('change', function() {
     const poId = this.value;
     const itemRow = document.getElementById('itemRow');
     const itemQtyRow = document.getElementById('itemQtyRow');
     const availableRow = document.getElementById('availableRow');
     const poiSelect = document.getElementById('poiSelect');
+    const lotRow = document.getElementById('lotRow');
+    const lotContainer = document.getElementById('lotCheckboxContainer');
 
     itemRow.style.display = 'none';
     itemQtyRow.style.display = 'none';
@@ -215,8 +242,8 @@ document.getElementById('poSelect').addEventListener('change', function() {
     document.getElementById('deliveryQty').value = '';
     document.getElementById('deliveryQty').classList.remove('is-invalid');
     document.getElementById('deliveryError').textContent = '';
-    document.getElementById('lotRow').style.display = 'none';
-    document.getElementById('lotSelect').innerHTML = '<option value="">Select Lot</option>';
+    lotRow.style.display = 'none';
+    lotContainer.innerHTML = '';
 
     if (!poId) return;
 
@@ -262,21 +289,7 @@ document.getElementById('poSelect').addEventListener('change', function() {
                 fetch('?controller=warehouse&action=getAvailableLots&poi_id=' + item.poi_id)
                     .then(function(response) { return response.json(); })
                     .then(function(lots) {
-                        var lotRow = document.getElementById('lotRow');
-                        var lotSelect = document.getElementById('lotSelect');
-                        lotSelect.innerHTML = '<option value="">Select Lot</option>';
-                        if (lots && lots.length > 0) {
-                            lots.forEach(function(lot) {
-                                var opt = document.createElement('option');
-                                opt.value = lot.lot_id;
-                                opt.textContent = lot.lot_number + ' (Available: ' + lot.available_quantity + ')';
-                                opt.dataset.available = lot.available_quantity;
-                                lotSelect.appendChild(opt);
-                            });
-                            lotRow.style.display = 'block';
-                        } else {
-                            lotRow.style.display = 'none';
-                        }
+                        renderLotCheckboxes(lots, lotRow, lotContainer);
                     });
             }
         });
@@ -297,12 +310,8 @@ document.getElementById('poiSelect').addEventListener('change', function() {
     }
 
     const qty = parseInt(selected.dataset.qty) || 0;
-    const produced = parseInt(selected.dataset.produced) || 0;
-    const delivered = parseInt(selected.dataset.delivered) || 0;
-    const available = Math.max(0, produced - delivered);
 
     document.getElementById('itemQtyDisplay').value = qty;
-
     document.getElementById('itemQtyRow').style.display = 'block';
     document.getElementById('availableRow').style.display = 'none';
     document.getElementById('availableQty').value = '';
@@ -311,57 +320,14 @@ document.getElementById('poiSelect').addEventListener('change', function() {
     document.getElementById('deliveryQty').classList.remove('is-invalid');
     document.getElementById('deliveryError').textContent = '';
 
-    // Fetch lots for the selected item and render checkboxes
     fetch('?controller=warehouse&action=getAvailableLots&poi_id=' + this.value)
         .then(function(response) { return response.json(); })
         .then(function(lots) {
-            lotContainer.innerHTML = '';
-            if (lots && lots.length > 0) {
-                lots.forEach(function(lot) {
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'form-check';
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.className = 'form-check-input';
-                    checkbox.value = lot.lot_id;
-                    checkbox.id = 'lotChk_' + lot.lot_id;
-                    const label = document.createElement('label');
-                    label.className = 'form-check-label';
-                    label.htmlFor = checkbox.id;
-                    label.textContent = lot.lot_number + ' (Available: ' + lot.available_quantity + ')';
-                    wrapper.appendChild(checkbox);
-                    wrapper.appendChild(label);
-                    lotContainer.appendChild(wrapper);
-                });
-                lotRow.style.display = 'block';
-            } else {
-                lotRow.style.display = 'none';
-            }
+            renderLotCheckboxes(lots, lotRow, lotContainer);
         });
 });
 
-document.getElementById('lotSelect').addEventListener('change', function() {
-    const selected = this.options[this.selectedIndex];
-    const availableRow = document.getElementById('availableRow');
-    const deliveryQty = document.getElementById('deliveryQty');
-    if (this.value && selected.dataset.available) {
-        const lotAvailable = parseInt(selected.dataset.available) || 0;
-        document.getElementById('availableQty').value = lotAvailable;
-        deliveryQty.max = lotAvailable;
-        deliveryQty.value = '';
-        availableRow.style.display = 'block';
-    } else {
-        document.getElementById('availableQty').value = '';
-        deliveryQty.value = '';
-        deliveryQty.removeAttribute('max');
-        availableRow.style.display = 'none';
-    }
-    deliveryQty.classList.remove('is-invalid');
-    document.getElementById('deliveryError').textContent = '';
-});
-
 document.querySelector('#createDeliveryModal form').addEventListener('submit', function(e) {
-    // Ensure a PO is selected (HTML5 required attribute already does this)
     const poSelect = document.getElementById('poSelect');
     if (!poSelect.value) {
         e.preventDefault();
@@ -369,7 +335,6 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         return;
     }
 
-    // If an item row is shown, ensure an item is selected
     const itemRow = document.getElementById('itemRow');
     const poiSelect = document.getElementById('poiSelect');
     if (itemRow.style.display !== 'none' && !poiSelect.value) {
@@ -378,7 +343,6 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         return;
     }
 
-    // Gather selected lots from the checkboxes
     const checkedBoxes = document.querySelectorAll('#lotCheckboxContainer input:checked');
     if (checkedBoxes.length === 0) {
         e.preventDefault();
@@ -388,8 +352,6 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
     const lotIds = [];
     checkedBoxes.forEach(cb => lotIds.push(cb.value));
     document.getElementById('selectedLotIds').value = lotIds.join(',');
-
-    // No further validation needed – the server will create deliveries for each selected lot
 });
 
 var drInputModal, drConfirmModal;
