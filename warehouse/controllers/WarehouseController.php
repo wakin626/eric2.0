@@ -105,24 +105,44 @@ class WarehouseController {
         $this->render('deliveries/index', $data);
     }
 
-    public function createDelivery() {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->warehouseModel->createDelivery([
-                'po_id' => $_POST['po_id'],
-                'poi_id' => $_POST['poi_id'] ?? null,
-                'lot_id' => $_POST['lot_id'] ?? null,
-                'delivered_by' => $_SESSION['user_id'],
-                'delivery_date' => $_POST['delivery_date'],
-                'delivery_quantity' => $_POST['delivery_quantity'],
-                'remarks' => $_POST['remarks'] ?? ''
-            ]);
-            $_SESSION['success'] = 'Delivery recorded successfully';
+    public function createMultipleDelivery() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ?controller=warehouse&action=deliveries');
             exit;
         }
-        $data['page_title'] = 'Record Delivery';
-        $data['purchase_orders'] = $this->warehouseModel->getPurchaseOrders();
-        $this->render('deliveries/create', $data);
+        $po_id = $_POST['po_id'] ?? null;
+        $dr_number = trim($_POST['dr_number'] ?? '');
+        $lotIds = $_POST['lot_ids'] ?? '';
+        $delivery_date = $_POST['delivery_date'] ?? date('Y-m-d');
+        $remarks = $_POST['remarks'] ?? '';
+        if (empty($po_id) || empty($dr_number) || empty($lotIds)) {
+            $_SESSION['error'] = 'Missing required fields for delivery.';
+            header('Location: ?controller=warehouse&action=deliveries');
+            exit;
+        }
+        $lotIdArray = array_map('intval', explode(',', $lotIds));
+        $lotIdArray = array_filter($lotIdArray);
+        foreach ($lotIdArray as $lotId) {
+            $lot = $this->warehouseModel->getLotById($lotId);
+            if (!$lot) continue;
+            $remaining = $this->warehouseModel->getLotRemaining($lotId);
+            if ($remaining <= 0) continue;
+            // Insert a delivery row for this lot
+            $deliveryId = $this->warehouseModel->createDelivery([
+                'po_id' => $po_id,
+                'poi_id' => $lot['poi_id'] ?? null,
+                'lot_id' => $lotId,
+                'delivered_by' => $_SESSION['user_id'],
+                'delivery_date' => $delivery_date,
+                'delivery_quantity' => $remaining,
+                'remarks' => $remarks
+            ]);
+            // Assign the DR number
+            $this->warehouseModel->updateDRNumber($deliveryId, $dr_number);
+        }
+        $_SESSION['success'] = "Delivery(s) recorded successfully for DR {$dr_number}.";
+        header('Location: ?controller=warehouse&action=deliveries');
+        exit;
     }
 
     public function updateDRNumber() {

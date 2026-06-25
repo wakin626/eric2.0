@@ -119,8 +119,13 @@
                 <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Record Delivery</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="?controller=warehouse&action=createDelivery">
+            <form method="POST" action="?controller=warehouse&action=createMultipleDelivery">
                 <div class="modal-body">
+                    <!-- DR Number (required) -->
+                    <div class="mb-3">
+                        <label class="form-label">Delivery Receipt (DR) Number *</label>
+                        <input type="text" name="dr_number" id="modalDrNumber" class="form-control" placeholder="Enter DR number" required>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Purchase Order</label>
                         <select name="po_id" id="poSelect" class="form-select" required>
@@ -143,10 +148,13 @@
                         <input type="hidden" id="itemDelivered" value="0">
                     </div>
                     <div class="mb-3" id="lotRow" style="display: none;">
-                        <label class="form-label">Lot Number *</label>
-                        <select name="lot_id" id="lotSelect" class="form-select">
-                            <option value="">Select Lot</option>
-                        </select>
+                        <label class="form-label">Select Lots *</label>
+                        <!-- Container for lot checkboxes (multiple selection) -->
+                        <div id="lotCheckboxContainer" class="form-check">
+                            <!-- checkboxes will be injected via JS -->
+                        </div>
+                        <!-- hidden field to collect selected lot IDs on submit -->
+                        <input type="hidden" name="lot_ids" id="selectedLotIds">
                     </div>
                     <div class="mb-3" id="itemQtyRow" style="display: none;">
                         <label class="form-label">PO Quantity</label>
@@ -156,9 +164,10 @@
                         <label class="form-label">Available for Delivery</label>
                         <input type="text" id="availableQty" class="form-control" readonly>
                     </div>
-                    <div class="mb-3">
+                    <!-- Delivery quantity is now derived from selected lots, so we hide the manual field -->
+                    <div class="mb-3" style="display: none;">
                         <label class="form-label">Delivery Quantity *</label>
-                        <input type="number" name="delivery_quantity" id="deliveryQty" class="form-control" min="1" required>
+                        <input type="number" name="delivery_quantity" id="deliveryQty" class="form-control" min="1">
                         <div class="invalid-feedback" id="deliveryError"></div>
                     </div>
                     <div class="mb-3">
@@ -276,14 +285,14 @@ document.getElementById('poSelect').addEventListener('change', function() {
 document.getElementById('poiSelect').addEventListener('change', function() {
     const selected = this.options[this.selectedIndex];
     const lotRow = document.getElementById('lotRow');
-    const lotSelect = document.getElementById('lotSelect');
+    const lotContainer = document.getElementById('lotCheckboxContainer');
 
     if (!this.value) {
         document.getElementById('itemQtyRow').style.display = 'none';
         document.getElementById('availableRow').style.display = 'none';
         document.getElementById('deliveryQty').value = '';
         lotRow.style.display = 'none';
-        lotSelect.innerHTML = '<option value="">Select Lot</option>';
+        lotContainer.innerHTML = '';
         return;
     }
 
@@ -302,17 +311,27 @@ document.getElementById('poiSelect').addEventListener('change', function() {
     document.getElementById('deliveryQty').classList.remove('is-invalid');
     document.getElementById('deliveryError').textContent = '';
 
+    // Fetch lots for the selected item and render checkboxes
     fetch('?controller=warehouse&action=getAvailableLots&poi_id=' + this.value)
         .then(function(response) { return response.json(); })
         .then(function(lots) {
-            lotSelect.innerHTML = '<option value="">Select Lot</option>';
+            lotContainer.innerHTML = '';
             if (lots && lots.length > 0) {
                 lots.forEach(function(lot) {
-                    const opt = document.createElement('option');
-                    opt.value = lot.lot_id;
-                    opt.textContent = lot.lot_number + ' (Available: ' + lot.available_quantity + ')';
-                    opt.dataset.available = lot.available_quantity;
-                    lotSelect.appendChild(opt);
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'form-check';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'form-check-input';
+                    checkbox.value = lot.lot_id;
+                    checkbox.id = 'lotChk_' + lot.lot_id;
+                    const label = document.createElement('label');
+                    label.className = 'form-check-label';
+                    label.htmlFor = checkbox.id;
+                    label.textContent = lot.lot_number + ' (Available: ' + lot.available_quantity + ')';
+                    wrapper.appendChild(checkbox);
+                    wrapper.appendChild(label);
+                    lotContainer.appendChild(wrapper);
                 });
                 lotRow.style.display = 'block';
             } else {
@@ -342,43 +361,35 @@ document.getElementById('lotSelect').addEventListener('change', function() {
 });
 
 document.querySelector('#createDeliveryModal form').addEventListener('submit', function(e) {
+    // Ensure a PO is selected (HTML5 required attribute already does this)
     const poSelect = document.getElementById('poSelect');
     if (!poSelect.value) {
         e.preventDefault();
-        alert('Please select a PO');
+        alert('Please select a Purchase Order');
         return;
     }
 
+    // If an item row is shown, ensure an item is selected
+    const itemRow = document.getElementById('itemRow');
     const poiSelect = document.getElementById('poiSelect');
-    if (poiSelect.offsetParent !== null && !poiSelect.value) {
+    if (itemRow.style.display !== 'none' && !poiSelect.value) {
         e.preventDefault();
         alert('Please select an item');
         return;
     }
 
-    const lotRow = document.getElementById('lotRow');
-    const lotSelect = document.getElementById('lotSelect');
-    if (lotRow.style.display !== 'none' && !lotSelect.value) {
+    // Gather selected lots from the checkboxes
+    const checkedBoxes = document.querySelectorAll('#lotCheckboxContainer input:checked');
+    if (checkedBoxes.length === 0) {
         e.preventDefault();
-        alert('Please select a lot number');
+        alert('Please select at least one lot');
         return;
     }
+    const lotIds = [];
+    checkedBoxes.forEach(cb => lotIds.push(cb.value));
+    document.getElementById('selectedLotIds').value = lotIds.join(',');
 
-    const available = parseInt(document.getElementById('availableQty').value) || 0;
-    const deliveryQty = parseInt(document.getElementById('deliveryQty').value) || 0;
-
-    if (deliveryQty > available) {
-        e.preventDefault();
-        document.getElementById('deliveryQty').classList.add('is-invalid');
-        document.getElementById('deliveryError').textContent = 'Cannot deliver ' + deliveryQty + '. Available: ' + available;
-        return;
-    }
-
-    if (deliveryQty <= 0) {
-        e.preventDefault();
-        alert('Delivery quantity must be at least 1');
-        return;
-    }
+    // No further validation needed – the server will create deliveries for each selected lot
 });
 
 var drInputModal, drConfirmModal;
