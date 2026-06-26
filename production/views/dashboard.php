@@ -32,8 +32,8 @@
                         <th>PO Date</th>
                         <th>Customer</th>
                         <th>Item</th>
-                        <th>Production Progress</th>
-                        <th>Delivered</th>
+<th>Produced PO QTY</th>
+<th>Delivered PO QTY</th>
                         <th>Type</th>
                     </tr>
                 </thead>
@@ -67,7 +67,7 @@
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                             <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                         </div>
-                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                         <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                     </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -82,10 +82,8 @@
                                     $itemRemaining = max(0, $itemQty - $itemDelivered);
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?></small>
-                                    <?php if ($itemRemaining > 0): ?>
-                                        <small class="text-warning ms-1">(<?= $itemRemaining ?> left)</small>
-                                    <?php endif; ?>
+<?php $conv = $item['uom_conversion'] ?? null; ?>
+<small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>

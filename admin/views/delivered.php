@@ -1,6 +1,19 @@
 <h4><i class="bi bi-truck me-2"></i>Delivered PO</h4>
 
-<div class="d-flex justify-content-end mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <select id="filterCustomer" class="form-select form-select-sm" style="width:180px">
+            <option value="">All Customers</option>
+        </select>
+        <select id="filterItem" class="form-select form-select-sm" style="width:200px">
+            <option value="">All Items</option>
+        </select>
+        <select id="filterDR" class="form-select form-select-sm" style="width:160px">
+            <option value="">All DR Numbers</option>
+        </select>
+        <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Delivery Date">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
+    </div>
     <div class="search-box" style="width: 300px;">
         <i class="bi bi-search"></i>
         <input type="text" id="searchDelivered" class="form-control" placeholder="Search...">
@@ -12,231 +25,156 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
-                    <th class="sortable" data-sort="po_number">PO Number <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="po_date">PO Date <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
-                    <th>Item</th>
-                    <th class="sortable" data-sort="total">PO Quantity <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="delivered">Delivered <i class="bi bi-chevron-expand"></i></th>
-                    <th>Remaining Balance</th>
-                    <th>Type</th>
+                    <th>PO Number</th>
+                    <th>Customer</th>
                     <th>DR Number</th>
+                    <th>Item / Lot</th>
+                    <th>Delivery Date</th>
+                    <th>Qty</th>
+                    <th>Cases</th>
+                    <th>Type</th>
+                    <th>Remarks</th>
+                    <th>Delivered By</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
-            <tbody id="deliveredTableBody">
-                <?php foreach ($purchase_orders as $po):
-                    $items = $po_items_map[$po['po_id']] ?? [];
+            <tbody id="deliveryTableBody">
+                <?php if (!empty($deliveries)): ?>
+                <?php foreach ($deliveries as $d):
+                    $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                    $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
+                    $isActive = ($d['active_status'] ?? 1) == 1;
                 ?>
-                <?php 
-                    $total = $po['total_quantity'] ?? 0;
-                    $delivered = $po['delivered_quantity'] ?? 0;
-                    $balance = $total - $delivered;
-                    if ($balance < 0) $balance = 0;
-                    $percent = $total > 0 ? round(($delivered / $total) * 100) : 0;
-                ?>
-                <tr>
-                    <td><strong class="text-primary"><?= htmlspecialchars($po['customer_po_number']) ?></strong></td>
-                    <td><?= date('Y-m-d', strtotime($po['customer_po_date'])) ?></td>
-                    <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
+                <tr class="<?= $isActive ? '' : 'text-decoration-line-through' ?>">
+                    <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number']) ?></strong></td>
+                    <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                    <td><?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
                     <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item): ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                        <?php if ($hasLotItems): ?>
+                            <?php foreach ($lotItems as $li): ?>
+                                <small><?= htmlspecialchars($li['item_description'] ?? '') ?> (<?= htmlspecialchars($li['lot_number'] ?? '') ?>)</small><br>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <small class="text-muted">-</small>
+                            <small><?= htmlspecialchars($d['item_code'] ?? '-') ?> - <?= htmlspecialchars($d['item_description'] ?? '') ?></small>
+                            <?php if (!empty($d['lot_number'])): ?><br><small><?= htmlspecialchars($d['lot_number']) ?></small><?php endif; ?>
                         <?php endif; ?>
                     </td>
+                    <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
+                    <td><?= $d['delivery_quantity'] ?? 0 ?></td>
                     <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item):
-                                $itemQty = $item['quantity'] ?? 0;
-                            ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small><?= $itemQty ?></small>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small class="text-muted">-</small>
-                        <?php endif; ?>
+                        <?php
+                        if ($hasLotItems) {
+                            $grouped = [];
+                            foreach ($lotItems as $li) {
+                                $key = $li['item_description'] ?? $li['item_code'] ?? 'Item';
+                                if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'conv' => null, 'uom' => ''];
+                                $grouped[$key]['qty'] += $li['qty'] ?? 0;
+                                if (!empty($li['uom_conversion'])) $grouped[$key]['conv'] = $li['uom_conversion'];
+                                if (!empty($li['item_uom'])) $grouped[$key]['uom'] = $li['item_uom'];
+                            }
+                            $caseParts = [];
+                            foreach ($grouped as $desc => $info) {
+                                $c = $info['conv'];
+                                $u = $info['uom'];
+                                if ($c && $u !== 'CS') {
+                                    $caseParts[] = htmlspecialchars($desc) . ': ' . round($info['qty'] / $c, 2) . ' CS';
+                                }
+                            }
+                            echo !empty($caseParts) ? implode('<br>', $caseParts) : '<span class="text-muted">—</span>';
+                        } else {
+                            $conv = $d['uom_conversion'] ?? null;
+                            $itemUom = $d['item_uom'] ?? '';
+                            $desc = $d['item_description'] ?? '';
+                            if ($conv && $itemUom !== 'CS') {
+                                echo htmlspecialchars($desc) . ': ' . round(($d['delivery_quantity'] ?? 0) / $conv, 2) . ' CS';
+                            } else {
+                                echo '<span class="text-muted">—</span>';
+                            }
+                        }
+                        ?>
                     </td>
                     <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item):
-                                $itemQty = $item['quantity'] ?? 0;
-                                $itemDelivered = $item['delivered_quantity'] ?? 0;
-                            ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?></small>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small class="text-muted">-</small>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item):
-                                $itemQty = $item['quantity'] ?? 0;
-                                $itemDelivered = $item['delivered_quantity'] ?? 0;
-                                $itemBalance = max(0, $itemQty - $itemDelivered);
-                            ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small class="badge <?= $itemBalance <= 0 ? 'bg-success' : 'bg-warning' ?>">
-                                    <?= $itemBalance ?>
-                                </small>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small class="text-muted">-</small>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
+                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
                             <span class="badge bg-info">Advance</span>
                         <?php else: ?>
                             <span class="badge bg-secondary">Normal</span>
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php
-                        $drNumbers = $dr_numbers_map[$po['po_id']] ?? [];
-                        if (!empty($drNumbers)):
-                        ?>
-                            <small><?= htmlspecialchars(implode(', ', $drNumbers)) ?></small>
+                        <?php if (!empty($d['remarks'])): ?>
+                            <?php
+                            $rmType = $d['remarks_type'] ?? '';
+                            if ($rmType === 'report') $rmStyle = 'color:red;font-weight:bold;';
+                            elseif ($rmType === 'edited') $rmStyle = 'color:#e6a800;font-weight:bold;';
+                            else $rmStyle = '';
+                            ?>
+                            <span style="<?= $rmStyle ?>"><?= htmlspecialchars($d['remarks']) ?></span>
                         <?php else: ?>
                             <span class="text-muted">-</span>
                         <?php endif; ?>
                     </td>
+                    <td><?= htmlspecialchars($d['delivered_by_name'] ?? '-') ?></td>
                     <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
+                        <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $d['po_id'] ?>" title="View PO Details">
                             <i class="bi bi-eye"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning editDeliveryBtn"
+                            data-delivery-id="<?= $d['delivery_id'] ?>"
+                            data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>"
+                            data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>"
+                            data-remarks="<?= htmlspecialchars($d['remarks'] ?? '') ?>">
+                            <i class="bi bi-pencil"></i> Edit
+                        </button>
+                        <button type="button" class="btn btn-sm <?= $isActive ? 'btn-outline-secondary' : 'btn-outline-success' ?> toggleStatusBtn"
+                            data-delivery-id="<?= $d['delivery_id'] ?>"
+                            title="<?= $isActive ? 'Set Inactive' : 'Set Active' ?>">
+                            <?= $isActive ? 'Inactive' : 'Active' ?>
                         </button>
                     </td>
                 </tr>
                 <?php endforeach; ?>
-                <?php if (empty($purchase_orders)): ?>
-                <tr><td colspan="10" class="text-center text-muted py-4">No purchase orders found</td></tr>
+                <?php else: ?>
+                <tr><td colspan="11" class="text-center text-muted py-4">No delivery records found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
 </div>
 
-<?php if ($totalPages > 1): ?>
-<nav>
-    <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=admin&action=delivered&page=<?= $i ?>"><?= $i ?></a>
-        </li>
-        <?php endfor; ?>
-    </ul>
-</nav>
-<?php endif; ?>
+<!-- Edit Delivery Modal -->
+<div class="modal fade" id="editDeliveryModal" tabindex="-1">
+    <div class="modal-dialog modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Delivery</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editDeliveryForm">
+                <div class="modal-body">
+                    <input type="hidden" name="delivery_id" id="editDeliveryId">
+                    <div class="mb-3">
+                        <label class="form-label">DR Number</label>
+                        <input type="text" name="dr_number" id="editDrNumber" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Delivery Date</label>
+                        <input type="date" name="delivery_date" id="editDeliveryDate" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        <textarea name="remarks" id="editRemarks" class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.view-po-btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const poId = this.getAttribute('data-po-id');
-            
-            fetch('?controller=warehouse&action=getPODetails&id=' + poId)
-                .then(function(response) {
-                    return response.json();
-                })
-                .then(function(data) {
-                    const po = data.po;
-                    const items = data.po_items;
-                    
-                    document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
-                    document.getElementById('viewCustomerCode').textContent = po.customer_code || '-';
-                    document.getElementById('viewCustomerName').textContent = po.customer_name || '-';
-                    document.getElementById('viewCustomerTin').textContent = po.customer_tin || '-';
-                    document.getElementById('viewCustomerTerms').textContent = (po.customer_terms || 0) + ' days';
-                    
-                    const tbody = document.getElementById('viewPOItems');
-                    tbody.innerHTML = '';
-                    if (items && items.length > 0) {
-                        items.forEach(function(item) {
-                            const qty = item.quantity || 0;
-                            const itemDelivered = item.delivered_quantity || 0;
-                            const remaining = Math.max(0, qty - itemDelivered);
-                            const itemPercent = qty > 0 ? Math.round((itemDelivered / qty) * 100) : 0;
-                            const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
-                            const row = '<tr>' +
-                                '<td>' + (item.item_code || '-') + '</td>' +
-                                '<td>' + (item.item_description || '-') + '</td>' +
-                                '<td>' + (item.item_uom || '-') + '</td>' +
-                                '<td>' + qty + '</td>' +
-                                '<td>' +
-                                    '<div class="d-flex align-items-center">' +
-                                        '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
-                                            '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
-                                        '</div>' +
-                                        '<small class="text-muted">' + itemDelivered + '/' + qty + '</small>' +
-                                    '</div>' +
-                                '</td>' +
-                                '<td>' +
-                                    '<small class="badge ' + (remaining <= 0 ? 'bg-success' : 'bg-warning') + '">' + remaining + '</small>' +
-                                '</td>' +
-                                '</tr>';
-                            tbody.innerHTML += row;
-                        });
-                    } else {
-                        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No items found</td></tr>';
-                    }
-                    
-                    const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
-                    modal.show();
-                })
-                .catch(function(error) {
-                    console.error('Error:', error);
-                    alert('Failed to load PO details: ' + error.message);
-                });
-        });
-    });
-});
-
-document.getElementById('searchDelivered').addEventListener('keyup', function() {
-    const query = this.value.toLowerCase();
-    document.querySelectorAll('#deliveredTableBody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
-    });
-});
-
-document.querySelectorAll('.sortable').forEach(th => {
-    th.addEventListener('click', function() {
-        const table = this.closest('table');
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-        const col = this.cellIndex;
-        const asc = !this.classList.contains('asc');
-        
-        table.querySelectorAll('.sortable').forEach(h => {
-            h.classList.remove('asc', 'desc');
-            h.querySelector('i').className = 'bi bi-chevron-expand';
-        });
-        
-        this.classList.add(asc ? 'asc' : 'desc');
-        this.querySelector('i').className = asc ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
-        
-        rows.sort((a, b) => {
-            let aVal = a.cells[col].textContent.trim();
-            let bVal = b.cells[col].textContent.trim();
-            if (!isNaN(aVal) && !isNaN(bVal)) {
-                aVal = parseFloat(aVal);
-                bVal = parseFloat(bVal);
-            }
-            return asc ? aVal.localeCompare(bVal, undefined, {numeric: true}) : bVal.localeCompare(aVal, undefined, {numeric: true});
-        });
-        
-        rows.forEach(row => tbody.appendChild(row));
-    });
-});
-</script>
-
+<!-- View PO Details Modal -->
 <div class="modal fade" id="viewPOModal">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -274,13 +212,243 @@ document.querySelectorAll('.sortable').forEach(th => {
                                 <th>Quantity</th>
                                 <th>Delivery Progress</th>
                                 <th>Remaining</th>
+                                <th>Lot Number</th>
+                                <th>DR Number(s)</th>
                             </tr>
                         </thead>
-                        <tbody id="viewPOItems">
-                        </tbody>
+                        <tbody id="viewPOItems"></tbody>
                     </table>
+                </div>
+                <div id="drPhotosSection" style="display:none;">
+                    <h6 class="mt-3 mb-2"><i class="bi bi-camera me-1"></i>DR Photos</h6>
+                    <div id="drPhotosContainer" class="d-flex flex-wrap gap-3"></div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.view-po-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const poId = this.getAttribute('data-po-id');
+
+            fetch('?controller=warehouse&action=getPODetails&id=' + poId)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    const po = data.po;
+                    const items = data.po_items;
+
+                    document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
+                    document.getElementById('viewCustomerCode').textContent = po.customer_code || '-';
+                    document.getElementById('viewCustomerName').textContent = po.customer_name || '-';
+                    document.getElementById('viewCustomerTin').textContent = po.customer_tin || '-';
+                    document.getElementById('viewCustomerTerms').textContent = (po.customer_terms || 0) + ' days';
+
+                    const tbody = document.getElementById('viewPOItems');
+                    tbody.innerHTML = '';
+                    var allReceipts = [];
+                    if (items && items.length > 0) {
+                        items.forEach(function(item) {
+                            const qty = item.quantity || 0;
+                            const itemDelivered = item.delivered_quantity || 0;
+                            var conv = item.uom_conversion || null;
+                            var deliveredText = itemDelivered + '/' + qty + ' pcs, ' + (conv ? (Math.round(itemDelivered / conv * 100) / 100) + '/' + (Math.round(qty / conv * 100) / 100) + ' cs' : '—/—');
+                            const remaining = Math.max(0, qty - itemDelivered);
+                            const itemPercent = qty > 0 ? Math.round((itemDelivered / qty) * 100) : 0;
+                            const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+
+                            var lotHtml = '<span class="text-muted">-</span>';
+                            var drsHtml = '<span class="text-muted">-</span>';
+                            if (item.deliveries && item.deliveries.length > 0) {
+                                drsHtml = '<div class="d-flex flex-column gap-1">';
+                                lotHtml = '<div class="d-flex flex-column gap-1">';
+                                item.deliveries.forEach(function(del) {
+                                    drsHtml += '<div>' +
+                                        '<span class="badge bg-secondary">' + (del.dr_number || '-') + '</span> ' +
+                                        '<small class="text-muted">(' + del.qty + ' pcs)</small>' +
+                                    '</div>';
+                                    lotHtml += '<div><small>' + (del.lot_number || '-') + '</small></div>';
+                                    if (del.receipt && del.receipt.file_path) {
+                                        if (!allReceipts.some(function(r) { return r.file_path === del.receipt.file_path; })) {
+                                            allReceipts.push({ file_path: del.receipt.file_path, dr_number: del.dr_number || '-' });
+                                        }
+                                    }
+                                });
+                                drsHtml += '</div>';
+                                lotHtml += '</div>';
+                            }
+
+                            const row = '<tr>' +
+                                '<td>' + (item.item_code || '-') + '</td>' +
+                                '<td>' + (item.item_description || '-') + '</td>' +
+                                '<td>' + (item.item_uom || '-') + '</td>' +
+                                '<td>' + qty + '</td>' +
+                                '<td>' +
+                                    '<div class="d-flex align-items-center">' +
+                                        '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
+                                            '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
+                                        '</div>' +
+                                        '<small class="text-muted">' + deliveredText + '</small>' +
+                                    '</div>' +
+                                '</td>' +
+                                '<td>' +
+                                    '<small class="badge ' + (remaining <= 0 ? 'bg-success' : 'bg-warning') + '">' + remaining + '</small>' +
+                                '</td>' +
+                                '<td>' + lotHtml + '</td>' +
+                                '<td>' + drsHtml + '</td>' +
+                                '</tr>';
+                            tbody.innerHTML += row;
+                        });
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No items found</td></tr>';
+                    }
+
+                    var photosSection = document.getElementById('drPhotosSection');
+                    var photosContainer = document.getElementById('drPhotosContainer');
+                    photosContainer.innerHTML = '';
+                    if (allReceipts.length > 0) {
+                        allReceipts.forEach(function(r) {
+                            photosContainer.innerHTML += '<div class="text-center">' +
+                                '<a href="' + r.file_path + '" target="_blank"><img src="' + r.file_path + '" alt="DR Photo" style="max-height:100px; border-radius:6px; border:1px solid #ddd;"></a>' +
+                                '<div><small class="text-muted">' + r.dr_number + '</small></div>' +
+                            '</div>';
+                        });
+                    } else {
+                        photosContainer.innerHTML = '<span class="text-muted">No attachment attached for this DR</span>';
+                    }
+                    photosSection.style.display = 'block';
+
+                    const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
+                    modal.show();
+                })
+                .catch(function(error) {
+                    console.error('Error:', error);
+                    alert('Failed to load PO details: ' + error.message);
+                });
+        });
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    var customers = new Set();
+    var items = new Set();
+    var drNumbers = new Set();
+    document.querySelectorAll('#deliveryTableBody tr').forEach(function(row) {
+        if (row.querySelector('td[colspan]')) return;
+        var cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
+        if (cust) customers.add(cust);
+        var itemCell = row.cells[3];
+        if (itemCell) {
+            itemCell.querySelectorAll('small').forEach(function(s) {
+                var t = s.textContent.trim().split('(')[0].trim();
+                if (t && t !== '-') items.add(t);
+            });
+        }
+        var dr = row.cells[2] ? row.cells[2].textContent.trim() : '';
+        if (dr && dr !== '-') drNumbers.add(dr);
+    });
+    var custSel = document.getElementById('filterCustomer');
+    customers.forEach(function(c) { var o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
+    var itemSel = document.getElementById('filterItem');
+    items.forEach(function(i) { var o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
+    var drSel = document.getElementById('filterDR');
+    drNumbers.forEach(function(d) { var o = document.createElement('option'); o.value = d; o.textContent = d; drSel.appendChild(o); });
+});
+
+function applyAdminFilters() {
+    var custFilter = document.getElementById('filterCustomer').value.toLowerCase();
+    var itemFilter = document.getElementById('filterItem').value.toLowerCase();
+    var drFilter = document.getElementById('filterDR').value.toLowerCase();
+    var dateFilter = document.getElementById('filterDate').value;
+    var searchQuery = document.getElementById('searchDelivered').value.toLowerCase();
+    document.querySelectorAll('#deliveryTableBody tr').forEach(function(row) {
+        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
+        var cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
+        var itemText = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
+        var drText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
+        var deliveryDate = row.cells[4] ? row.cells[4].textContent.trim() : '';
+        var rowText = row.textContent.toLowerCase();
+        var show = true;
+        if (custFilter && !cust.includes(custFilter)) show = false;
+        if (itemFilter && !itemText.includes(itemFilter)) show = false;
+        if (drFilter && !drText.includes(drFilter)) show = false;
+        if (dateFilter && deliveryDate !== dateFilter) show = false;
+        if (searchQuery && !rowText.includes(searchQuery)) show = false;
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+document.getElementById('searchDelivered').addEventListener('keyup', applyAdminFilters);
+document.getElementById('filterCustomer').addEventListener('change', applyAdminFilters);
+document.getElementById('filterItem').addEventListener('change', applyAdminFilters);
+document.getElementById('filterDR').addEventListener('change', applyAdminFilters);
+document.getElementById('filterDate').addEventListener('change', applyAdminFilters);
+document.getElementById('clearFilters').addEventListener('click', function() {
+    document.getElementById('filterCustomer').value = '';
+    document.getElementById('filterItem').value = '';
+    document.getElementById('filterDR').value = '';
+    document.getElementById('filterDate').value = '';
+    document.getElementById('searchDelivered').value = '';
+    applyAdminFilters();
+});
+
+document.querySelectorAll('.editDeliveryBtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('editDeliveryId').value = this.dataset.deliveryId;
+        document.getElementById('editDrNumber').value = this.dataset.dr || '';
+        document.getElementById('editDeliveryDate').value = this.dataset.date || '';
+        document.getElementById('editRemarks').value = this.dataset.remarks || '';
+        var modal = new bootstrap.Modal(document.getElementById('editDeliveryModal'));
+        modal.show();
+    });
+});
+
+document.getElementById('editDeliveryForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var formData = new FormData(this);
+    fetch('?controller=admin&action=updateDelivery', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update delivery'));
+        }
+    })
+    .catch(function(err) {
+        alert('Error updating delivery: ' + err.message);
+    });
+});
+
+document.querySelectorAll('.toggleStatusBtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var deliveryId = this.dataset.deliveryId;
+        var formData = new FormData();
+        formData.append('delivery_id', deliveryId);
+        fetch('?controller=admin&action=toggleDeliveryStatus', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to toggle status'));
+            }
+        })
+        .catch(function(err) {
+            alert('Error: ' + err.message);
+        });
+    });
+});
+</script>

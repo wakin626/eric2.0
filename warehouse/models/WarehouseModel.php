@@ -76,10 +76,11 @@ class WarehouseModel extends BaseModel {
                 FROM purchase_orders po 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON po.requested_by = u.user_id 
+                WHERE po.`remove` = 0
                 ORDER BY po.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
-return $stmt->fetchAll();
+        return $stmt->fetchAll();
     }
 
     public function getPurchaseOrderById($id) {
@@ -151,7 +152,20 @@ return $stmt->fetchAll();
         $conn->prepare("UPDATE purchase_orders SET delivered_quantity = delivered_quantity + :added WHERE po_id = :po_id")
             ->execute(['added' => $data['delivery_quantity'], 'po_id' => $data['po_id']]);
         
-        if (!empty($data['poi_id'])) {
+        $lotItems = json_decode($data['lot_items'] ?? '[]', true);
+        if (is_array($lotItems) && count($lotItems) > 0) {
+            $perPoi = [];
+            foreach ($lotItems as $li) {
+                $poiId = $li['poi_id'] ?? null;
+                if ($poiId) {
+                    $perPoi[$poiId] = ($perPoi[$poiId] ?? 0) + intval($li['qty'] ?? 0);
+                }
+            }
+            foreach ($perPoi as $poiId => $qty) {
+                $conn->prepare("UPDATE purchase_order_items SET delivered_quantity = delivered_quantity + :added WHERE poi_id = :poi_id")
+                    ->execute(['added' => $qty, 'poi_id' => $poiId]);
+            }
+        } elseif (!empty($data['poi_id'])) {
             $conn->prepare("UPDATE purchase_order_items SET delivered_quantity = delivered_quantity + :added WHERE poi_id = :poi_id")
                 ->execute(['added' => $data['delivery_quantity'], 'poi_id' => $data['poi_id']]);
         }
@@ -181,14 +195,16 @@ return $stmt->fetchAll();
     }
 
     public function getDeliveries() {
-    $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type, c.customer_name,
-                   poi.quantity as item_quantity, i.item_code, i.item_description, pl.lot_number
+        $sql = "SELECT d.*, po.customer_po_number, po.customer_po_date, po.total_quantity, po.delivered_quantity, po.production_type, c.customer_name,
+                   poi.quantity as item_quantity, i.item_code, i.item_description, i.item_uom, i.uom_conversion, pl.lot_number,
+                   u.full_name as delivered_by_name
             FROM deliveries d 
             LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
             LEFT JOIN customers c ON po.customer_id = c.customer_id 
             LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
             LEFT JOIN items i ON poi.item_id = i.item_id
             LEFT JOIN production_lots pl ON d.lot_id = pl.lot_id
+            LEFT JOIN users u ON d.delivered_by = u.user_id
             WHERE d.`remove` = 0
             ORDER BY d.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -321,6 +337,16 @@ return $stmt->fetchAll();
         return $grouped;
     }
 
+    public function getDeliveriesByPOId($po_id) {
+        $sql = "SELECT d.*, l.lot_number
+                FROM deliveries d
+                LEFT JOIN production_lots l ON d.lot_id = l.lot_id
+                WHERE d.po_id = :po_id AND d.`remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_id' => $po_id]);
+        return $stmt->fetchAll();
+    }
+
     public function createLot($data) {
         $sql = "INSERT INTO production_lots (po_id, poi_id, lot_number, quantity_produced, lot_date, created_by)
                 VALUES (:po_id, :poi_id, :lot_number, :quantity_produced, :lot_date, :created_by)";
@@ -372,7 +398,7 @@ return $stmt->fetchAll();
 
     public function getAvailableLotsForDelivery($poi_id) {
         $sql = "SELECT l.*, 
-                    l.quantity_produced - COALESCE(
+                    COALESCE(
                         (SELECT SUM(d.delivery_quantity) FROM deliveries d 
                          WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
                     ) AS delivered_legacy
@@ -452,7 +478,7 @@ return $stmt->fetchAll();
         $sql = "SELECT l.*, 
                     poi.quantity AS poi_quantity, poi.unit_price, poi.item_id,
                     i.item_code, i.item_description, i.item_uom, i.uom_conversion,
-                    l.quantity_produced - COALESCE(
+                    COALESCE(
                         (SELECT SUM(d.delivery_quantity) FROM deliveries d 
                          WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
                     ) AS delivered_legacy
@@ -591,5 +617,107 @@ return $stmt->fetchAll();
             'exists' => count($rows) > 0,
             'po_ids' => array_column($rows, 'po_id')
         ];
+    }
+
+    public function reportDelivery($deliveryId, $remarks) {
+        $sql = "UPDATE deliveries SET remarks = :remarks, remarks_type = 'report'
+                WHERE delivery_id = :delivery_id AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['remarks' => $remarks, 'delivery_id' => $deliveryId]);
+    }
+
+    public function updateDelivery($deliveryId, $data) {
+        $fields = [];
+        $params = ['delivery_id' => $deliveryId];
+
+        if (isset($data['dr_number'])) {
+            $fields[] = 'dr_number = :dr_number';
+            $params['dr_number'] = $data['dr_number'];
+        }
+        if (isset($data['delivery_date'])) {
+            $fields[] = 'delivery_date = :delivery_date';
+            $params['delivery_date'] = $data['delivery_date'];
+        }
+        if (isset($data['remarks'])) {
+            $fields[] = 'remarks = :remarks';
+            $params['remarks'] = $data['remarks'];
+            $fields[] = "remarks_type = 'edited'";
+        }
+
+        if (empty($fields)) return;
+
+        $sql = "UPDATE deliveries SET " . implode(', ', $fields) .
+               " WHERE delivery_id = :delivery_id AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+    }
+
+    public function attachDRPhoto($data) {
+        $sql = "INSERT INTO delivery_receipts (delivery_id, po_id, file_name, file_path, file_type, file_size, uploaded_by)
+                VALUES (:delivery_id, :po_id, :file_name, :file_path, :file_type, :file_size, :uploaded_by)";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute([
+            'delivery_id' => $data['delivery_id'],
+            'po_id' => $data['po_id'],
+            'file_name' => $data['file_name'],
+            'file_path' => $data['file_path'],
+            'file_type' => $data['file_type'],
+            'file_size' => $data['file_size'],
+            'uploaded_by' => $data['uploaded_by']
+        ]);
+        return self::getConnection()->lastInsertId();
+    }
+
+    public function getDRPhotoByDeliveryId($delivery_id) {
+        $sql = "SELECT * FROM delivery_receipts
+                WHERE delivery_id = :delivery_id AND `remove` = 0
+                ORDER BY date_created DESC LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['delivery_id' => $delivery_id]);
+        return $stmt->fetch();
+    }
+
+    public function getReceiptsByPOId($po_id) {
+        $sql = "SELECT dr.* FROM delivery_receipts dr
+                WHERE dr.po_id = :po_id AND dr.`remove` = 0
+                ORDER BY dr.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_id' => $po_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function deleteDRPhoto($receiptId) {
+        $receipt = $this->getReceiptById($receiptId);
+        if ($receipt && file_exists(__DIR__ . '/../../' . $receipt['file_path'])) {
+            unlink(__DIR__ . '/../../' . $receipt['file_path']);
+        }
+        $sql = "UPDATE delivery_receipts SET `remove` = 1 WHERE receipt_id = :receipt_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['receipt_id' => $receiptId]);
+    }
+
+    public function getReceiptById($receiptId) {
+        $sql = "SELECT * FROM delivery_receipts WHERE receipt_id = :receipt_id AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['receipt_id' => $receiptId]);
+        return $stmt->fetch();
+    }
+
+    public function toggleDeliveryStatus($deliveryId) {
+        $conn = self::getConnection();
+        $sql = "UPDATE deliveries SET active_status = IF(active_status = 1, 0, 1)
+                WHERE delivery_id = :delivery_id AND `remove` = 0";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute(['delivery_id' => $deliveryId]);
+
+        $sql2 = "SELECT active_status FROM deliveries WHERE delivery_id = :delivery_id";
+        $stmt2 = $conn->prepare($sql2);
+        $stmt2->execute(['delivery_id' => $deliveryId]);
+        return $stmt2->fetchColumn();
+    }
+
+    public function getReportedRemarksCount() {
+        $sql = "SELECT COUNT(*) FROM deliveries WHERE remarks_type = 'report' AND `remove` = 0";
+        return self::getConnection()->query($sql)->fetchColumn();
     }
 }

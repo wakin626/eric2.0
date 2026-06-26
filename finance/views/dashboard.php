@@ -72,7 +72,7 @@
                                     <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                         <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                     </div>
-                                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                    <small class="text-muted text-nowrap"><?= $itemProduced ?> pcs</small>
                                 </div>
                             <?php endforeach; ?>
                         <?php else: ?>
@@ -85,9 +85,11 @@
                                 $itemProduced = $item['produced_quantity'] ?? 0;
                                 $itemDelivered = $item['delivered_quantity'] ?? 0;
                                 $itemAvailable = max(0, $itemProduced - $itemDelivered);
+                                $conv = $item['uom_conversion'] ?? null;
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                 <span class="badge bg-success"><?= $itemAvailable ?></span>
+                                <small class="text-muted"><?= $itemDelivered ?> PCS<?= $conv ? ' / ' . round($itemDelivered / $conv, 2) . ' CS' : '' ?></small>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>
@@ -226,6 +228,8 @@ function viewPODetails(poId) {
                     const remaining = Math.max(0, qty - itemDelivered);
                     const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
                     const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                    var conv = item.uom_conversion || null;
+                    var deliveredText = itemDelivered + ' PCS' + (conv ? ' / ' + (Math.round(itemDelivered / conv * 100) / 100) + ' CS' : '');
                     html += `<tr>
                         <td>${item.item_code || '-'}</td>
                         <td>${item.item_description || '-'}</td>
@@ -236,10 +240,10 @@ function viewPODetails(poId) {
                                 <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
                                     <div class="progress-bar ${barClass}" style="width: ${itemPercent}%"></div>
                                 </div>
-                                <small class="text-muted">${itemProduced}/${qty}</small>
+                                <small class="text-muted">${itemProduced} pcs</small>
                             </div>
                         </td>
-                        <td><small class="text-muted">${itemDelivered}/${qty}</small></td>
+                        <td><small class="text-muted">${deliveredText}</small></td>
                         <td><small class="badge ${remaining <= 0 ? 'bg-success' : 'bg-warning'}">${remaining}</small></td>
                     </tr>`;
                 });

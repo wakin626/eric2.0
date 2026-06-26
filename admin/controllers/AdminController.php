@@ -106,14 +106,12 @@ class AdminController {
             }
         }
         $data['page_title'] = 'Add Item';
-        $data['uoms'] = ['PCS', 'PCKS', 'CS'];
         $this->render('items/form', $data);
     }
 
     public function itemEdit() {
         $id = $_GET['id'] ?? null;
         $data['item'] = $this->itemModel->getById($id);
-        $data['uoms'] = ['PCS', 'PCKS', 'CS'];
         if (!$data['item']) {
             $_SESSION['error'] = 'Item not found';
             header('Location: ?controller=admin&action=items');
@@ -191,24 +189,62 @@ public function purchaseOrders() {
 }
 
 public function delivered() {
-    $allPOs = $this->warehouseModel->getPurchaseOrders();
-    $pagination = Pagination::paginate($allPOs, 10);
-    $poIds = array_column($pagination['items'], 'po_id');
-    $data['purchase_orders'] = $pagination['items'];
-    $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
-    $data['dr_numbers_map'] = $this->warehouseModel->getDRNumbersByPOIds($poIds);
-    $data['page'] = $pagination['page'];
-    $data['totalPages'] = $pagination['totalPages'];
-    $data['total'] = $pagination['total'];
-    $data['page_title'] = 'Delivered PO';
+    $data['deliveries'] = $this->warehouseModel->getDeliveries();
+    $data['reportedCount'] = $this->warehouseModel->getReportedRemarksCount();
+    $data['page_title'] = 'Deliveries';
     $this->render('delivered', $data);
 }
 
+public function toggleDeliveryStatus() {
+    header('Content-Type: application/json');
+    try {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        $deliveryId = $_POST['delivery_id'] ?? null;
+        if (!$deliveryId) {
+            echo json_encode(['error' => 'Missing delivery_id']);
+            exit;
+        }
+        $newStatus = $this->warehouseModel->toggleDeliveryStatus($deliveryId);
+        echo json_encode(['success' => true, 'active_status' => (int)$newStatus]);
+    } catch (\Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+    exit;
+}
 
+public function updateDelivery() {
+    header('Content-Type: application/json');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['error' => 'Method not allowed']);
+        exit;
+    }
+    $deliveryId = $_POST['delivery_id'] ?? null;
+    $drNumber = trim($_POST['dr_number'] ?? '');
+    $deliveryDate = $_POST['delivery_date'] ?? '';
+    $remarks = trim($_POST['remarks'] ?? '');
 
+    if (!$deliveryId) {
+        echo json_encode(['error' => 'Missing delivery_id']);
+        exit;
+    }
 
+    $this->warehouseModel->updateDelivery($deliveryId, [
+        'dr_number' => $drNumber,
+        'delivery_date' => $deliveryDate,
+        'remarks' => $remarks
+    ]);
+    echo json_encode(['success' => true]);
+    exit;
+}
 
     private function render($view, $data = []) {
+        $data['reportedCount'] = $this->warehouseModel->getReportedRemarksCount();
         extract($data);
         ob_start();
         include __DIR__ . "/../views/{$view}.php";

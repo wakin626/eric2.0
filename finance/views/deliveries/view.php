@@ -69,10 +69,11 @@
                                     <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
                                         <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                     </div>
-                                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                    <small class="text-muted text-nowrap"><?= $itemProduced ?> pcs</small>
                                 </div>
                             </td>
-                            <td><small class="text-muted"><?= $itemDelivered ?>/<?= $qty ?></small></td>
+                            <?php $conv = $poi_item['uom_conversion'] ?? null; ?>
+                            <td><small class="text-muted"><?= $itemDelivered ?> PCS<?= $conv ? ' / ' . round($itemDelivered / $conv, 2) . ' CS' : '' ?></small></td>
                             <td><small class="badge <?= $remaining <= 0 ? 'bg-success' : 'bg-warning' ?>"><?= $remaining ?></small></td>
                         </tr>
                         <?php else: ?>

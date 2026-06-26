@@ -35,6 +35,12 @@
                            value="<?= htmlspecialchars($customer['customer_tin'] ?? '') ?>" 
                            placeholder="e.g., 123-456-789">
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">Terms (Days)</label>
+                    <input type="number" name="customer_terms" class="form-control" min="0"
+                           value="<?= $customer['customer_terms'] ?? 0 ?>" 
+                           placeholder="e.g. 30">
+                </div>
                 <?php if (isset($customer)): ?>
                 <div class="col-md-4">
                     <label class="form-label">Status</label>

@@ -117,7 +117,10 @@
 </li>
 <li class="nav-item">
 <a class="nav-link <?= $currentAction === 'delivered' ? 'active' : '' ?>" href="?controller=admin&action=delivered">
-<i class="bi bi-truck me-2"></i>Delivered
+<i class="bi bi-truck me-2"></i>Deliveries
+<?php if (!empty($reportedCount) && $reportedCount > 0): ?>
+    <span class="badge bg-danger float-end"><?= $reportedCount ?></span>
+<?php endif; ?>
 </a>
 </li>
 <li class="nav-item">

@@ -89,6 +89,79 @@ class WarehouseController {
         $id = $_GET['id'] ?? null;
         $po = $this->warehouseModel->getPurchaseOrderById($id);
         $po_items = $this->warehouseModel->getPurchaseOrderItems($id);
+        
+        // Fetch all active deliveries for this PO and map them to their corresponding items
+        $deliveries = $this->warehouseModel->getDeliveriesByPOId($id);
+        $dr_map = [];
+        $delivery_ids = [];
+        foreach ($deliveries as $d) {
+            $dr = $d['dr_number'] ?? '';
+            $delivery_id = $d['delivery_id'] ?? null;
+            if (empty($dr)) continue;
+            
+            if (!empty($d['poi_id'])) {
+                $poi_id = $d['poi_id'];
+                $qty = $d['delivery_quantity'] ?? 0;
+                if (!isset($dr_map[$poi_id])) {
+                    $dr_map[$poi_id] = [];
+                }
+                $dr_map[$poi_id][] = [
+                    'dr_number' => $dr,
+                    'qty' => $qty,
+                    'delivery_date' => $d['delivery_date'],
+                    'lot_number' => $d['lot_number'] ?? null,
+                    'delivery_id' => $delivery_id
+                ];
+                if ($delivery_id) $delivery_ids[] = $delivery_id;
+            }
+            
+            if (!empty($d['lot_items'])) {
+                $lotItems = json_decode($d['lot_items'], true);
+                if (is_array($lotItems)) {
+                    foreach ($lotItems as $li) {
+                        $poi_id = $li['poi_id'] ?? null;
+                        $qty = $li['qty'] ?? 0;
+                        if ($poi_id) {
+                            if (!isset($dr_map[$poi_id])) {
+                                $dr_map[$poi_id] = [];
+                            }
+                            $dr_map[$poi_id][] = [
+                                'dr_number' => $dr,
+                                'qty' => $qty,
+                                'delivery_date' => $d['delivery_date'],
+                                'lot_number' => $li['lot_number'] ?? null,
+                                'delivery_id' => $delivery_id
+                            ];
+                            if ($delivery_id) $delivery_ids[] = $delivery_id;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Fetch receipts for this PO and map by delivery_id
+        $receipts = [];
+        if (!empty($id)) {
+            $allReceipts = $this->warehouseModel->getReceiptsByPOId($id);
+            foreach ($allReceipts as $r) {
+                $rid = $r['delivery_id'];
+                if (!isset($receipts[$rid])) {
+                    $receipts[$rid] = $r;
+                }
+            }
+        }
+        
+        foreach ($po_items as &$item) {
+            $poi_id = $item['poi_id'];
+            $item['deliveries'] = $dr_map[$poi_id] ?? [];
+            foreach ($item['deliveries'] as &$del) {
+                $did = $del['delivery_id'] ?? null;
+                $del['receipt'] = ($did && isset($receipts[$did])) ? $receipts[$did] : null;
+            }
+            unset($del);
+        }
+        unset($item);
+        
         echo json_encode(['po' => $po, 'po_items' => $po_items]);
         exit;
     }
@@ -97,12 +170,43 @@ class WarehouseController {
         $allDeliveries = $this->warehouseModel->getDeliveries();
         $pagination = Pagination::paginate($allDeliveries, 10);
         $data['deliveries'] = $pagination['items'];
+        $deliveryIds = array_column($pagination['items'], 'delivery_id');
+        $receiptsMap = [];
+        if (!empty($deliveryIds)) {
+            $placeholders = implode(',', array_fill(0, count($deliveryIds), '?'));
+            $conn = $this->warehouseModel::getConnection();
+            $stmt = $conn->prepare("SELECT * FROM delivery_receipts WHERE delivery_id IN ($placeholders) AND `remove` = 0");
+            $stmt->execute($deliveryIds);
+            foreach ($stmt->fetchAll() as $r) {
+                if (!isset($receiptsMap[$r['delivery_id']])) {
+                    $receiptsMap[$r['delivery_id']] = $r;
+                }
+            }
+        }
+        $data['receipts_map'] = $receiptsMap;
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
         $data['purchase_orders'] = $this->warehouseModel->getPurchaseOrders();
         $data['page_title'] = 'Deliveries';
         $this->render('deliveries/index', $data);
+    }
+
+    public function deleteDRPhoto() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        $receiptId = $_POST['receipt_id'] ?? null;
+        if (!$receiptId) {
+            echo json_encode(['error' => 'Missing receipt_id']);
+            exit;
+        }
+        $this->warehouseModel->deleteDRPhoto($receiptId);
+        echo json_encode(['success' => true]);
+        exit;
     }
 
     public function createMultipleDelivery() {
@@ -143,7 +247,9 @@ class WarehouseController {
                 'lot_number' => $lot['lot_number'] ?? '',
                 'item_code' => $item['item_code'] ?? '',
                 'item_description' => $item['item_description'] ?? '',
-                'qty' => $deliveryQty
+                'qty' => $deliveryQty,
+                'item_uom' => $item['item_uom'] ?? '',
+                'uom_conversion' => $item['uom_conversion'] ?? null,
             ];
             $totalQty += $deliveryQty;
             if (!$firstPoiId) $firstPoiId = $poiId;
@@ -218,6 +324,87 @@ class WarehouseController {
         }
         $result = $this->warehouseModel->checkDRNumber($dr_number);
         echo json_encode($result);
+        exit;
+    }
+
+    public function reportDelivery() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        $deliveryId = $_POST['delivery_id'] ?? null;
+        $remarks = trim($_POST['remarks'] ?? '');
+        if (!$deliveryId || empty($remarks)) {
+            echo json_encode(['error' => 'Missing delivery_id or remarks']);
+            exit;
+        }
+        $this->warehouseModel->reportDelivery($deliveryId, $remarks);
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    public function uploadDRPhoto() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+
+        $deliveryId = $_POST['delivery_id'] ?? null;
+        $poId = $_POST['po_id'] ?? null;
+
+        if (!$deliveryId || !$poId) {
+            echo json_encode(['error' => 'Missing delivery_id or po_id']);
+            exit;
+        }
+
+        if (!isset($_FILES['dr_photo']) || $_FILES['dr_photo']['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['error' => 'Please select a file to upload']);
+            exit;
+        }
+
+        $file = $_FILES['dr_photo'];
+        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+        if (!in_array($file['type'], $allowedTypes)) {
+            echo json_encode(['error' => 'Invalid file type. Allowed: JPG, PNG, GIF, WebP']);
+            exit;
+        }
+
+        $maxSize = 10 * 1024 * 1024;
+        if ($file['size'] > $maxSize) {
+            echo json_encode(['error' => 'File size must be less than 10MB']);
+            exit;
+        }
+
+        $uploadDir = __DIR__ . '/../../uploads/receipts/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0755, true);
+        }
+
+        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+        $fileName = 'dr_photo_' . $deliveryId . '_' . time() . '.' . $extension;
+        $filePath = $uploadDir . $fileName;
+
+        if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+            echo json_encode(['error' => 'Failed to upload file']);
+            exit;
+        }
+
+        $this->warehouseModel->attachDRPhoto([
+            'delivery_id' => $deliveryId,
+            'po_id' => $poId,
+            'file_name' => $file['name'],
+            'file_path' => 'uploads/receipts/' . $fileName,
+            'file_type' => $file['type'],
+            'file_size' => $file['size'],
+            'uploaded_by' => $_SESSION['user_id']
+        ]);
+
+        echo json_encode(['success' => true, 'file_path' => 'uploads/receipts/' . $fileName]);
         exit;
     }
 

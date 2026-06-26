@@ -33,15 +33,16 @@ class CustomerModel extends BaseModel {
     }
 
     public function create($data) {
-        $sql = "INSERT INTO {$this->table} (customer_code, customer_name, customer_address, customer_type, customer_tin) 
-                VALUES (:customer_code, :customer_name, :customer_address, :customer_type, :customer_tin)";
+        $sql = "INSERT INTO {$this->table} (customer_code, customer_name, customer_address, customer_type, customer_tin, customer_terms) 
+                VALUES (:customer_code, :customer_name, :customer_address, :customer_type, :customer_tin, :customer_terms)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'customer_code' => $data['customer_code'],
             'customer_name' => $data['customer_name'],
             'customer_address' => $data['customer_address'] ?? null,
             'customer_type' => $data['customer_type'] ?? 'vat',
-            'customer_tin' => $data['customer_tin'] ?? null
+            'customer_tin' => $data['customer_tin'] ?? null,
+            'customer_terms' => $data['customer_terms'] ?? 0
         ]);
         return self::getConnection()->lastInsertId();
     }
@@ -53,6 +54,7 @@ class CustomerModel extends BaseModel {
                 customer_address = :customer_address, 
                 customer_type = :customer_type,
                 customer_tin = :customer_tin,
+                customer_terms = :customer_terms,
                 status = :status
                 WHERE customer_id = :id AND `remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
@@ -63,6 +65,7 @@ class CustomerModel extends BaseModel {
             'customer_address' => $data['customer_address'] ?? null,
             'customer_type' => $data['customer_type'] ?? 'vat',
             'customer_tin' => $data['customer_tin'] ?? null,
+            'customer_terms' => $data['customer_terms'] ?? 0,
             'status' => $data['status'] ?? 1
         ]);
     }

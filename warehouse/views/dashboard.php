@@ -32,8 +32,8 @@
                         <th>PO Date</th>
                         <th>Customer</th>
                         <th>Item</th>
-                        <th>Production Status</th>
-                        <th>Delivery Status</th>
+<th>Produced PO QTY</th>
+<th>Delivered PO QTY</th>
                         <th>Type</th>
                     </tr>
                 </thead>
@@ -67,7 +67,7 @@
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                             <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                         </div>
-                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                     </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -355,7 +355,7 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                                     '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
                                         '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
                                     '</div>' +
-                                    '<small class="text-muted">' + itemProduced + '/' + qty + '</small>' +
+                                    '<small class=\"text-muted\">' + itemProduced + '/' + qty + ' pcs</small>' +
                                 '</div>' +
                             '</td>' +
                             '</tr>';

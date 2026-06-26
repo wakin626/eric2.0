@@ -1,10 +1,17 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <span class="text-muted">Showing <?= count($deliveries) ?> of <?= $total ?> deliveries</span>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <select id="filterCustomer" class="form-select form-select-sm" style="width:200px">
+            <option value="">All Customers</option>
+        </select>
+        <select id="filterItem" class="form-select form-select-sm" style="width:200px">
+            <option value="">All Items</option>
+        </select>
         <input type="date" id="filterDateFrom" class="form-control form-control-sm" style="width: 160px;" title="From date">
         <input type="date" id="filterDateTo" class="form-control form-control-sm" style="width: 160px;" title="To date">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
         <div class="search-box" style="width: 250px;">
             <i class="bi bi-search"></i>
             <input type="text" id="searchDelivery" class="form-control" placeholder="Search delivery...">
@@ -71,23 +78,61 @@
 <?php endif; ?>
 
 <script>
+function populateDeliveryFilters() {
+    const customers = new Set();
+    const items = new Set();
+    document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
+        if (row.querySelector('td[colspan]')) return;
+        const cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
+        if (cust) customers.add(cust);
+        const itemCell = row.cells[2];
+        if (itemCell) {
+            const t = itemCell.textContent.trim();
+            if (t && t !== '-') items.add(t);
+        }
+    });
+    const custSel = document.getElementById('filterCustomer');
+    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
+    const itemSel = document.getElementById('filterItem');
+    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
+}
+
 function filterTable() {
     const query = document.getElementById('searchDelivery').value.toLowerCase();
+    const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
+    const itemFilter = document.getElementById('filterItem').value.toLowerCase();
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
     document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
+        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
         const text = row.textContent.toLowerCase();
+        const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
+        const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
         const rowDate = row.getAttribute('data-date') || '';
         const matchesSearch = text.includes(query);
+        const matchesCust = !custFilter || cust.includes(custFilter);
+        const matchesItem = !itemFilter || itemText.includes(itemFilter);
         const matchesFrom = !dateFrom || rowDate >= dateFrom;
         const matchesTo = !dateTo || rowDate <= dateTo;
-        row.style.display = (matchesSearch && matchesFrom && matchesTo) ? '' : 'none';
+        row.style.display = (matchesSearch && matchesCust && matchesItem && matchesFrom && matchesTo) ? '' : 'none';
     });
 }
 
 document.getElementById('searchDelivery').addEventListener('keyup', filterTable);
+document.getElementById('filterCustomer').addEventListener('change', filterTable);
+document.getElementById('filterItem').addEventListener('change', filterTable);
 document.getElementById('filterDateFrom').addEventListener('change', filterTable);
 document.getElementById('filterDateTo').addEventListener('change', filterTable);
+document.getElementById('clearFilters').addEventListener('click', function() {
+    document.getElementById('filterCustomer').value = '';
+    document.getElementById('filterItem').value = '';
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    document.getElementById('searchDelivery').value = '';
+    filterTable();
+});
+
+document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
 
 document.querySelectorAll('.sortable').forEach(th => {
     th.style.cursor = 'pointer';

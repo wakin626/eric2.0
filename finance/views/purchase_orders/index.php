@@ -1,10 +1,20 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <span class="text-muted">Showing <?= count($purchase_orders) ?> of <?= $total ?> purchase orders</span>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <select id="filterCustomer" class="form-select form-select-sm" style="width:200px">
+            <option value="">All Customers</option>
+        </select>
+        <select id="filterItem" class="form-select form-select-sm" style="width:200px">
+            <option value="">All Items</option>
+        </select>
+        <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Date Created">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
-    <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchPO" class="form-control" placeholder="Search PO...">
+    <div class="d-flex align-items-center gap-3">
+        <span class="text-muted">Showing <?= count($purchase_orders) ?> of <?= $total ?> purchase orders</span>
+        <div class="search-box" style="width: 300px;">
+            <i class="bi bi-search"></i>
+            <input type="text" id="searchPO" class="form-control" placeholder="Search PO...">
+        </div>
     </div>
 </div>
 
@@ -16,8 +26,8 @@
                     <th class="sortable" data-sort="po_number">PO Number</th>
                     <th>Customer</th>
                     <th>Item</th>
-                    <th class="sortable" data-sort="produced">Production Progress</th>
-                    <th class="sortable" data-sort="delivered">Delivered</th>
+<th class="sortable" data-sort="produced">Produced PO QTY</th>
+<th class="sortable" data-sort="delivered">Delivered PO QTY</th>
                     <th>Type</th>
                     <th class="sortable" data-sort="date">Date Created</th>
                     <th class="text-center">Actions</th>
@@ -52,7 +62,7 @@
                                     <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                         <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                     </div>
-                                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                 </div>
                             <?php endforeach; ?>
                         <?php else: ?>
@@ -66,7 +76,8 @@
                                 $itemDelivered = $item['delivered_quantity'] ?? 0;
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?></small>
+<?php $conv = $item['uom_conversion'] ?? null; ?>
+<small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>
@@ -123,11 +134,62 @@
 
 <script>
 document.getElementById('searchPO').addEventListener('keyup', function() {
-    const query = this.value.toLowerCase();
-    document.querySelectorAll('#poTableBody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
-    });
+    applyFilters();
 });
+
+function populateFilters() {
+    const customers = new Set();
+    const items = new Set();
+    document.querySelectorAll('#poTableBody tr').forEach(row => {
+        if (row.querySelector('td[colspan]')) return;
+        const cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
+        if (cust) customers.add(cust);
+        const itemCell = row.cells[2];
+        if (itemCell) {
+            itemCell.querySelectorAll('small').forEach(s => {
+                const t = s.textContent.trim();
+                if (t && t !== '-') items.add(t);
+            });
+        }
+    });
+    const custSel = document.getElementById('filterCustomer');
+    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
+    const itemSel = document.getElementById('filterItem');
+    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
+}
+
+function applyFilters() {
+    const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
+    const itemFilter = document.getElementById('filterItem').value.toLowerCase();
+    const dateFilter = document.getElementById('filterDate').value;
+    const searchQuery = document.getElementById('searchPO').value.toLowerCase();
+    document.querySelectorAll('#poTableBody tr').forEach(row => {
+        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
+        const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
+        const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
+        const poDate = row.cells[6] ? row.cells[6].textContent.trim() : '';
+        const rowText = row.textContent.toLowerCase();
+        let show = true;
+        if (custFilter && !cust.includes(custFilter)) show = false;
+        if (itemFilter && !itemText.includes(itemFilter)) show = false;
+        if (dateFilter && poDate !== dateFilter) show = false;
+        if (searchQuery && !rowText.includes(searchQuery)) show = false;
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+document.getElementById('filterCustomer').addEventListener('change', applyFilters);
+document.getElementById('filterItem').addEventListener('change', applyFilters);
+document.getElementById('filterDate').addEventListener('change', applyFilters);
+document.getElementById('clearFilters').addEventListener('click', function() {
+    document.getElementById('filterCustomer').value = '';
+    document.getElementById('filterItem').value = '';
+    document.getElementById('filterDate').value = '';
+    document.getElementById('searchPO').value = '';
+    applyFilters();
+});
+
+document.addEventListener('DOMContentLoaded', populateFilters);
 
 document.querySelectorAll('.sortable').forEach(th => {
     th.style.cursor = 'pointer';
@@ -209,6 +271,8 @@ function viewPODetails(poId) {
                     const remaining = Math.max(0, qty - itemDelivered);
                     const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
                     const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                    var conv = item.uom_conversion || null;
+                    var deliveredText = itemDelivered + '/' + qty + ' pcs, ' + (conv ? (Math.round(itemDelivered / conv * 100) / 100) + '/' + (Math.round(qty / conv * 100) / 100) + ' cs' : '—/—');
                     html += `<tr>
                         <td>${item.item_code || '-'}</td>
                         <td>${item.item_description || '-'}</td>
@@ -219,10 +283,10 @@ function viewPODetails(poId) {
                                 <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
                                     <div class="progress-bar ${barClass}" style="width: ${itemPercent}%"></div>
                                 </div>
-                                <small class="text-muted">${itemProduced}/${qty}</small>
+                                <small class="text-muted">${itemProduced}/${qty} pcs</small>
                             </div>
                         </td>
-                        <td><small class="text-muted">${itemDelivered}/${qty}</small></td>
+                        <td><small class="text-muted">${deliveredText}</small></td>
                         <td><small class="badge ${remaining <= 0 ? 'bg-success' : 'bg-warning'}">${remaining}</small></td>
                     </tr>`;
                 });

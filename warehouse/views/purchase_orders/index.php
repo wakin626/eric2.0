@@ -1,8 +1,18 @@
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPOModal">
             <i class="bi bi-plus-circle me-1"></i> Create New PO
         </button>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <select id="filterCustomer" class="form-select form-select-sm" style="width:200px">
+            <option value="">All Customers</option>
+        </select>
+        <select id="filterItem" class="form-select form-select-sm" style="width:200px">
+            <option value="">All Items</option>
+        </select>
+        <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Date Created">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
     <div class="search-box" style="width: 300px;">
         <i class="bi bi-search"></i>
@@ -18,7 +28,7 @@
                         <th class="sortable" data-sort="po_number">PO Number <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                         <th>Item</th>
-                        <th>Production Status</th>
+                        <th>Produced PO QTY</th>
                         <th>Type</th>
                         <th class="sortable" data-sort="created_by">Created By <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="date">Date Created <i class="bi bi-chevron-expand"></i></th>
@@ -54,7 +64,7 @@
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                             <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                         </div>
-                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                     </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -118,7 +128,8 @@
                                     data-code="<?= htmlspecialchars($c['customer_code']) ?>"
                                     data-name="<?= htmlspecialchars($c['customer_name']) ?>"
                                     data-address="<?= htmlspecialchars($c['customer_address']) ?>"
-                                    data-tin="<?= htmlspecialchars($c['customer_tin'] ?? '') ?>">
+                                    data-tin="<?= htmlspecialchars($c['customer_tin'] ?? '') ?>"
+                                    data-terms="<?= $c['customer_terms'] ?? 0 ?>">
                                     <?= $c['customer_code'] ?> - <?= $c['customer_name'] ?>
                                 </option>
                             <?php endforeach; ?>
@@ -145,7 +156,7 @@
                         <div class="col-md-2">
                             <label class="form-label">Terms (Days)</label>
                             <div class="input-group">
-                                <input type="number" name="customer_terms" id="customerTerms" class="form-control" min="0" placeholder="e.g. 30" required>
+                                <input type="number" name="customer_terms" id="customerTerms" class="form-control" min="0" readonly>
                                 <span class="input-group-text">days</span>
                             </div>
                         </div>
@@ -310,11 +321,62 @@ document.getElementById('createPOModal').addEventListener('hidden.bs.modal', fun
 });
 
 document.getElementById('searchPO').addEventListener('keyup', function() {
-    const query = this.value.toLowerCase();
-    document.querySelectorAll('#poTableBody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
-    });
+    applyFilters();
 });
+
+function populateFilters() {
+    const customers = new Set();
+    const items = new Set();
+    document.querySelectorAll('#poTableBody tr').forEach(row => {
+        if (row.querySelector('td[colspan]')) return;
+        const cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
+        if (cust) customers.add(cust);
+        const itemCell = row.cells[2];
+        if (itemCell) {
+            itemCell.querySelectorAll('small').forEach(s => {
+                const t = s.textContent.trim();
+                if (t && t !== '-') items.add(t);
+            });
+        }
+    });
+    const custSel = document.getElementById('filterCustomer');
+    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
+    const itemSel = document.getElementById('filterItem');
+    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
+}
+
+function applyFilters() {
+    const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
+    const itemFilter = document.getElementById('filterItem').value.toLowerCase();
+    const dateFilter = document.getElementById('filterDate').value;
+    const searchQuery = document.getElementById('searchPO').value.toLowerCase();
+    document.querySelectorAll('#poTableBody tr').forEach(row => {
+        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
+        const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
+        const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
+        const poDate = row.cells[6] ? row.cells[6].textContent.trim() : '';
+        const rowText = row.textContent.toLowerCase();
+        let show = true;
+        if (custFilter && !cust.includes(custFilter)) show = false;
+        if (itemFilter && !itemText.includes(itemFilter)) show = false;
+        if (dateFilter && poDate !== dateFilter) show = false;
+        if (searchQuery && !rowText.includes(searchQuery)) show = false;
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+document.getElementById('filterCustomer').addEventListener('change', applyFilters);
+document.getElementById('filterItem').addEventListener('change', applyFilters);
+document.getElementById('filterDate').addEventListener('change', applyFilters);
+document.getElementById('clearFilters').addEventListener('click', function() {
+    document.getElementById('filterCustomer').value = '';
+    document.getElementById('filterItem').value = '';
+    document.getElementById('filterDate').value = '';
+    document.getElementById('searchPO').value = '';
+    applyFilters();
+});
+
+document.addEventListener('DOMContentLoaded', populateFilters);
 
 const customerSelect = document.getElementById('customerSelect');
 const customerDetails = document.getElementById('customerDetails');
@@ -336,7 +398,7 @@ customerSelect.addEventListener('change', function() {
     customerName.value = option.dataset.name || '';
     customerAddress.value = option.dataset.address || '';
     customerTin.value = option.dataset.tin || '';
-    customerTerms.value = '';
+    customerTerms.value = option.dataset.terms || '0';
     customerDetails.classList.remove('d-none');
 });
 
@@ -484,7 +546,7 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                                     '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
                                         '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
                                     '</div>' +
-                                    '<small class="text-muted">' + itemProduced + '/' + qty + '</small>' +
+                                    '<small class="text-muted">' + itemProduced + '/' + qty + ' pcs</small>' +
                                 '</div>' +
                             '</td>' +
                             '</tr>';

@@ -32,8 +32,8 @@
                         <th>PO Date</th>
                         <th>Customer</th>
                         <th>Item</th>
-                        <th>Production Progress</th>
-                        <th>Delivered</th>
+                        <th>Produced PO QTY</th>
+                        <th>Delivered PO QTY</th>
                         <th>Type</th>
                     </tr>
                 </thead>
@@ -67,7 +67,7 @@
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                             <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                         </div>
-                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?></small>
+                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                     </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -81,7 +81,8 @@
                                     $itemDelivered = $item['delivered_quantity'] ?? 0;
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?></small>
+                                    <?php $conv = $item['uom_conversion'] ?? null; ?>
+                                    <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>
@@ -144,6 +145,7 @@
                     <div class="mb-3"><label class="form-label">Delivery Address</label><textarea name="customer_address" class="form-control"></textarea></div>
                     <div class="mb-3"><label class="form-label">Type</label><select name="customer_type" class="form-select" required><option value="vat">VAT %</option><option value="non_vat">Non-VAT</option></select></div>
                     <div class="mb-3"><label class="form-label">TIN</label><input type="text" name="customer_tin" class="form-control"></div>
+                    <div class="mb-3"><label class="form-label">Terms (Days)</label><input type="number" name="customer_terms" class="form-control" min="0" placeholder="e.g. 30"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -162,8 +164,8 @@
                 <div class="modal-body">
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" class="form-control" required></div>
-                    <div class="mb-3"><label class="form-label">UOM *</label><select name="item_uom" id="dash_item_uom" class="form-select" required><option value="">Select</option><option>PCS</option><option>PCKS</option><option>CS</option></select></div>
-                    <div class="mb-3" id="dashConversionGroup" style="display:none;"><label class="form-label">Conversion (per case)</label><input type="number" name="uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
+                    <div class="mb-3"><label class="form-label">UOM</label><input type="text" class="form-control" value="PCS" readonly><input type="hidden" name="item_uom" value="PCS"></div>
+                    <div class="mb-3"><label class="form-label">Cases Conversion</label><input type="number" name="uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -174,8 +176,4 @@
     </div>
 </div>
 
-<script>
-document.getElementById('dash_item_uom').addEventListener('change', function() {
-    document.getElementById('dashConversionGroup').style.display = (this.value === 'PCS' || this.value === 'PCKS') ? '' : 'none';
-});
-</script>
+
