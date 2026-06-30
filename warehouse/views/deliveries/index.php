@@ -8,13 +8,13 @@
         </button>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <select id="filterCustomer" class="form-select form-select-sm" style="width:200px">
+        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Customers</option>
         </select>
-        <select id="filterItem" class="form-select form-select-sm" style="width:200px">
+        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Items</option>
         </select>
-        <select id="filterDR" class="form-select form-select-sm" style="width:160px">
+        <select id="filterDR" class="form-select form-select-sm filter-select" style="width:160px">
             <option value="">All DR Numbers</option>
         </select>
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Delivery Date">

@@ -170,6 +170,7 @@
         </div>
     </div>
     <script src="public/js/bootstrap.bundle.min.js"></script>
+    <script src="public/js/app.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements by their IDs

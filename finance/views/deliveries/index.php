@@ -3,10 +3,10 @@
         <span class="text-muted">Showing <?= count($deliveries) ?> of <?= $total ?> deliveries</span>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <select id="filterCustomer" class="form-select form-select-sm" style="width:200px">
+        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Customers</option>
         </select>
-        <select id="filterItem" class="form-select form-select-sm" style="width:200px">
+        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Items</option>
         </select>
         <input type="date" id="filterDateFrom" class="form-control form-control-sm" style="width: 160px;" title="From date">
