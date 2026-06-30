@@ -115,7 +115,13 @@
                     </td>
                     <td><?= htmlspecialchars($d['delivered_by_name'] ?? '-') ?></td>
                     <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $d['po_id'] ?>" title="View PO Details">
+                        <button type="button" class="btn btn-sm btn-outline-primary view-po-btn"
+                            data-po-id="<?= $d['po_id'] ?>"
+                            data-delivery-id="<?= $d['delivery_id'] ?>"
+                            data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>"
+                            data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
+                            data-delivery-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>"
+                            title="View PO Details">
                             <i class="bi bi-eye"></i>
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-warning editDeliveryBtn"
@@ -208,20 +214,14 @@
                             <tr>
                                 <th>Item Code</th>
                                 <th>Description</th>
-                                <th>UOM</th>
-                                <th>Quantity</th>
-                                <th>Delivery Progress</th>
-                                <th>Remaining</th>
                                 <th>Lot Number</th>
-                                <th>DR Number(s)</th>
+                                <th class="text-end">Delivered</th>
+                                <th class="text-end">Cases</th>
+                                <th>DR Number</th>
                             </tr>
                         </thead>
                         <tbody id="viewPOItems"></tbody>
                     </table>
-                </div>
-                <div id="drPhotosSection" style="display:none;">
-                    <h6 class="mt-3 mb-2"><i class="bi bi-camera me-1"></i>DR Photos</h6>
-                    <div id="drPhotosContainer" class="d-flex flex-wrap gap-3"></div>
                 </div>
             </div>
         </div>
@@ -235,14 +235,15 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             e.stopPropagation();
             const poId = this.getAttribute('data-po-id');
+            const drNumber = this.getAttribute('data-dr') || '-';
+            const lotItemsRaw = this.getAttribute('data-lot-items') || '[]';
+            const lotItems = JSON.parse(lotItemsRaw);
+            const hasLotItems = Array.isArray(lotItems) && lotItems.length > 0;
 
             fetch('?controller=warehouse&action=getPODetails&id=' + poId)
-                .then(function(response) {
-                    return response.json();
-                })
+                .then(function(response) { return response.json(); })
                 .then(function(data) {
                     const po = data.po;
-                    const items = data.po_items;
 
                     document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
                     document.getElementById('viewCustomerCode').textContent = po.customer_code || '-';
@@ -252,77 +253,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const tbody = document.getElementById('viewPOItems');
                     tbody.innerHTML = '';
-                    var allReceipts = [];
-                    if (items && items.length > 0) {
-                        items.forEach(function(item) {
-                            const qty = item.quantity || 0;
-                            const itemDelivered = item.delivered_quantity || 0;
-                            var conv = item.uom_conversion || null;
-                            var deliveredText = itemDelivered + '/' + qty + ' pcs, ' + (conv ? (Math.round(itemDelivered / conv * 100) / 100) + '/' + (Math.round(qty / conv * 100) / 100) + ' cs' : '—/—');
-                            const remaining = Math.max(0, qty - itemDelivered);
-                            const itemPercent = qty > 0 ? Math.round((itemDelivered / qty) * 100) : 0;
-                            const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
 
-                            var lotHtml = '<span class="text-muted">-</span>';
-                            var drsHtml = '<span class="text-muted">-</span>';
-                            if (item.deliveries && item.deliveries.length > 0) {
-                                drsHtml = '<div class="d-flex flex-column gap-1">';
-                                lotHtml = '<div class="d-flex flex-column gap-1">';
-                                item.deliveries.forEach(function(del) {
-                                    drsHtml += '<div>' +
-                                        '<span class="badge bg-secondary">' + (del.dr_number || '-') + '</span> ' +
-                                        '<small class="text-muted">(' + del.qty + ' pcs)</small>' +
-                                    '</div>';
-                                    lotHtml += '<div><small>' + (del.lot_number || '-') + '</small></div>';
-                                    if (del.receipt && del.receipt.file_path) {
-                                        if (!allReceipts.some(function(r) { return r.file_path === del.receipt.file_path; })) {
-                                            allReceipts.push({ file_path: del.receipt.file_path, dr_number: del.dr_number || '-' });
-                                        }
-                                    }
-                                });
-                                drsHtml += '</div>';
-                                lotHtml += '</div>';
-                            }
+                    if (hasLotItems) {
+                        lotItems.forEach(function(li) {
+                            var qty = li.qty || 0;
+                            var conv = li.uom_conversion || null;
+                            var uom = li.item_uom || '';
+                            var cases = (conv && uom !== 'CS') ? Math.round(qty / conv * 100) / 100 : 0;
 
-                            const row = '<tr>' +
-                                '<td>' + (item.item_code || '-') + '</td>' +
-                                '<td>' + (item.item_description || '-') + '</td>' +
-                                '<td>' + (item.item_uom || '-') + '</td>' +
-                                '<td>' + qty + '</td>' +
-                                '<td>' +
-                                    '<div class="d-flex align-items-center">' +
-                                        '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
-                                            '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
-                                        '</div>' +
-                                        '<small class="text-muted">' + deliveredText + '</small>' +
-                                    '</div>' +
-                                '</td>' +
-                                '<td>' +
-                                    '<small class="badge ' + (remaining <= 0 ? 'bg-success' : 'bg-warning') + '">' + remaining + '</small>' +
-                                '</td>' +
-                                '<td>' + lotHtml + '</td>' +
-                                '<td>' + drsHtml + '</td>' +
+                            var row = '<tr>' +
+                                '<td>' + (li.item_code || '-') + '</td>' +
+                                '<td>' + (li.item_description || '-') + '</td>' +
+                                '<td>' + (li.lot_number || '-') + '</td>' +
+                                '<td class="text-end">' + qty + ' pcs</td>' +
+                                '<td class="text-end">' + (cases > 0 ? cases + ' CS' : '---') + '</td>' +
+                                '<td><span class="badge bg-secondary">' + drNumber + '</span></td>' +
                                 '</tr>';
                             tbody.innerHTML += row;
                         });
                     } else {
-                        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No items found</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No lot items found for this delivery</td></tr>';
                     }
-
-                    var photosSection = document.getElementById('drPhotosSection');
-                    var photosContainer = document.getElementById('drPhotosContainer');
-                    photosContainer.innerHTML = '';
-                    if (allReceipts.length > 0) {
-                        allReceipts.forEach(function(r) {
-                            photosContainer.innerHTML += '<div class="text-center">' +
-                                '<a href="' + r.file_path + '" target="_blank"><img src="' + r.file_path + '" alt="DR Photo" style="max-height:100px; border-radius:6px; border:1px solid #ddd;"></a>' +
-                                '<div><small class="text-muted">' + r.dr_number + '</small></div>' +
-                            '</div>';
-                        });
-                    } else {
-                        photosContainer.innerHTML = '<span class="text-muted">No attachment attached for this DR</span>';
-                    }
-                    photosSection.style.display = 'block';
 
                     const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
                     modal.show();
