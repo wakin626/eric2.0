@@ -34,7 +34,7 @@
 
         <div class="card data-card mb-4">
             <div class="card-header">
-                <i class="bi bi-box me-2"></i>Delivered Item
+                <i class="bi bi-box me-2"></i>Delivered Items
             </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -42,44 +42,43 @@
                         <tr>
                             <th>Item Code</th>
                             <th>Description</th>
+                            <th>Lot Number</th>
                             <th>UOM</th>
-                            <th>Net Wt/Size</th>
-                            <th>Price Per Piece</th>
-                            <th>Qty Ordered</th>
-                            <th>Production Progress</th>
-                            <th>Delivered</th>
-                            <th>Remaining</th>
+                            <th class="text-end">Quantity</th>
+                            <th class="text-end">Cases</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (!empty($poi_item)):
-                            $qty = $poi_item['quantity'] ?? 0;
-                            $itemProduced = $poi_item['produced_quantity'] ?? 0;
-                            $itemDelivered = $poi_item['delivered_quantity'] ?? 0;
-                            $remaining = max(0, $qty - $itemDelivered);
-                            $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                        <?php
+                        $lotItems = json_decode($delivery['lot_items'] ?? '[]', true);
+                        $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
+                        $totalQty = 0;
+                        $totalCases = 0;
+                        if ($hasLotItems):
+                            foreach ($lotItems as $li):
+                                $liQty = $li['qty'] ?? 0;
+                                $conv = $li['uom_conversion'] ?? null;
+                                $uom = $li['item_uom'] ?? '';
+                                $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
+                                $totalQty += $liQty;
+                                $totalCases += $cases;
                         ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars($poi_item['item_code']) ?></strong></td>
-                            <td><?= htmlspecialchars($poi_item['item_description']) ?></td>
-                            <td><?= htmlspecialchars($poi_item['item_uom']) ?></td>
-                            <td><?= htmlspecialchars($price_list['net_size'] ?? $poi_item['item_size'] ?? '-') ?></td>
-                            <td><?= number_format($price_list['price_per_piece'] ?? 0, 2) ?></td>
-                            <td><?= $qty ?></td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
-                                        <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
-                                    </div>
-                                    <small class="text-muted text-nowrap"><?= $itemProduced ?> pcs</small>
-                                </div>
-                            </td>
-                            <?php $conv = $poi_item['uom_conversion'] ?? null; ?>
-                            <td><small class="text-muted"><?= $itemDelivered ?> PCS<?= $conv ? ' / ' . round($itemDelivered / $conv, 2) . ' CS' : '' ?></small></td>
-                            <td><small class="badge <?= $remaining <= 0 ? 'bg-success' : 'bg-warning' ?>"><?= $remaining ?></small></td>
+                            <td><strong><?= htmlspecialchars($li['item_code'] ?? '-') ?></strong></td>
+                            <td><?= htmlspecialchars($li['item_description'] ?? '-') ?></td>
+                            <td><?= htmlspecialchars($li['lot_number'] ?? '-') ?></td>
+                            <td><?= htmlspecialchars($uom) ?></td>
+                            <td class="text-end"><?= number_format($liQty) ?></td>
+                            <td class="text-end"><?= $cases > 0 ? $cases . ' CS' : '---' ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <tr class="table-light fw-bold">
+                            <td colspan="4" class="text-end">Total:</td>
+                            <td class="text-end"><?= number_format($totalQty) ?></td>
+                            <td class="text-end"><?= $totalCases > 0 ? $totalCases . ' CS' : '---' ?></td>
                         </tr>
                         <?php else: ?>
-                        <tr><td colspan="9" class="text-center text-muted py-3">Item not found</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-3">No lot items found</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

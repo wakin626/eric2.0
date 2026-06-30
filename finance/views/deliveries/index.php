@@ -36,10 +36,32 @@
             </thead>
             <tbody id="deliveryTableBody">
                 <?php foreach ($deliveries as $d): ?>
+                <?php
+                    $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                    $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
+                    $itemSummary = '';
+                    if ($hasLotItems) {
+                        $grouped = [];
+                        foreach ($lotItems as $li) {
+                            $key = $li['item_description'] ?? $li['item_code'] ?? 'Unknown';
+                            if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'lots' => []];
+                            $grouped[$key]['qty'] += $li['qty'] ?? 0;
+                            $grouped[$key]['lots'][] = $li['lot_number'] ?? '?';
+                        }
+                        $parts = [];
+                        foreach ($grouped as $desc => $info) {
+                            $parts[] = htmlspecialchars($desc) . ' (' . $info['qty'] . ' - ' . implode(', ', $info['lots']) . ')';
+                        }
+                        $itemSummary = implode('<br>', $parts);
+                    } else {
+                        $itemSummary = htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? ''));
+                        if (!empty($d['lot_number'])) $itemSummary .= '<br><small>' . htmlspecialchars($d['lot_number']) . '</small>';
+                    }
+                ?>
                 <tr data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>">
                     <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
-                    <td><small><?= htmlspecialchars($d['item_description'] ?? '-') ?></small></td>
+                    <td><small><?= $itemSummary ?></small></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '-') ?></td>
                     <td>
@@ -51,6 +73,19 @@
                     </td>
                     <td><?= htmlspecialchars($d['delivered_by_name'] ?? '-') ?></td>
                     <td class="text-center">
+                        <?php if ($hasLotItems): ?>
+                        <button type="button" class="btn btn-sm btn-outline-info viewDeliveryBtn"
+                            data-bs-toggle="modal" data-bs-target="#viewDeliveryModal"
+                            data-dr="<?= htmlspecialchars($d['dr_number']) ?>"
+                            data-po="<?= htmlspecialchars($d['customer_po_number']) ?>"
+                            data-customer="<?= htmlspecialchars($d['customer_name'] ?? '') ?>"
+                            data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>"
+                            data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
+                            data-delivered-by="<?= htmlspecialchars($d['delivered_by_name'] ?? '') ?>"
+                            title="View Lot Items">
+                            <i class="bi bi-list-ul"></i>
+                        </button>
+                        <?php endif; ?>
                         <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-primary" title="View Delivery">
                             <i class="bi bi-eye"></i>
                         </a>
@@ -162,4 +197,70 @@ document.querySelectorAll('.sortable').forEach(th => {
         rows.forEach(row => tbody.appendChild(row));
     });
 });
+
+document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('modalPONumber').textContent = this.dataset.po || '-';
+        document.getElementById('modalCustomer').textContent = this.dataset.customer || '-';
+        document.getElementById('modalDR').textContent = this.dataset.dr || '-';
+        document.getElementById('modalDate').textContent = this.dataset.date || '-';
+
+        var lotItems = JSON.parse(this.dataset.lotItems || '[]');
+        var tbody = document.getElementById('modalLotItemsBody');
+        tbody.innerHTML = '';
+        var total = 0;
+        lotItems.forEach(function(item) {
+            total += item.qty || 0;
+            var conv = item.uom_conversion || null;
+            var uom = item.item_uom || '';
+            var cases = (conv && uom !== 'CS') ? Math.round((item.qty || 0) / conv * 100) / 100 : 0;
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + (item.item_code || '-') + '</td>' +
+                '<td>' + (item.item_description || '-') + '</td>' +
+                '<td>' + (item.lot_number || '-') + '</td>' +
+                '<td class="text-end">' + (item.qty || 0) + '</td>' +
+                '<td class="text-end">' + (cases > 0 ? cases + ' CS' : '---') + '</td>';
+            tbody.appendChild(tr);
+        });
+        var totalTr = document.createElement('tr');
+        totalTr.innerHTML = '<td colspan="3" class="text-end fw-bold">Total:</td>' +
+            '<td class="text-end fw-bold">' + total + '</td><td></td>';
+        tbody.appendChild(totalTr);
+    });
+});
 </script>
+
+<div class="modal fade" id="viewDeliveryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-list-ul me-2"></i>Lot Items - <span id="modalPONumber"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-4"><strong>Customer:</strong> <span id="modalCustomer"></span></div>
+                    <div class="col-md-4"><strong>DR No.:</strong> <span id="modalDR"></span></div>
+                    <div class="col-md-4"><strong>Date:</strong> <span id="modalDate"></span></div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Item Code</th>
+                                <th>Item Description</th>
+                                <th>Lot Number</th>
+                                <th class="text-end">Quantity</th>
+                                <th class="text-end">Cases</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalLotItemsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

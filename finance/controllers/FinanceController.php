@@ -257,16 +257,63 @@ class FinanceController {
             $priceList = $this->priceListModel->getByItemId($delivery['poi_item_id']);
         }
 
-        $qty = $delivery['delivery_quantity'] ?? 0;
-        $price = $priceList['price_per_piece'] ?? 0;
-        $amount = $qty * $price;
+        $lotItems = json_decode($delivery['lot_items'] ?? '[]', true);
+        if (!is_array($lotItems)) $lotItems = [];
+
+        $items = [];
+        $grandTotalQty = 0;
+        $grandTotalAmount = 0;
         $vatType = $priceList['vat_type'] ?? 'non_vat';
 
+        foreach ($lotItems as $li) {
+            $liQty = $li['qty'] ?? 0;
+            $conv = $li['uom_conversion'] ?? null;
+            $uom = $li['item_uom'] ?? '';
+            $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
+            $lotNumber = $li['lot_number'] ?? '';
+            $itemDesc = $li['item_description'] ?? '';
+
+            $descParts = [];
+            if (!empty($itemDesc)) $descParts[] = $itemDesc;
+            if ($cases > 0) $descParts[] = $cases . ' CS';
+            if (!empty($lotNumber)) $descParts[] = $lotNumber;
+            $fullDesc = implode(' | ', $descParts);
+
+            $itemPrice = $priceList['price_per_piece'] ?? 0;
+            $itemAmount = $liQty * $itemPrice;
+
+            $items[] = [
+                'item_description' => $fullDesc,
+                'item_uom' => 'Pcs',
+                'qty' => $liQty,
+                'price' => $itemPrice,
+                'amount' => $itemAmount,
+            ];
+
+            $grandTotalQty += $liQty;
+            $grandTotalAmount += $itemAmount;
+        }
+
+        if (empty($items) && $delivery) {
+            $qty = $delivery['delivery_quantity'] ?? 0;
+            $price = $priceList['price_per_piece'] ?? 0;
+            $amount = $qty * $price;
+            $items[] = [
+                'item_description' => $delivery['item_description'] ?? '',
+                'item_uom' => $delivery['item_uom'] ?? '',
+                'qty' => $qty,
+                'price' => $price,
+                'amount' => $amount,
+            ];
+            $grandTotalQty = $qty;
+            $grandTotalAmount = $amount;
+        }
+
         if ($vatType === 'vat') {
-            $subtotal = $amount / 1.12;
-            $vat = $amount - $subtotal;
+            $subtotal = $grandTotalAmount / 1.12;
+            $vat = $grandTotalAmount - $subtotal;
         } else {
-            $subtotal = $amount;
+            $subtotal = $grandTotalAmount;
             $vat = 0;
         }
 
@@ -279,22 +326,16 @@ class FinanceController {
             'customer_terms' => ($delivery['customer_terms'] ?? 0) . ' DAYS',
             'customer_code' => $delivery['customer_code'] ?? '',
             'po_number' => $delivery['customer_po_number'] ?? '',
-            'item_description' => $delivery['item_description'] ?? '',
-            'item_uom' => $delivery['item_uom'] ?? '',
-            'item_size' => $delivery['item_size'] ?? '',
             'dr_number' => $delivery['dr_number'] ?? '',
-            'delivery_quantity' => $delivery['delivery_quantity'] ?? 0,
-            'qty' => $qty,
-            'price' => $price,
-            'amount' => $amount,
+            'items' => $items,
             'subtotal' => $subtotal,
             'vat' => $vat,
             'vatType' => $vatType,
-            'grand_total' => $amount,
+            'grand_total' => $grandTotalAmount,
             'vatable_sales' => $vatType === 'vat' ? $subtotal : 0,
             'vat_amount' => $vat,
             'zero_rated_sales' => 0,
-            'vat_exempt_sales' => $vatType !== 'vat' ? $amount : 0,
+            'vat_exempt_sales' => $vatType !== 'vat' ? $grandTotalAmount : 0,
         ];
 
         extract($data);
