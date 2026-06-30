@@ -27,6 +27,8 @@
                     <th class="sortable" data-sort="po_number">PO Number <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
+                    <th>Lot Number</th>
+                    <th>Quantity</th>
                     <th class="sortable" data-sort="date">Delivery Date <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="dr_number">DR No. <i class="bi bi-chevron-expand"></i></th>
                     <th>Type</th>
@@ -39,29 +41,27 @@
                 <?php
                     $lotItems = json_decode($d['lot_items'] ?? '[]', true);
                     $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
-                    $itemSummary = '';
+                    $itemLines = [];
+                    $lotLines = [];
+                    $qtyLines = [];
                     if ($hasLotItems) {
-                        $grouped = [];
                         foreach ($lotItems as $li) {
-                            $key = $li['item_description'] ?? $li['item_code'] ?? 'Unknown';
-                            if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'lots' => []];
-                            $grouped[$key]['qty'] += $li['qty'] ?? 0;
-                            $grouped[$key]['lots'][] = $li['lot_number'] ?? '?';
+                            $itemLines[] = $li['item_description'] ?? $li['item_code'] ?? '-';
+                            $lotLines[] = $li['lot_number'] ?? '-';
+                            $qtyLines[] = $li['qty'] ?? 0;
                         }
-                        $parts = [];
-                        foreach ($grouped as $desc => $info) {
-                            $parts[] = htmlspecialchars($desc) . ' (' . $info['qty'] . ' - ' . implode(', ', $info['lots']) . ')';
-                        }
-                        $itemSummary = implode('<br>', $parts);
                     } else {
-                        $itemSummary = htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? ''));
-                        if (!empty($d['lot_number'])) $itemSummary .= '<br><small>' . htmlspecialchars($d['lot_number']) . '</small>';
+                        $itemLines[] = ($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '');
+                        $lotLines[] = $d['lot_number'] ?? '-';
+                        $qtyLines[] = $d['delivery_quantity'] ?? 0;
                     }
                 ?>
                 <tr data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>">
                     <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
-                    <td><small><?= $itemSummary ?></small></td>
+                    <td><small><?= htmlspecialchars(implode('<br>', $itemLines)) ?></small></td>
+                    <td><small class="text-muted"><?= htmlspecialchars(implode('<br>', $lotLines)) ?></small></td>
+                    <td><?= implode('<br>', $qtyLines) ?></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '-') ?></td>
                     <td>
@@ -93,7 +93,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="8" class="text-center text-muted py-4">No deliveries found</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No deliveries found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
