@@ -2,10 +2,12 @@
 namespace App\Controllers;
 
 use App\Models\FinanceModel;
+use App\Models\PriceListModel;
 use App\Helpers\Pagination;
 
 class FinanceController {
     private $financeModel;
+    private $priceListModel;
 
     public function __construct() {
         if (!isset($_SESSION['user_id'])) {
@@ -19,6 +21,7 @@ class FinanceController {
             exit;
         }
         $this->financeModel = new FinanceModel();
+        $this->priceListModel = new PriceListModel();
     }
 
     public function index() {
@@ -70,6 +73,7 @@ class FinanceController {
         $data['delivery'] = $this->financeModel->getDeliveryById($id);
         $data['receipts'] = $this->financeModel->getReceiptsByDelivery($id);
         $data['poi_item'] = $this->financeModel->getDeliveryPoiItem($data['delivery']['poi_id'] ?? 0);
+        $data['price_list'] = !empty($data['poi_item']['item_id']) ? $this->priceListModel->getByItemId($data['poi_item']['item_id']) : null;
         $data['page_title'] = 'Delivery Details';
         $this->render('deliveries/view', $data);
     }
@@ -185,7 +189,115 @@ class FinanceController {
         exit;
     }
 
+    public function priceList() {
+        $allItems = $this->priceListModel->getAll();
+        $pagination = Pagination::paginate($allItems, 20);
+        $data['price_items'] = $pagination['items'];
+        $data['page'] = $pagination['page'];
+        $data['totalPages'] = $pagination['totalPages'];
+        $data['total'] = $pagination['total'];
+        $data['all_items'] = $this->financeModel->getAllActiveItems();
+        $data['page_title'] = 'Price List';
+        $this->render('price_list', $data);
+    }
+
+    public function priceListCreate() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->priceListModel->create([
+                'item_id' => $_POST['item_id'] ?? null,
+                'product_name' => $_POST['product_name'] ?? '',
+                'net_size' => $_POST['net_size'] ?? null,
+                'price_per_pack' => $_POST['price_per_pack'] ?? 0,
+                'price_per_case' => $_POST['price_per_case'] ?? 0,
+                'price_per_piece' => $_POST['price_per_piece'] ?? 0,
+                'vat_type' => $_POST['vat_type'] ?? 'vat'
+            ]);
+            $_SESSION['success'] = 'Price list item added successfully';
+        }
+        header('Location: ?controller=finance&action=priceList');
+        exit;
+    }
+
+    public function priceListUpdate() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $id = $_POST['price_list_id'] ?? null;
+            if ($id) {
+                $this->priceListModel->update($id, [
+                    'item_id' => $_POST['item_id'] ?? null,
+                    'product_name' => $_POST['product_name'] ?? '',
+                    'net_size' => $_POST['net_size'] ?? null,
+                    'price_per_pack' => $_POST['price_per_pack'] ?? 0,
+                    'price_per_case' => $_POST['price_per_case'] ?? 0,
+                    'price_per_piece' => $_POST['price_per_piece'] ?? 0,
+                    'vat_type' => $_POST['vat_type'] ?? 'vat'
+                ]);
+                $_SESSION['success'] = 'Price list item updated successfully';
+            }
+        }
+        header('Location: ?controller=finance&action=priceList');
+        exit;
+    }
+
+    public function priceListToggle() {
+        $id = $_GET['id'] ?? null;
+        if ($id) {
+            $this->priceListModel->toggleStatus($id);
+            $_SESSION['success'] = 'Status updated successfully';
+        }
+        header('Location: ?controller=finance&action=priceList');
+        exit;
+    }
+
     public function printSalesInvoice() {
+        $id = $_GET['id'] ?? null;
+        $delivery = $this->financeModel->getDeliveryById($id);
+
+        $priceList = null;
+        if (!empty($delivery['poi_item_id'])) {
+            $priceList = $this->priceListModel->getByItemId($delivery['poi_item_id']);
+        }
+
+        $qty = $delivery['delivery_quantity'] ?? 0;
+        $price = $priceList['price_per_piece'] ?? 0;
+        $amount = $qty * $price;
+        $vatType = $priceList['vat_type'] ?? 'non_vat';
+
+        if ($vatType === 'vat') {
+            $subtotal = $amount / 1.12;
+            $vat = $amount - $subtotal;
+        } else {
+            $subtotal = $amount;
+            $vat = 0;
+        }
+
+        $data = [
+            'delivery' => $delivery,
+            'date' => !empty($delivery['delivery_date']) ? date('j-M-Y', strtotime($delivery['delivery_date'])) : '',
+            'customer_name' => $delivery['customer_name'] ?? '',
+            'customer_tin' => $delivery['customer_tin'] ?? '',
+            'customer_address' => $delivery['customer_address'] ?? '',
+            'customer_terms' => ($delivery['customer_terms'] ?? 0) . ' DAYS',
+            'customer_code' => $delivery['customer_code'] ?? '',
+            'po_number' => $delivery['customer_po_number'] ?? '',
+            'item_description' => $delivery['item_description'] ?? '',
+            'item_uom' => $delivery['item_uom'] ?? '',
+            'item_size' => $delivery['item_size'] ?? '',
+            'dr_number' => $delivery['dr_number'] ?? '',
+            'delivery_quantity' => $delivery['delivery_quantity'] ?? 0,
+            'qty' => $qty,
+            'price' => $price,
+            'amount' => $amount,
+            'subtotal' => $subtotal,
+            'vat' => $vat,
+            'vatType' => $vatType,
+            'grand_total' => $amount,
+            'vatable_sales' => $vatType === 'vat' ? $subtotal : 0,
+            'vat_amount' => $vat,
+            'zero_rated_sales' => 0,
+            'vat_exempt_sales' => $vatType !== 'vat' ? $amount : 0,
+        ];
+
+        extract($data);
         include __DIR__ . "/../views/deliveries/print.php";
         exit;
     }

@@ -84,7 +84,7 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getPurchaseOrderById($id) {
-        $sql = "SELECT po.*, c.customer_name, c.customer_code, c.customer_tin 
+        $sql = "SELECT po.*, c.customer_name, c.customer_code, c.customer_tin, c.customer_address
                 FROM purchase_orders po 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 WHERE po.po_id = :id";

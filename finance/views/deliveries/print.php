@@ -39,90 +39,87 @@
             background: #fff;
             margin: 10px auto;
             font-family: Calibri, sans-serif;
-            /* border removed for print */
         }
 
-        /* ─── Date (top right) ─── */
+        /* ─── HEADER LEFT: Customer Info ─── */
+        .print-customer-name {
+            position: absolute;
+            top: 2.10in;
+            left: 1.75in;
+            width: 3.5in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        .print-customer-tin {
+            position: absolute;
+            top: 2.30in;
+            left: 1.75in;
+            width: 3.5in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        .print-customer-address {
+            position: absolute;
+            top: 2.50in;
+            left: 1.75in;
+            width: 3.5in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        /* ─── HEADER RIGHT: Date, Terms, PO, DR ─── */
         .print-date {
             position: absolute;
-            top: 1.65in;
-            right: 0.65in;
+            top: 1.67in;
+            right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
 
-        /* ─── Company Name (center-left) ─── */
-        .print-company-name {
-            position: absolute;
-            top: 2.3in;
-            left: 1.45in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            font-weight: bold;
-            text-align: left;
-        }
-
-        /* ─── Company TIN (center-left) ─── */
-        .print-company-tin {
-            position: absolute;
-            top: 2.5in;
-            left: 1.55in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            font-weight: bold;
-            text-align: left;
-        }
-
-        /* ─── Company Address (center-left) ─── */
-        .print-company-address {
-            position: absolute;
-            top: 2.8in;
-            left: 1.4in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            font-weight: bold;
-            text-align: left;
-        }
-
-        /* ─── Terms (right side, same row as company) ─── */
         .print-terms {
             position: absolute;
-            top: 2.2in;
-            right: 0.72in;
+            top: 2.11in;
+            right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
 
-        /* ─── Customer Code (right side, below terms) ─── */
-        .print-customer-code {
-            position: absolute;
-            top: 2.45in;
-            right: 0.6in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            font-weight: bold;
-            text-align: left;
-        }
-
-        /* ─── PO Number (right side, below customer code) ─── */
         .print-po-number {
             position: absolute;
-            top: 2.75in;
-            right: 0.75in;
+            top: 2.37in;
+            right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             font-weight: bold;
             text-align: left;
         }
 
-        /* ─── Item Description ─── */
+        .print-dr-number {
+            position: absolute;
+            top: 2.60in;
+            right: 1.25in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        /* ─── BODY: Item Row ─── */
         .print-item-desc {
             position: absolute;
-            top: 3.85in;
+            top: 3.35in;
             left: 0.55in;
             width: 4.2in;
             font-family: Calibri, sans-serif;
@@ -133,74 +130,157 @@
             text-overflow: clip;
         }
 
-        /* ─── Item Unit ─── */
         .print-item-unit {
             position: absolute;
-            top: 3.85in;
-            left: 4.6in;
+            top: 3.35in;
+            left: 4.20in;
             width: 0.6in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: center;
         }
 
-        /* ─── Item Qty ─── */
         .print-item-qty {
             position: absolute;
-            top: 3.85in;
-            left: 5.2in;
+            top: 3.35in;
+            left: 4.50in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: right;
         }
 
-        /* ─── Item Price ─── */
         .print-item-price {
             position: absolute;
-            top: 3.85in;
-            left: 6.1in;
+            top: 3.35in;
+            left: 5.27in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: right;
         }
 
-        /* ─── Item Amount ─── */
         .print-item-amount {
             position: absolute;
-           top: 3.85in;
-            left: 7.0in;
+            top: 3.35in;
+            left: 6.3in;
             width: 1.1in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: right;
         }
 
-        /* ─── Totals Block (lower right) ─── */
-        .print-totals-block {
+        /* ─── LEFT COLUMNS: VAT Breakdown ─── */
+        .print-vatable-sales {
             position: absolute;
-            bottom: 2.0in;
-            left: 3.5in;
+            left: 3.00in;
+            bottom: 3.65in;
+            width: 2.0in;
             font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            line-height: 1.8;
-        }
-
-        .print-totals-block .totals-row {
-            display: flex;
-            justify-content: flex-end;
-            width: 4.2in;
-        }
-
-        .print-totals-block .totals-row .totals-value {
+            font-size: 10pt;
             text-align: right;
-            min-width: 1.5in;
         }
 
-        .print-totals-block .totals-grand {
+        .print-vat {
+            position: absolute;
+            left: 3.00in;
+            bottom: 3.35in;
+            width: 2.0in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-zero-rated-sales {
+            position: absolute;
+            left: 3.00in;
+            bottom: 3.05in;
+            width: 2.0in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-vat-exempt-sales {
+            position: absolute;
+            left: 3.00in;
+            bottom: 2.80in;
+            width: 2.0in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        /* ─── RIGHT COLUMNS: Total Sales Breakdown ─── */
+        .print-total-sales {
+            position: absolute;
+            left: 5.50in;
+            bottom: 3.65in;
+            width: 1.7in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-less-vat {
+            position: absolute;
+            left: 5.50in;
+            bottom: 3.35in;
+            width: 1.7in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-net-of-vat {
+            position: absolute;
+            left: 5.50in;
+            bottom: 3.05in;
+            width: 1.7in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-less-discount {
+            position: absolute;
+            left: 5.50in;
+            bottom: 2.80in;
+            width: 1.7in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-add-vat {
+            position: absolute;
+            left: 5.50in;
+            bottom: 2.55in;
+            width: 1.7in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-less-withholding-tax {
+            position: absolute;
+            left: 5.50in;
+            bottom: 2.30in;
+            width: 1.7in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
+        .print-total-amount-due {
+            position: absolute;
+            left: 5.50in;
+            bottom: 2.0in;
+            width: 1.7in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
             font-weight: bold;
-            margin-top: 2px;
+            text-align: right;
         }
 
         /* ─── Print Styles ─── */
@@ -237,48 +317,38 @@
 
 <div class="receipt-container">
 
-    <!-- DATE (top right) -->
-    <div class="print-date">3-Jun-2026</div>
+    <!-- HEADER LEFT: Customer Info -->
+    <div class="print-customer-name"><?= htmlspecialchars($customer_name) ?></div>
+    <div class="print-customer-tin"><?= htmlspecialchars($customer_tin) ?></div>
+    <div class="print-customer-address"><?= htmlspecialchars($customer_address) ?></div>
 
-    <!-- COMPANY INFO (center-left) -->
-    <div class="print-company-name">SKINTEC ADVANCE INCORPORATED</div>
-    <div class="print-company-tin">008-434-783-000</div>
-    <div class="print-company-address">BYPASS ROAD BULIHAN PLARIDEL BULACAN 3004</div>
+    <!-- HEADER RIGHT: Date, Terms, PO, DR -->
+    <div class="print-date"><?= htmlspecialchars($date) ?></div>
+    <div class="print-terms"><?= htmlspecialchars($customer_terms) ?></div>
+    <div class="print-po-number"><?= htmlspecialchars($po_number) ?></div>
+    <div class="print-dr-number"><?= htmlspecialchars($dr_number) ?></div>
 
-    <!-- TERMS (right side) -->
-    <div class="print-terms">90 DAYS</div>
+    <!-- BODY: Item Row -->
+    <div class="print-item-desc"><?= htmlspecialchars($item_description) ?></div>
+    <div class="print-item-unit"><?= htmlspecialchars($item_uom) ?></div>
+    <div class="print-item-qty"><?= number_format($qty) ?></div>
+    <div class="print-item-price"><?= number_format($price, 2) ?></div>
+    <div class="print-item-amount"><?= number_format($amount, 2) ?></div>
 
-    <!-- CUSTOMER CODE (right side) -->
-    <div class="print-customer-code">SKI-CC-02199</div>
+    <!-- LEFT COLUMNS: VAT Breakdown -->
+    <div class="print-vatable-sales"><?= $vatable_sales > 0 ? number_format($vatable_sales, 2) : '-' ?></div>
+    <div class="print-vat"><?= $vat_amount > 0 ? number_format($vat_amount, 2) : '-' ?></div>
+    <div class="print-zero-rated-sales"><?= $zero_rated_sales > 0 ? number_format($zero_rated_sales, 2) : '-' ?></div>
+    <div class="print-vat-exempt-sales"><?= $vat_exempt_sales > 0 ? number_format($vat_exempt_sales, 2) : '-' ?></div>
 
-    <!-- PO NUMBER (right side) -->
-    <div class="print-po-number">16529</div>
-
-    <!-- ITEM ROW (individual elements) -->
-    <div class="print-item-desc">Empress Shampoo Long and Healthy 21mlx24pck (11+1)</div>
-    <div class="print-item-unit">Pck</div>
-    <div class="print-item-qty">4,224</div>
-    <div class="print-item-price">29.75</div>
-    <div class="print-item-amount">125,664.00</div>
-
-    <!-- TOTALS BLOCK -->
-    <div class="print-totals-block">
-        <div class="totals-row">
-            <span class="totals-value">112,200.00</span>
-        </div>
-        <div class="totals-row">
-            <span class="totals-value">13,464.00</span>
-        </div>
-        <div class="totals-row">
-            <span class="totals-value">-</span>
-        </div>
-        <div class="totals-row">
-            <span class="totals-value">-</span>
-        </div>
-        <div class="totals-row totals-grand">
-            <span class="totals-value">125,664.00</span>
-        </div>
-    </div>
+    <!-- RIGHT COLUMNS: Total Sales Breakdown -->
+    <div class="print-total-sales"><?= number_format($grand_total, 2) ?></div>
+    <div class="print-less-vat"><?= $vatType === 'vat' ? number_format($vat, 2) : '-' ?></div>
+    <div class="print-net-of-vat"><?= $subtotal > 0 ? number_format($subtotal, 2) : '-' ?></div>
+    <div class="print-less-discount">-</div>
+    <div class="print-add-vat"><?= $vatType === 'vat' && $vat > 0 ? number_format($vat, 2) : '-' ?></div>
+    <div class="print-less-withholding-tax">-</div>
+    <div class="print-total-amount-due"><?= number_format($grand_total, 2) ?></div>
 
 </div>
 

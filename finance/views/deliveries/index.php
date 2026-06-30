@@ -28,7 +28,7 @@
                     <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="date">Delivery Date <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="quantity">Quantity <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="dr_number">DR No. <i class="bi bi-chevron-expand"></i></th>
                     <th>Type</th>
                     <th class="sortable" data-sort="by">Delivered By <i class="bi bi-chevron-expand"></i></th>
                     <th class="text-center">Actions</th>
@@ -41,7 +41,7 @@
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><small><?= htmlspecialchars($d['item_description'] ?? '-') ?></small></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
-                    <td><?= $d['delivery_quantity'] ?? 0 ?></td>
+                    <td><?= htmlspecialchars($d['dr_number'] ?? '-') ?></td>
                     <td>
                         <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
                             <span class="badge bg-info">Advance</span>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Delivery Receipt - <?= htmlspecialchars($po['customer_po_number'] ?? '') ?></title>
+    <title>Delivery Receipt - <?= htmlspecialchars($dr_number) ?></title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { margin: 0; padding: 0; }
@@ -24,84 +24,132 @@
             border-radius: 5px;
         }
         .no-print button:hover { background: #0b5ed7; }
-        .receipt-container {
+
+        /* ─── Page Container ─── */
+        .dr-page {
             width: 8.5in;
-            min-height: 11in;
+            height: 11in;
             position: relative;
+            overflow: hidden;
             background: #fff;
             margin: 10px auto;
             font-family: Calibri, sans-serif;
-            padding: 0.5in;
         }
-        .receipt-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        .receipt-header .company-info {
-            font-weight: bold;
-            line-height: 1.6;
-        }
-        .receipt-header .po-info {
-            text-align: right;
-            font-weight: bold;
-            line-height: 1.6;
-        }
-        .receipt-customer {
-            margin-bottom: 15px;
-            line-height: 1.6;
-        }
-        .receipt-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        .receipt-table th {
+
+        /* ─── HEADER FIELDS ─── */
+
+        .dr-field-delivered-to {
+            position: absolute;
+            top: 2.38in;
+            left: 1.65in;
+            width: 4.00in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
             text-align: left;
-            border-bottom: 2px solid #000;
-            padding: 6px 4px;
-            font-size: 10pt;
         }
-        .receipt-table td {
-            padding: 5px 4px;
-            vertical-align: top;
-            border-bottom: 1px solid #eee;
+
+        .dr-field-date {
+            position: absolute;
+            top: 2.38in;
+            right: .50in;
+            width: 2.00in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: left;
         }
-        .receipt-table .text-right { text-align: right; }
-        .receipt-table .text-center { text-align: center; }
-        .receipt-table .lot-row {
-            background: #f8f8f8;
+
+        .dr-field-address {
+            position: absolute;
+            top: 2.60in;
+            left: 1.55in;
+            width: 5.50in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: left;
         }
-        .receipt-table .lot-row td {
-            border-bottom: 1px solid #ddd;
+
+        .dr-field-tin {
+            position: absolute;
+            top: 2.85in;
+            left: 1.55in;
+            width: 3.00in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: left;
         }
-        .receipt-table .item-separator td {
-            padding-top: 12px;
-            border-bottom: 2px solid #999;
-            font-weight: bold;
+
+        .dr-field-terms {
+            position: absolute;
+            top: 2.85in;
+            left: 4.65in;
+            width: 1.50in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: left;
         }
-        .receipt-totals {
+
+        .dr-field-po-number {
+            position: absolute;
+            top: 2.85in;
+            right: .45in;
+            width: 2.00in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: left;
+        }
+
+        /* ─── TABLE BODY START ─── */
+        .dr-table-start {
+            position: absolute;
+            top: 3.60in;
+            left: 0.50in;
+            right: 0.50in;
+        }
+
+        /* ─── TABLE ROW (repeated per lot) ─── */
+        .dr-row {
             display: flex;
-            justify-content: flex-end;
-            margin-top: 10px;
+            align-items: flex-start;
+            height: 0.35in;
+            border-bottom: 1px solid transparent;
         }
-        .receipt-totals table {
-            border-collapse: collapse;
-            min-width: 3in;
+
+        .dr-col-qty {
+            width: 1.00in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: center;
+            padding: 0 4px;
+            flex-shrink: 0;
         }
-        .receipt-totals td {
-            padding: 3px 8px;
+
+        .dr-col-unit {
+            width: .85in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: center;
+            padding: 0 4px;
+            flex-shrink: 0;
         }
-        .receipt-totals .grand-total {
-            font-weight: bold;
-            border-top: 2px solid #000;
-            font-size: 12pt;
+
+        .dr-col-desc {
+            flex: 1;
+            margin-left: .35in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+            text-align: left;
+            padding: 0 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: clip;
         }
+
+        /* ─── Print Styles ─── */
         @media print {
-            @page { size: 8.5in 11in; margin: 0.25in; }
+            @page { size: 8.5in 11in; margin: 0 !important; }
             html, body { padding: 0 !important; margin: 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; }
             .no-print { display: none !important; }
-            .receipt-container { margin: 0 !important; box-shadow: none; background: #fff; }
+            .dr-page { margin: 0 !important; box-shadow: none; background: #fff; }
         }
     </style>
 </head>
@@ -112,108 +160,40 @@
     <button onclick="window.print()"><i class="bi bi-printer"></i> Print Delivery Receipt</button>
 </div>
 
-<div class="receipt-container">
-    <div class="receipt-header">
-        <div class="company-info">
-            SKINTEC ADVANCE INCORPORATED<br>
-            008-434-783-000<br>
-            BYPASS ROAD BULIHAN PLARIDEL BULACAN 3004
-        </div>
-        <div class="po-info">
-            Date: <?= date('d-M-Y') ?><br>
-            <?php if (!empty($dr_number)): ?>
-            DR Number: <strong><?= htmlspecialchars($dr_number) ?></strong><br>
-            <?php endif; ?>
-            PO Number: <?= htmlspecialchars($po['customer_po_number'] ?? '') ?><br>
-            Terms: <?= htmlspecialchars($po['customer_terms'] ?? '') ?> DAYS
-        </div>
-    </div>
+<div class="dr-page">
 
-    <div class="receipt-customer">
-        <strong>Customer:</strong> <?= htmlspecialchars($po['customer_code'] ?? '') ?> - <?= htmlspecialchars($po['customer_name'] ?? '') ?><br>
-        <strong>Address:</strong> <?= htmlspecialchars($po['customer_address'] ?? '') ?>
-    </div>
+    <!-- HEADER FIELDS -->
+    <div class="dr-field-delivered-to"><?= htmlspecialchars($po['customer_name'] ?? '') ?></div>
+    <div class="dr-field-date"><?= !empty($dr_deliveries[0]['delivery_date']) ? date('d-M-Y', strtotime($dr_deliveries[0]['delivery_date'])) : date('d-M-Y') ?></div>
+    <div class="dr-field-address"><?= htmlspecialchars($po['customer_address'] ?? '') ?></div>
+    <div class="dr-field-tin"><?= htmlspecialchars($po['customer_tin'] ?? '') ?></div>
+    <div class="dr-field-terms"><?= htmlspecialchars($po['customer_terms'] ?? '') ?> DAYS</div>
+    <div class="dr-field-po-number"><?= htmlspecialchars($po['customer_po_number'] ?? '') ?></div>
 
-    <table class="receipt-table">
-        <thead>
-            <tr>
-                <th style="width:12%">Lot #</th>
-                <th style="width:30%">Item Description</th>
-                <th class="text-center" style="width:8%">UOM</th>
-                <th class="text-right" style="width:12%">Quantity</th>
-                <th class="text-right" style="width:12%">Unit Price</th>
-                <th class="text-right" style="width:14%">Amount</th>
-                <th class="text-right" style="width:12%">Cases</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if (empty($dr_deliveries)): ?>
-                <tr>
-                    <td colspan="7" class="text-center text-muted py-4">No deliveries found for DR number: <?= htmlspecialchars($dr_number) ?></td>
-                </tr>
-            <?php else: ?>
-            <?php
-            $grandTotalQty = 0;
-            $grandTotalAmount = 0;
-            $grandTotalCases = 0;
-            $prevItemId = null;
-
-            foreach ($dr_deliveries as $d):
+    <!-- TABLE BODY -->
+    <div class="dr-table-start">
+        <?php if (!empty($dr_deliveries)): ?>
+            <?php foreach ($dr_deliveries as $d):
                 $qty = $d['delivery_quantity'] ?? 0;
-                $amount = $qty * ($d['unit_price'] ?? 0);
                 $conv = $d['uom_conversion'] ?? null;
-                $cases = ($conv && ($d['item_uom'] ?? '') !== 'CS') ? round($qty / $conv, 2) : 0;
+                $itemUom = $d['item_uom'] ?? '';
+                $cases = ($conv && $itemUom !== 'CS') ? round($qty / $conv, 2) : 0;
 
-                $grandTotalQty += $qty;
-                $grandTotalAmount += $amount;
-                $grandTotalCases += $cases;
+                $descParts = [];
+                if (!empty($d['item_description'])) $descParts[] = $d['item_description'];
+                if ($cases > 0) $descParts[] = $cases . ' CS';
+                if (!empty($d['lot_number'])) $descParts[] = $d['lot_number'];
+                $fullDesc = implode(' | ', $descParts);
             ?>
-                <?php if ($prevItemId !== null && $prevItemId != $d['item_id']): ?>
-                    <tr class="item-separator">
-                        <td colspan="7"></td>
-                    </tr>
-                <?php endif; ?>
-                <tr class="lot-row">
-                    <td><strong><?= htmlspecialchars($d['lot_number'] ?? '-') ?></strong></td>
-                    <td><?= htmlspecialchars($d['item_description'] ?? '') ?></td>
-                    <td class="text-center"><?= htmlspecialchars($d['item_uom'] ?? '') ?></td>
-                    <td class="text-right"><?= number_format($qty) ?></td>
-                    <td class="text-right"><?= number_format($d['unit_price'] ?? 0, 2) ?></td>
-                    <td class="text-right"><?= number_format($amount, 2) ?></td>
-                    <td class="text-right">
-                        <?php if ($cases > 0): ?>
-                            <?= $cases ?> CS
-                        <?php else: ?>
-                            —
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php $prevItemId = $d['item_id']; ?>
+            <div class="dr-row">
+                <div class="dr-col-qty"><?= number_format($qty) ?></div>
+                <div class="dr-col-unit">Pcs</div>
+                <div class="dr-col-desc"><?= htmlspecialchars($fullDesc) ?></div>
+            </div>
             <?php endforeach; ?>
-            <?php endif; ?>
-        </tbody>
-    </table>
-
-    <?php if (!empty($dr_deliveries)): ?>
-    <div class="receipt-totals">
-        <table>
-            <tr>
-                <td>Total Quantity:</td>
-                <td class="text-right"><strong><?= number_format($grandTotalQty) ?></strong></td>
-            </tr>
-            <?php if ($grandTotalCases > 0): ?>
-            <tr>
-                <td>Total Cases:</td>
-                <td class="text-right"><strong><?= $grandTotalCases ?> CS</strong></td>
-            </tr>
-            <?php endif; ?>
-            <tr class="grand-total">
-                <td>Total Amount:</td>
-                <td class="text-right"><?= number_format($grandTotalAmount, 2) ?></td>
-            </tr>
-        </table>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
+
 </div>
 
 </body>

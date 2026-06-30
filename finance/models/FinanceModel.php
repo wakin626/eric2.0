@@ -80,9 +80,10 @@ class FinanceModel extends BaseModel {
     }
 
     public function getDeliveryById($id) {
-        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity,
+        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.customer_terms,
                 c.customer_name, c.customer_code, c.customer_address, c.customer_tin,
                 u.full_name as delivered_by_name,
+                poi.quantity as poi_quantity, poi.unit_price, poi.item_id as poi_item_id,
                 i.item_code, i.item_description, i.item_uom, i.item_size
                 FROM deliveries d 
                 LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
@@ -188,6 +189,13 @@ class FinanceModel extends BaseModel {
             $map[$item['po_id']][] = $item;
         }
         return $map;
+    }
+
+    public function getAllActiveItems() {
+        $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 ORDER BY item_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
     }
 
     public function getDeliveriesByPOWithItems($po_id) {

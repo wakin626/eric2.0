@@ -64,6 +64,11 @@
                             <i class="bi bi-truck me-2"></i>Deliveries
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= in_array($currentAction, ['priceList', 'priceListCreate', 'priceListUpdate', 'priceListToggle']) ? 'active' : '' ?>" href="?controller=finance&action=priceList">
+                            <i class="bi bi-tag me-2"></i>Price List
+                        </a>
+                    </li>
                     <li class="nav-item border-top border-secondary mt-3 pt-2">
                         <a class="nav-link text-white-50" href="?controller=auth&action=logout">
                             <i class="bi bi-box-arrow-left me-2"></i>Logout

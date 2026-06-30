@@ -24,7 +24,7 @@
                     </div>
                     <div class="col-md-6">
                         <p><strong>Delivery Date:</strong> <?= date('F d, Y', strtotime($delivery['delivery_date'])) ?></p>
-                        <p><strong>Delivery Quantity:</strong> <?= $delivery['delivery_quantity'] ?? 0 ?></p>
+                        <p><strong>DR No.:</strong> <?= htmlspecialchars($delivery['dr_number'] ?? '-') ?></p>
                         <p><strong>Delivered By:</strong> <?= htmlspecialchars($delivery['delivered_by_name'] ?? '-') ?></p>
                         <p><strong>Remarks:</strong> <?= htmlspecialchars($delivery['remarks'] ?? 'None') ?></p>
                     </div>
@@ -43,7 +43,8 @@
                             <th>Item Code</th>
                             <th>Description</th>
                             <th>UOM</th>
-                            <th>Size</th>
+                            <th>Net Wt/Size</th>
+                            <th>Price Per Piece</th>
                             <th>Qty Ordered</th>
                             <th>Production Progress</th>
                             <th>Delivered</th>
@@ -62,7 +63,8 @@
                             <td><strong><?= htmlspecialchars($poi_item['item_code']) ?></strong></td>
                             <td><?= htmlspecialchars($poi_item['item_description']) ?></td>
                             <td><?= htmlspecialchars($poi_item['item_uom']) ?></td>
-                            <td><?= htmlspecialchars($poi_item['item_size'] ?? '-') ?></td>
+                            <td><?= htmlspecialchars($price_list['net_size'] ?? $poi_item['item_size'] ?? '-') ?></td>
+                            <td><?= number_format($price_list['price_per_piece'] ?? 0, 2) ?></td>
                             <td><?= $qty ?></td>
                             <td>
                                 <div class="d-flex align-items-center">
@@ -77,7 +79,7 @@
                             <td><small class="badge <?= $remaining <= 0 ? 'bg-success' : 'bg-warning' ?>"><?= $remaining ?></small></td>
                         </tr>
                         <?php else: ?>
-                        <tr><td colspan="8" class="text-center text-muted py-3">Item not found</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-3">Item not found</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -89,7 +91,7 @@
     <div class="col-md-4">
         <div class="card data-card mb-4">
             <div class="card-body">
-                <a href="?controller=finance&action=printSalesInvoice&t=<?= time() ?>" target="_blank" class="btn btn-primary w-100">
+                <a href="?controller=finance&action=printSalesInvoice&id=<?= $delivery['delivery_id'] ?>" target="_blank" class="btn btn-primary w-100">
                     <i class="bi bi-printer me-2"></i>Print Sales Invoice
                 </a>
             </div>
@@ -97,7 +99,7 @@
 
         <div class="card data-card mb-4">
             <div class="card-header">
-                <i class="bi bi-paperclip me-2"></i>Delivery Receipts
+                <i class="bi bi-paperclip me-2"></i>Receipts
             </div>
             <div class="card-body">
                 <?php if (!empty($receipts)): ?>
