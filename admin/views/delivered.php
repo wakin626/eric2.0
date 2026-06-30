@@ -2,15 +2,9 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div class="d-flex gap-2 flex-wrap">
-        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:180px">
-            <option value="">All Customers</option>
-        </select>
-        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
-            <option value="">All Items</option>
-        </select>
-        <select id="filterDR" class="form-select form-select-sm filter-select" style="width:160px">
-            <option value="">All DR Numbers</option>
-        </select>
+        <input type="text" id="filterCustomer" class="form-control form-control-sm" placeholder="Search Customer..." style="width:180px">
+        <input type="text" id="filterItem" class="form-control form-control-sm" placeholder="Search Item..." style="width:200px">
+        <input type="text" id="filterDR" class="form-control form-control-sm" placeholder="Search DR Number..." style="width:160px">
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Delivery Date">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
@@ -286,32 +280,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-    var customers = new Set();
-    var items = new Set();
-    var drNumbers = new Set();
-    document.querySelectorAll('#deliveryTableBody tr').forEach(function(row) {
-        if (row.querySelector('td[colspan]')) return;
-        var cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
-        if (cust) customers.add(cust);
-        var itemCell = row.cells[3];
-        if (itemCell) {
-            itemCell.querySelectorAll('small').forEach(function(s) {
-                var t = s.textContent.trim().split('(')[0].trim();
-                if (t && t !== '-') items.add(t);
-            });
-        }
-        var dr = row.cells[2] ? row.cells[2].textContent.trim() : '';
-        if (dr && dr !== '-') drNumbers.add(dr);
-    });
-    var custSel = document.getElementById('filterCustomer');
-    customers.forEach(function(c) { var o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
-    var itemSel = document.getElementById('filterItem');
-    items.forEach(function(i) { var o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
-    var drSel = document.getElementById('filterDR');
-    drNumbers.forEach(function(d) { var o = document.createElement('option'); o.value = d; o.textContent = d; drSel.appendChild(o); });
-});
-
 function applyAdminFilters() {
     var custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     var itemFilter = document.getElementById('filterItem').value.toLowerCase();
@@ -336,9 +304,9 @@ function applyAdminFilters() {
 }
 
 document.getElementById('searchDelivered').addEventListener('keyup', applyAdminFilters);
-document.getElementById('filterCustomer').addEventListener('change', applyAdminFilters);
-document.getElementById('filterItem').addEventListener('change', applyAdminFilters);
-document.getElementById('filterDR').addEventListener('change', applyAdminFilters);
+document.getElementById('filterCustomer').addEventListener('input', applyAdminFilters);
+document.getElementById('filterItem').addEventListener('input', applyAdminFilters);
+document.getElementById('filterDR').addEventListener('input', applyAdminFilters);
 document.getElementById('filterDate').addEventListener('change', applyAdminFilters);
 document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterCustomer').value = '';

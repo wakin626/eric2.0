@@ -2,12 +2,8 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div class="d-flex gap-2 flex-wrap">
-        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
-            <option value="">All Customers</option>
-        </select>
-        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
-            <option value="">All Items</option>
-        </select>
+        <input type="text" id="filterCustomer" class="form-control form-control-sm" placeholder="Search Customer..." style="width:200px">
+        <input type="text" id="filterItem" class="form-control form-control-sm" placeholder="Search Item..." style="width:200px">
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by PO Date">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
@@ -231,27 +227,6 @@ document.getElementById('searchPO').addEventListener('keyup', function() {
     applyFilters();
 });
 
-function populateFilters() {
-    const customers = new Set();
-    const items = new Set();
-    document.querySelectorAll('#poTableBody tr').forEach(row => {
-        if (row.querySelector('td[colspan]')) return;
-        const cust = row.cells[2] ? row.cells[2].textContent.trim() : '';
-        if (cust) customers.add(cust);
-        const itemCell = row.cells[3];
-        if (itemCell) {
-            itemCell.querySelectorAll('small').forEach(s => {
-                const t = s.textContent.trim();
-                if (t && t !== '-') items.add(t);
-            });
-        }
-    });
-    const custSel = document.getElementById('filterCustomer');
-    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
-    const itemSel = document.getElementById('filterItem');
-    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
-}
-
 function applyFilters() {
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
@@ -272,8 +247,8 @@ function applyFilters() {
     });
 }
 
-document.getElementById('filterCustomer').addEventListener('change', applyFilters);
-document.getElementById('filterItem').addEventListener('change', applyFilters);
+document.getElementById('filterCustomer').addEventListener('input', applyFilters);
+document.getElementById('filterItem').addEventListener('input', applyFilters);
 document.getElementById('filterDate').addEventListener('change', applyFilters);
 document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterCustomer').value = '';
@@ -282,8 +257,6 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('searchPO').value = '';
     applyFilters();
 });
-
-document.addEventListener('DOMContentLoaded', populateFilters);
 
 document.querySelectorAll('.sortable').forEach(th => {
     th.addEventListener('click', function() {

@@ -3,12 +3,8 @@
         <span class="text-muted">Showing <?= count($deliveries) ?> of <?= $total ?> deliveries</span>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
-            <option value="">All Customers</option>
-        </select>
-        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
-            <option value="">All Items</option>
-        </select>
+        <input type="text" id="filterCustomer" class="form-control form-control-sm" placeholder="Search Customer..." style="width:200px">
+        <input type="text" id="filterItem" class="form-control form-control-sm" placeholder="Search Item..." style="width:200px">
         <input type="date" id="filterDateFrom" class="form-control form-control-sm" style="width: 160px;" title="From date">
         <input type="date" id="filterDateTo" class="form-control form-control-sm" style="width: 160px;" title="To date">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
@@ -113,25 +109,6 @@
 <?php endif; ?>
 
 <script>
-function populateDeliveryFilters() {
-    const customers = new Set();
-    const items = new Set();
-    document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
-        if (row.querySelector('td[colspan]')) return;
-        const cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
-        if (cust) customers.add(cust);
-        const itemCell = row.cells[2];
-        if (itemCell) {
-            const t = itemCell.textContent.trim();
-            if (t && t !== '-') items.add(t);
-        }
-    });
-    const custSel = document.getElementById('filterCustomer');
-    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
-    const itemSel = document.getElementById('filterItem');
-    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
-}
-
 function filterTable() {
     const query = document.getElementById('searchDelivery').value.toLowerCase();
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
@@ -154,8 +131,8 @@ function filterTable() {
 }
 
 document.getElementById('searchDelivery').addEventListener('keyup', filterTable);
-document.getElementById('filterCustomer').addEventListener('change', filterTable);
-document.getElementById('filterItem').addEventListener('change', filterTable);
+document.getElementById('filterCustomer').addEventListener('input', filterTable);
+document.getElementById('filterItem').addEventListener('input', filterTable);
 document.getElementById('filterDateFrom').addEventListener('change', filterTable);
 document.getElementById('filterDateTo').addEventListener('change', filterTable);
 document.getElementById('clearFilters').addEventListener('click', function() {
@@ -166,8 +143,6 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('searchDelivery').value = '';
     filterTable();
 });
-
-document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
 
 document.querySelectorAll('.sortable').forEach(th => {
     th.style.cursor = 'pointer';
