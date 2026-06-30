@@ -28,9 +28,10 @@
                     <th>PO Number</th>
                     <th>Customer</th>
                     <th>DR Number</th>
-                    <th>Item / Lot</th>
+                    <th>Item</th>
+                    <th>Lot Number</th>
+                    <th>Quantity</th>
                     <th>Delivery Date</th>
-                    <th>Qty</th>
                     <th>Cases</th>
                     <th>Type</th>
                     <th>Remarks</th>
@@ -51,16 +52,35 @@
                     <td><?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
                     <td>
                         <?php if ($hasLotItems): ?>
-                            <?php foreach ($lotItems as $li): ?>
-                                <small><?= htmlspecialchars($li['item_description'] ?? '') ?> (<?= htmlspecialchars($li['lot_number'] ?? '') ?>)</small><br>
+                            <?php foreach ($lotItems as $idx => $li): ?>
+                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                <small><?= htmlspecialchars($li['item_description'] ?? '') ?></small>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small><?= htmlspecialchars($d['item_code'] ?? '-') ?> - <?= htmlspecialchars($d['item_description'] ?? '') ?></small>
-                            <?php if (!empty($d['lot_number'])): ?><br><small><?= htmlspecialchars($d['lot_number']) ?></small><?php endif; ?>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($hasLotItems): ?>
+                            <?php foreach ($lotItems as $idx => $li): ?>
+                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                <small class="text-muted"><?= htmlspecialchars($li['lot_number'] ?? '-') ?></small>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <small class="text-muted"><?= htmlspecialchars($d['lot_number'] ?? '-') ?></small>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($hasLotItems): ?>
+                            <?php foreach ($lotItems as $idx => $li): ?>
+                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                <?= $li['qty'] ?? 0 ?>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <?= $d['delivery_quantity'] ?? 0 ?>
                         <?php endif; ?>
                     </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
-                    <td><?= $d['delivery_quantity'] ?? 0 ?></td>
                     <td>
                         <?php
                         if ($hasLotItems) {
@@ -140,7 +160,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php else: ?>
-                <tr><td colspan="11" class="text-center text-muted py-4">No delivery records found</td></tr>
+                <tr><td colspan="12" class="text-center text-muted py-4">No delivery records found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

@@ -18,7 +18,83 @@
             </div>
         </div>
     </div>
-    
+
+    <div class="card data-card mb-4">
+        <div class="card-header d-flex justify-content-between">
+            <span><i class="bi bi-truck me-2"></i>Recent Deliveries</span>
+            <a href="?controller=admin&action=delivered" class="btn btn-primary btn-sm">View All</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>PO Number</th>
+                        <th>Customer</th>
+                        <th>Item / Lot</th>
+                        <th>PO Qty</th>
+                        <th>Delivered</th>
+                        <th>Type</th>
+                        <th>Delivery Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach (array_slice($deliveries ?? [], 0, 5) as $d):
+                        $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                        $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
+                        $poItems = $po_items_map[$d['po_id']] ?? [];
+                        $poItemLookup = [];
+                        foreach ($poItems as $pi) { $poItemLookup[$pi['item_code']] = $pi; }
+
+                        $itemLines = [];
+                        $poQtyLines = [];
+                        $deliveredLines = [];
+
+                        if ($hasLotItems) {
+                            $liCount = count($lotItems);
+                            foreach ($lotItems as $idx => $li) {
+                                $liCode = $li['item_code'] ?? '';
+                                $liQty = $li['qty'] ?? 0;
+                                $liDesc = $li['item_description'] ?? $liCode;
+                                $liLot = $li['lot_number'] ?? '';
+                                $poItem = $poItemLookup[$liCode] ?? null;
+                                $poQty = $poItem ? $poItem['quantity'] : 0;
+                                $sep = $idx < $liCount - 1 ? ' border-bottom pb-2 mb-2' : '';
+                                $itemLines[] = '<div class="' . $sep . '"><small>' . htmlspecialchars($liDesc) . '</small><br><small class="text-muted">' . htmlspecialchars($liLot) . '</small></div>';
+                                $poQtyLines[] = '<div class="' . $sep . '">' . $poQty . '</div>';
+                                $deliveredLines[] = '<div class="' . $sep . '">' . $liQty . '</div>';
+                            }
+                        } else {
+                            $dItemQty = $d['item_quantity'] ?? 0;
+                            $dDelivered = $d['delivery_quantity'] ?? 0;
+                            $itemLines[] = '<small>' . htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) . '</small>';
+                            $poQtyLines[] = $dItemQty;
+                            $deliveredLines[] = $dDelivered;
+                        }
+                    ?>
+                    <tr>
+                        <td><strong class="text-primary"><?= $d['customer_po_number'] ?></strong></td>
+                        <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                        <td><?= implode('', $itemLines) ?></td>
+                        <td><?= implode('', $poQtyLines) ?></td>
+                        <td><?= implode('', $deliveredLines) ?></td>
+                        <td>
+                            <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
+                                <span class="badge bg-info">Advance</span>
+                            <?php else: ?>
+                                <span class="badge bg-secondary">Normal</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php if (empty($deliveries)): ?>
+                    <tr><td colspan="7" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="card data-card mb-4">
         <div class="card-header d-flex justify-content-between">
             <span><i class="bi bi-cart3 me-2"></i>Recent Customer PO</span>

@@ -29,6 +29,7 @@ class AdminController {
         $data['purchase_orders'] = $allPOs;
         $poIds = array_column($allPOs, 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+        $data['deliveries'] = $this->warehouseModel->getDeliveries();
         $data['page_title'] = 'Admin Dashboard';
         $this->render('dashboard', $data);
     }
