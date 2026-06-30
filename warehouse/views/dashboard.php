@@ -144,6 +144,7 @@
                     $remainingLines = [];
 
                     if ($hasLotItems) {
+                        $idx = 0;
                         foreach ($lotItems as $li) {
                             $liCode = $li['item_code'] ?? '';
                             $liQty = $li['qty'] ?? 0;
@@ -152,15 +153,17 @@
                             $poItem = $poItemLookup[$liCode] ?? null;
                             $poQty = $poItem ? $poItem['quantity'] : 0;
                             $rem = max(0, $poQty - $liQty);
+                            $sep = $idx < count($lotItems) - 1 ? ' border-bottom pb-2 mb-2' : '';
 
-                            $itemLines[] = '<small>' . htmlspecialchars($liDesc) . '</small><br><small class="text-muted">' . htmlspecialchars($liLot) . '</small>';
-                            $poQtyLines[] = $poQty;
-                            $deliveredLines[] = $liQty;
+                            $itemLines[] = '<div class="' . $sep . '"><small>' . htmlspecialchars($liDesc) . '</small><br><small class="text-muted">' . htmlspecialchars($liLot) . '</small></div>';
+                            $poQtyLines[] = '<div class="' . $sep . '">' . $poQty . '</div>';
+                            $deliveredLines[] = '<div class="' . $sep . '">' . $liQty . '</div>';
                             if ($rem <= 0) {
-                                $remainingLines[] = '<span class="badge bg-success">Complete</span>';
+                                $remainingLines[] = '<div class="' . $sep . '"><span class="badge bg-success">Complete</span></div>';
                             } else {
-                                $remainingLines[] = '<span class="badge bg-warning text-dark">' . $rem . '</span>';
+                                $remainingLines[] = '<div class="' . $sep . '"><span class="badge bg-warning text-dark">' . $rem . '</span></div>';
                             }
+                            $idx++;
                         }
                     } else {
                         $dItemQty = $d['item_quantity'] ?? 0;

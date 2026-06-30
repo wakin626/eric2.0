@@ -143,11 +143,14 @@
                     $deliveredLines = [];
 
                     if ($hasLotItems) {
+                        $idx = 0;
                         foreach ($lotItems as $li) {
                             $liDesc = $li['item_description'] ?? $li['item_code'] ?? '-';
                             $liLot = $li['lot_number'] ?? '';
-                            $itemLines[] = '<small>' . htmlspecialchars($liDesc) . '</small><br><small class="text-muted">' . htmlspecialchars($liLot) . '</small>';
-                            $deliveredLines[] = $li['qty'] ?? 0;
+                            $sep = $idx < count($lotItems) - 1 ? ' border-bottom pb-2 mb-2' : '';
+                            $itemLines[] = '<div class="' . $sep . '"><small>' . htmlspecialchars($liDesc) . '</small><br><small class="text-muted">' . htmlspecialchars($liLot) . '</small></div>';
+                            $deliveredLines[] = '<div class="' . $sep . '">' . ($li['qty'] ?? 0) . '</div>';
+                            $idx++;
                         }
                     } else {
                         $itemLines[] = '<small>' . htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) . '</small>';
