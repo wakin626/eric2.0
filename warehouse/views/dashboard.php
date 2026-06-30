@@ -123,7 +123,8 @@
                     <th>PO Number</th>
                     <th>Customer</th>
                     <th>Item</th>
-                    <th>PO Quantity</th>
+                    <th>Lot</th>
+                    <th>PO Qty</th>
                     <th>Delivered</th>
                     <th>Remaining</th>
                     <th>Type</th>
@@ -131,15 +132,62 @@
                 </tr>
             </thead>
             <tbody>
-                <?php foreach (array_slice($deliveries ?? [], 0, 5) as $d):
-                    $dItemQty = $d['item_quantity'] ?? 0;
-                    $dDelivered = $d['delivery_quantity'] ?? 0;
-                    $dRemaining = $dItemQty - $dDelivered;
+                <?php
+                $dashboardDeliveries = array_slice($deliveries ?? [], 0, 5);
+                $rowIndex = 0;
+                foreach ($dashboardDeliveries as $d):
+                    $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                    $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
+                    $poItems = $po_items_map[$d['po_id']] ?? [];
+                    $poItemLookup = [];
+                    foreach ($poItems as $pi) {
+                        $poItemLookup[$pi['item_code']] = $pi;
+                    }
+                    if ($hasLotItems) {
+                        foreach ($lotItems as $li):
+                            $liCode = $li['item_code'] ?? '';
+                            $liQty = $li['qty'] ?? 0;
+                            $poItem = $poItemLookup[$liCode] ?? null;
+                            $poQty = $poItem ? $poItem['quantity'] : 0;
+                            $remaining = max(0, $poQty - $liQty);
+                            $rowIndex++;
                 ?>
                 <tr>
-                    <td><strong><?= $d['customer_po_number'] ?></strong></td>
+                    <td><strong class="text-primary"><?= $d['customer_po_number'] ?></strong></td>
+                    <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                    <td><small><?= htmlspecialchars($li['item_description'] ?? $liCode) ?></small></td>
+                    <td><small class="text-muted"><?= htmlspecialchars($li['lot_number'] ?? '-') ?></small></td>
+                    <td><?= $poQty ?></td>
+                    <td><?= $liQty ?></td>
+                    <td>
+                        <?php if ($remaining <= 0): ?>
+                            <span class="badge bg-success">Complete</span>
+                        <?php else: ?>
+                            <span class="badge bg-warning text-dark"><?= $remaining ?></span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
+                            <span class="badge bg-info">Advance</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary">Normal</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
+                </tr>
+                <?php
+                        endforeach;
+                    } else {
+                        $dItemQty = $d['item_quantity'] ?? 0;
+                        $dDelivered = $d['delivery_quantity'] ?? 0;
+                        $dRemaining = max(0, $dItemQty - $dDelivered);
+                        $rowIndex++;
+                ?>
+                <tr>
+                    <td><strong class="text-primary"><?= $d['customer_po_number'] ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small></td>
+                    <td><small class="text-muted"><?= htmlspecialchars($d['lot_number'] ?? '-') ?></small></td>
                     <td><?= $dItemQty ?></td>
                     <td><?= $dDelivered ?></td>
                     <td>
@@ -158,9 +206,12 @@
                     </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                 </tr>
-                <?php endforeach; ?>
+                <?php
+                    }
+                endforeach;
+                ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="8" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-3">No deliveries yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

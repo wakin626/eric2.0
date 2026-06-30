@@ -128,27 +128,58 @@
                 <tr>
                     <th>PO Number</th>
                     <th>Customer</th>
+                    <th>Item</th>
+                    <th>Lot</th>
+                    <th>Delivered</th>
                     <th>Delivery Date</th>
-                    <th>Quantity</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($recent_deliveries ?? [] as $d): ?>
+                <?php
+                $dashboardDeliveries = array_slice($recent_deliveries ?? [], 0, 5);
+                foreach ($dashboardDeliveries as $d):
+                    $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                    $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
+                    if ($hasLotItems) {
+                        foreach ($lotItems as $li):
+                ?>
                 <tr>
-                    <td><strong><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
+                    <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                    <td><small><?= htmlspecialchars($li['item_description'] ?? $li['item_code'] ?? '-') ?></small></td>
+                    <td><small class="text-muted"><?= htmlspecialchars($li['lot_number'] ?? '-') ?></small></td>
+                    <td><?= $li['qty'] ?? 0 ?></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
-                    <td><?= $d['delivery_quantity'] ?? 0 ?></td>
                     <td class="text-center">
                         <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-success" title="Attach Receipt">
                             <i class="bi bi-paperclip"></i>
                         </a>
                     </td>
                 </tr>
-                <?php endforeach; ?>
+                <?php
+                        endforeach;
+                    } else {
+                ?>
+                <tr>
+                    <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
+                    <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                    <td><small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small></td>
+                    <td><small class="text-muted"><?= htmlspecialchars($d['lot_number'] ?? '-') ?></small></td>
+                    <td><?= $d['delivery_quantity'] ?? 0 ?></td>
+                    <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
+                    <td class="text-center">
+                        <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-success" title="Attach Receipt">
+                            <i class="bi bi-paperclip"></i>
+                        </a>
+                    </td>
+                </tr>
+                <?php
+                    }
+                endforeach;
+                ?>
                 <?php if (empty($recent_deliveries)): ?>
-                <tr><td colspan="5" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-3">No deliveries yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
