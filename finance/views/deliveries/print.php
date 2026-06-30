@@ -117,52 +117,54 @@
         }
 
         /* ─── BODY: Item Row ─── */
-        .print-item-row {
-            display: flex;
-            align-items: flex-start;
-            position: absolute;
-            left: 0.55in;
-            right: 0.40in;
-            height: 0.30in;
-        }
-
         .print-item-desc {
-            width: 3.65in;
+            position: absolute;
+            top: 3.35in;
+            left: 0.55in;
+            width: 4.2in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: left;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: clip;
-            flex-shrink: 0;
         }
 
         .print-item-unit {
-            width: 0.55in;
+            position: absolute;
+            top: 3.35in;
+            left: 4.20in;
+            width: 0.6in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: center;
-            flex-shrink: 0;
         }
 
         .print-item-qty {
-            width: 0.65in;
+            position: absolute;
+            top: 3.35in;
+            left: 4.50in;
+            width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: right;
-            flex-shrink: 0;
         }
 
         .print-item-price {
-            width: 0.80in;
+            position: absolute;
+            top: 3.35in;
+            left: 5.27in;
+            width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: right;
-            flex-shrink: 0;
         }
 
         .print-item-amount {
-            flex: 1;
+            position: absolute;
+            top: 3.35in;
+            left: 6.3in;
+            width: 1.1in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: right;
@@ -332,13 +334,11 @@
     $rowHeight = 0.30;
     foreach ($items as $idx => $item):
     ?>
-    <div class="print-item-row" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;">
-        <div class="print-item-desc"><?= htmlspecialchars($item['item_description']) ?></div>
-        <div class="print-item-unit"><?= htmlspecialchars($item['item_uom']) ?></div>
-        <div class="print-item-qty"><?= number_format($item['qty']) ?></div>
-        <div class="print-item-price"><?= number_format($item['price'], 2) ?></div>
-        <div class="print-item-amount"><?= number_format($item['amount'], 2) ?></div>
-    </div>
+    <div class="print-item-desc" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_description']) ?></div>
+    <div class="print-item-unit" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_uom']) ?></div>
+    <div class="print-item-qty" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['qty']) ?></div>
+    <div class="print-item-price" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['price'], 2) ?></div>
+    <div class="print-item-amount" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['amount'], 2) ?></div>
     <?php endforeach; ?>
 
     <!-- LEFT COLUMNS: VAT Breakdown -->

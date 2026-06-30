@@ -267,24 +267,12 @@ class FinanceController {
 
         foreach ($lotItems as $li) {
             $liQty = $li['qty'] ?? 0;
-            $conv = $li['uom_conversion'] ?? null;
-            $uom = $li['item_uom'] ?? '';
-            $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
-            $lotNumber = $li['lot_number'] ?? '';
-            $itemDesc = $li['item_description'] ?? '';
-
-            $descParts = [];
-            if (!empty($itemDesc)) $descParts[] = $itemDesc;
-            if ($cases > 0) $descParts[] = $cases . ' CS';
-            if (!empty($lotNumber)) $descParts[] = $lotNumber;
-            $fullDesc = implode(' | ', $descParts);
-
             $itemPrice = $priceList['price_per_piece'] ?? 0;
             $itemAmount = $liQty * $itemPrice;
 
             $items[] = [
-                'item_description' => $fullDesc,
-                'item_uom' => 'Pcs',
+                'item_description' => $li['item_description'] ?? '',
+                'item_uom' => $li['item_uom'] ?? '',
                 'qty' => $liQty,
                 'price' => $itemPrice,
                 'amount' => $itemAmount,
