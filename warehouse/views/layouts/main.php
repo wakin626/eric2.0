@@ -68,6 +68,11 @@
                             <i class="bi bi-truck me-2"></i>Deliveries
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= $currentAction === 'readyToDeliver' ? 'active' : '' ?>" href="?controller=warehouse&action=readyToDeliver">
+                            <i class="bi bi-box-seam me-2"></i>Ready to Deliver
+                        </a>
+                    </li>
                     <li class="nav-item border-top border-secondary mt-3 pt-2">
                         <a class="nav-link text-white-50" href="?controller=auth&action=logout">
                             <i class="bi bi-box-arrow-left me-2"></i>Logout

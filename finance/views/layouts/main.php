@@ -55,11 +55,6 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= $currentAction === 'readyToDeliver' ? 'active' : '' ?>" href="?controller=finance&action=readyToDeliver">
-                            <i class="bi bi-box-seam me-2"></i>Ready to Deliver
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
                             <i class="bi bi-truck me-2"></i>Deliveries
                         </a>

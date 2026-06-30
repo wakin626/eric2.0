@@ -720,4 +720,18 @@ class WarehouseModel extends BaseModel {
         $sql = "SELECT COUNT(*) FROM deliveries WHERE remarks_type = 'report' AND `remove` = 0";
         return self::getConnection()->query($sql)->fetchColumn();
     }
+
+    public function getPOsReadyToDeliver() {
+        $sql = "SELECT po.*, c.customer_name, c.customer_code, u.full_name as requested_by_name,
+                (po.produced_quantity - po.delivered_quantity) as available_for_delivery
+                FROM purchase_orders po 
+                LEFT JOIN customers c ON po.customer_id = c.customer_id 
+                LEFT JOIN users u ON po.requested_by = u.user_id 
+                WHERE po.`remove` = 0 
+                AND po.produced_quantity > po.delivered_quantity
+                ORDER BY po.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
 }

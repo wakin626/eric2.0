@@ -192,6 +192,19 @@ class WarehouseController {
         $this->render('deliveries/index', $data);
     }
 
+    public function readyToDeliver() {
+        $allPOs = $this->warehouseModel->getPOsReadyToDeliver();
+        $pagination = Pagination::paginate($allPOs, 10);
+        $data['purchase_orders'] = $pagination['items'];
+        $poIds = array_column($pagination['items'], 'po_id');
+        $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+        $data['page'] = $pagination['page'];
+        $data['totalPages'] = $pagination['totalPages'];
+        $data['total'] = $pagination['total'];
+        $data['page_title'] = 'Ready to Deliver';
+        $this->render('purchase_orders/ready_to_deliver', $data);
+    }
+
     public function deleteDRPhoto() {
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
