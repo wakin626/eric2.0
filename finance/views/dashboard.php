@@ -134,34 +134,12 @@
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($recent_deliveries ?? [] as $d):
-                    $lotItems = json_decode($d['lot_items'] ?? '[]', true);
-                    $dDelivered = $d['delivery_quantity'] ?? 0;
-                    $dItemQty = $d['item_quantity'] ?? 0;
-                    if (!empty($lotItems)) {
-                        $totalQty = 0;
-                        foreach ($lotItems as $li) { $totalQty += ($li['qty'] ?? 0); }
-                        if ($totalQty > 0) { $dItemQty = $totalQty; }
-                    }
-                    $dRemaining = $dItemQty - $dDelivered;
-                ?>
+                <?php foreach ($recent_deliveries ?? [] as $d): ?>
                 <tr>
                     <td><strong><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
-                    <td>
-                        <?php if (!empty($lotItems)): ?>
-                            <?php foreach ($lotItems as $i => $li): ?>
-                                <small><?= htmlspecialchars($li['item_description'] ?? $d['item_description'] ?? '-') ?></small>
-                                <?php if (($li['lot_number'] ?? '') !== ''): ?>
-                                    <br><small class="text-muted">Lot: <?= htmlspecialchars($li['lot_number']) ?></small>
-                                <?php endif; ?>
-                                <?php if ($i < count($lotItems) - 1): ?><br><?php endif; ?>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small>
-                        <?php endif; ?>
-                    </td>
-                    <td><?= $dDelivered ?></td>
+                    <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
+                    <td><?= $d['delivery_quantity'] ?? 0 ?></td>
                     <td class="text-center">
                         <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-success" title="Attach Receipt">
                             <i class="bi bi-paperclip"></i>

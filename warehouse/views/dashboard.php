@@ -132,32 +132,14 @@
             </thead>
             <tbody>
                 <?php foreach (array_slice($deliveries ?? [], 0, 5) as $d):
-                    $lotItems = json_decode($d['lot_items'] ?? '[]', true);
-                    $dDelivered = $d['delivery_quantity'] ?? 0;
                     $dItemQty = $d['item_quantity'] ?? 0;
-                    if (!empty($lotItems)) {
-                        $totalQty = 0;
-                        foreach ($lotItems as $li) { $totalQty += ($li['qty'] ?? 0); }
-                        if ($totalQty > 0) { $dItemQty = $totalQty; }
-                    }
+                    $dDelivered = $d['delivery_quantity'] ?? 0;
                     $dRemaining = $dItemQty - $dDelivered;
                 ?>
                 <tr>
                     <td><strong><?= $d['customer_po_number'] ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
-                    <td>
-                        <?php if (!empty($lotItems)): ?>
-                            <?php foreach ($lotItems as $i => $li): ?>
-                                <small><?= htmlspecialchars($li['item_description'] ?? $d['item_description'] ?? '-') ?></small>
-                                <?php if (($li['lot_number'] ?? '') !== ''): ?>
-                                    <br><small class="text-muted">Lot: <?= htmlspecialchars($li['lot_number']) ?></small>
-                                <?php endif; ?>
-                                <?php if ($i < count($lotItems) - 1): ?><br><?php endif; ?>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small>
-                        <?php endif; ?>
-                    </td>
+                    <td><small><?= htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) ?></small></td>
                     <td><?= $dItemQty ?></td>
                     <td><?= $dDelivered ?></td>
                     <td>
