@@ -125,7 +125,6 @@
                     <th>Item / Lot</th>
                     <th>PO Qty</th>
                     <th>Delivered</th>
-                    <th>Remaining</th>
                     <th>Type</th>
                     <th>Delivery Date</th>
                 </tr>
@@ -141,7 +140,6 @@
                     $itemLines = [];
                     $poQtyLines = [];
                     $deliveredLines = [];
-                    $remainingLines = [];
 
                     if ($hasLotItems) {
                         $idx = 0;
@@ -152,27 +150,19 @@
                             $liLot = $li['lot_number'] ?? '';
                             $poItem = $poItemLookup[$liCode] ?? null;
                             $poQty = $poItem ? $poItem['quantity'] : 0;
-                            $rem = max(0, $poQty - $liQty);
                             $sep = $idx < count($lotItems) - 1 ? ' border-bottom pb-2 mb-2' : '';
 
                             $itemLines[] = '<div class="' . $sep . '"><small>' . htmlspecialchars($liDesc) . '</small><br><small class="text-muted">' . htmlspecialchars($liLot) . '</small></div>';
                             $poQtyLines[] = '<div class="' . $sep . '">' . $poQty . '</div>';
                             $deliveredLines[] = '<div class="' . $sep . '">' . $liQty . '</div>';
-                            if ($rem <= 0) {
-                                $remainingLines[] = '<div class="' . $sep . '"><span class="badge bg-success">Complete</span></div>';
-                            } else {
-                                $remainingLines[] = '<div class="' . $sep . '"><span class="badge bg-warning text-dark">' . $rem . '</span></div>';
-                            }
                             $idx++;
                         }
                     } else {
                         $dItemQty = $d['item_quantity'] ?? 0;
                         $dDelivered = $d['delivery_quantity'] ?? 0;
-                        $dRemaining = max(0, $dItemQty - $dDelivered);
                         $itemLines[] = '<small>' . htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) . '</small>';
                         $poQtyLines[] = $dItemQty;
                         $deliveredLines[] = $dDelivered;
-                        $remainingLines[] = $dRemaining <= 0 ? '<span class="badge bg-success">Complete</span>' : '<span class="badge bg-warning text-dark">' . $dRemaining . '</span>';
                     }
                 ?>
                 <tr>
@@ -181,7 +171,6 @@
                     <td><?= implode('<br>', $itemLines) ?></td>
                     <td><?= implode('<br>', $poQtyLines) ?></td>
                     <td><?= implode('<br>', $deliveredLines) ?></td>
-                    <td><?= implode('<br>', $remainingLines) ?></td>
                     <td>
                         <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
                             <span class="badge bg-info">Advance</span>
@@ -193,7 +182,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="9" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-3">No deliveries yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
