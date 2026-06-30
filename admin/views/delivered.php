@@ -296,10 +296,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cust) customers.add(cust);
         var itemCell = row.cells[3];
         if (itemCell) {
-            itemCell.querySelectorAll('small').forEach(function(s) {
-                var t = s.textContent.trim().split('(')[0].trim();
-                if (t && t !== '-') items.add(t);
-            });
+            var divs = itemCell.querySelectorAll('div');
+            if (divs.length > 0) {
+                divs.forEach(function(d) {
+                    var t = d.textContent.trim().split('(')[0].trim();
+                    if (t && t !== '-') items.add(t);
+                });
+            } else {
+                itemCell.querySelectorAll('small').forEach(function(s) {
+                    var t = s.textContent.trim().split('(')[0].trim();
+                    if (t && t !== '-') items.add(t);
+                });
+            }
         }
         var dr = row.cells[2] ? row.cells[2].textContent.trim() : '';
         if (dr && dr !== '-') drNumbers.add(dr);

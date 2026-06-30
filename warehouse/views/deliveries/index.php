@@ -435,10 +435,18 @@ function populateDeliveryFilters() {
         if (cust) customers.add(cust);
         const itemCell = row.cells[2];
         if (itemCell) {
-            itemCell.querySelectorAll('small').forEach(s => {
-                const t = s.textContent.trim().split('(')[0].trim();
-                if (t && t !== '-') items.add(t);
-            });
+            const divs = itemCell.querySelectorAll('div');
+            if (divs.length > 0) {
+                divs.forEach(d => {
+                    const t = d.textContent.trim().split('(')[0].trim();
+                    if (t && t !== '-') items.add(t);
+                });
+            } else {
+                itemCell.querySelectorAll('small').forEach(s => {
+                    const t = s.textContent.trim().split('(')[0].trim();
+                    if (t && t !== '-') items.add(t);
+                });
+            }
         }
         const dr = row.cells[3] ? row.cells[3].textContent.trim() : '';
         if (dr && dr !== '-') drNumbers.add(dr);
