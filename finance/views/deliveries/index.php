@@ -45,23 +45,25 @@
                     $lotLines = [];
                     $qtyLines = [];
                     if ($hasLotItems) {
-                        foreach ($lotItems as $li) {
-                            $itemLines[] = $li['item_description'] ?? $li['item_code'] ?? '-';
-                            $lotLines[] = $li['lot_number'] ?? '-';
-                            $qtyLines[] = $li['qty'] ?? 0;
+                        $liCount = count($lotItems);
+                        foreach ($lotItems as $idx => $li) {
+                            $sep = $idx < $liCount - 1 ? ' border-bottom pb-2 mb-2' : '';
+                            $itemLines[] = '<div class="' . $sep . '"><small>' . htmlspecialchars($li['item_description'] ?? $li['item_code'] ?? '-') . '</small></div>';
+                            $lotLines[] = '<div class="' . $sep . '"><small class="text-muted">' . htmlspecialchars($li['lot_number'] ?? '-') . '</small></div>';
+                            $qtyLines[] = '<div class="' . $sep . '">' . ($li['qty'] ?? 0) . '</div>';
                         }
                     } else {
-                        $itemLines[] = ($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '');
-                        $lotLines[] = $d['lot_number'] ?? '-';
+                        $itemLines[] = '<small>' . htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) . '</small>';
+                        $lotLines[] = '<small class="text-muted">' . htmlspecialchars($d['lot_number'] ?? '-') . '</small>';
                         $qtyLines[] = $d['delivery_quantity'] ?? 0;
                     }
                 ?>
                 <tr data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>">
                     <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
-                    <td><small><?= htmlspecialchars(implode('<br>', $itemLines)) ?></small></td>
-                    <td><small class="text-muted"><?= htmlspecialchars(implode('<br>', $lotLines)) ?></small></td>
-                    <td><?= implode('<br>', $qtyLines) ?></td>
+                    <td><?= implode('', $itemLines) ?></td>
+                    <td><?= implode('', $lotLines) ?></td>
+                    <td><?= implode('', $qtyLines) ?></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '-') ?></td>
                     <td>
