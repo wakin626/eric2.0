@@ -8,9 +8,15 @@
         </button>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <input type="text" id="filterCustomer" class="form-control form-control-sm" placeholder="Search Customer..." style="width:200px">
-        <input type="text" id="filterItem" class="form-control form-control-sm" placeholder="Search Item..." style="width:200px">
-        <input type="text" id="filterDR" class="form-control form-control-sm" placeholder="Search DR Number..." style="width:160px">
+        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
+            <option value="">All Customers</option>
+        </select>
+        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
+            <option value="">All Items</option>
+        </select>
+        <select id="filterDR" class="form-select form-select-sm filter-select" style="width:160px">
+            <option value="">All DR Numbers</option>
+        </select>
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Delivery Date">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
@@ -419,6 +425,32 @@ document.getElementById('searchDelivery').addEventListener('keyup', function() {
     applyDeliveryFilters();
 });
 
+function populateDeliveryFilters() {
+    const customers = new Set();
+    const items = new Set();
+    const drNumbers = new Set();
+    document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
+        if (row.querySelector('td[colspan]')) return;
+        const cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
+        if (cust) customers.add(cust);
+        const itemCell = row.cells[2];
+        if (itemCell) {
+            itemCell.querySelectorAll('small').forEach(s => {
+                const t = s.textContent.trim().split('(')[0].trim();
+                if (t && t !== '-') items.add(t);
+            });
+        }
+        const dr = row.cells[3] ? row.cells[3].textContent.trim() : '';
+        if (dr && dr !== '-') drNumbers.add(dr);
+    });
+    const custSel = document.getElementById('filterCustomer');
+    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
+    const itemSel = document.getElementById('filterItem');
+    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
+    const drSel = document.getElementById('filterDR');
+    drNumbers.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; drSel.appendChild(o); });
+}
+
 function applyDeliveryFilters() {
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
@@ -442,9 +474,9 @@ function applyDeliveryFilters() {
     });
 }
 
-document.getElementById('filterCustomer').addEventListener('input', applyDeliveryFilters);
-document.getElementById('filterItem').addEventListener('input', applyDeliveryFilters);
-document.getElementById('filterDR').addEventListener('input', applyDeliveryFilters);
+document.getElementById('filterCustomer').addEventListener('change', applyDeliveryFilters);
+document.getElementById('filterItem').addEventListener('change', applyDeliveryFilters);
+document.getElementById('filterDR').addEventListener('change', applyDeliveryFilters);
 document.getElementById('filterDate').addEventListener('change', applyDeliveryFilters);
 document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterCustomer').value = '';
@@ -454,6 +486,8 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('searchDelivery').value = '';
     applyDeliveryFilters();
 });
+
+document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
 
 let poItemsCache = [];
 
