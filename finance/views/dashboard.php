@@ -28,7 +28,7 @@
 <div class="card data-card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-box-seam me-2"></i>POs Ready to Deliver</span>
-        <a href="?controller=warehouse&action=readyToDeliver" class="btn btn-primary btn-sm">View All</a>
+        <a href="?controller=finance&action=readyToDeliver" class="btn btn-primary btn-sm">View All</a>
     </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">

@@ -45,6 +45,18 @@ class FinanceController {
         $this->render('purchase_orders/index', $data);
     }
 
+    public function readyToDeliver() {
+        $readyPOs = $this->financeModel->getPOsReadyToDeliver();
+        $pagination = Pagination::paginate($readyPOs, 10);
+        $data['purchase_orders'] = $pagination['items'];
+        $data['page'] = $pagination['page'];
+        $data['totalPages'] = $pagination['totalPages'];
+        $data['total'] = $pagination['total'];
+        $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
+        $data['page_title'] = 'Ready to Deliver';
+        $this->render('purchase_orders/ready_to_deliver', $data);
+    }
+
     public function deliveries() {
         $allDeliveries = $this->financeModel->getAllDeliveries();
         $pagination = Pagination::paginate($allDeliveries, 10);
