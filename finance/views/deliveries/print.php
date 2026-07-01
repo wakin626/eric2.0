@@ -130,6 +130,16 @@
             text-overflow: clip;
         }
 
+        .print-item-lot {
+            position: absolute;
+            top: 3.39in;
+            left: 3.50in;
+            width: 0.8in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: center;
+        }
+
         .print-item-unit {
             position: absolute;
             top: 3.39in;
@@ -150,10 +160,20 @@
             text-align: right;
         }
 
+        .print-item-cases {
+            position: absolute;
+            top: 3.39in;
+            left: 5.10in;
+            width: 0.6in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: right;
+        }
+
         .print-item-price {
             position: absolute;
             top: 3.39in;
-            left: 5.48in;
+            left: 5.51in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -174,7 +194,7 @@
         .print-vatable-sales {
             position: absolute;
             left: 3.00in;
-            bottom: 3.75in;
+            bottom: 3.77in;
             width: 2.0in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -184,7 +204,7 @@
         .print-vat {
             position: absolute;
             left: 3.00in;
-            bottom: 3.45in;
+            bottom: 3.47in;
             width: 2.0in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -194,7 +214,7 @@
         .print-zero-rated-sales {
             position: absolute;
             left: 3.00in;
-            bottom: 3.15in;
+            bottom: 3.18in;
             width: 2.0in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -204,7 +224,7 @@
         .print-vat-exempt-sales {
             position: absolute;
             left: 3.00in;
-            bottom: 2.90in;
+            bottom: 2.93in;
             width: 2.0in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -235,7 +255,7 @@
         .print-net-of-vat {
             position: absolute;
             left: 5.75in;
-            bottom: 3.25in;
+            bottom: 3.23in;
             width: 1.7in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -265,7 +285,7 @@
         .print-less-withholding-tax {
             position: absolute;
             left: 5.75in;
-            bottom: 2.30in;
+            bottom: 2.33in;
             width: 1.7in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -335,8 +355,10 @@
     foreach ($items as $idx => $item):
     ?>
     <div class="print-item-desc" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_description']) ?></div>
+    <div class="print-item-lot" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['lot_number'] ?? '') ?></div>
     <div class="print-item-unit" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_uom']) ?></div>
     <div class="print-item-qty" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['qty']) ?></div>
+    <div class="print-item-cases" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= $item['cases'] > 0 ? $item['cases'] : '' ?></div>
     <div class="print-item-price" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['price'], 2) ?></div>
     <div class="print-item-amount" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['amount'], 2) ?></div>
     <?php endforeach; ?>

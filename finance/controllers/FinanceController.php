@@ -269,11 +269,16 @@ class FinanceController {
             $liQty = $li['qty'] ?? 0;
             $itemPrice = $priceList['price_per_piece'] ?? 0;
             $itemAmount = $liQty * $itemPrice;
+            $conv = $li['uom_conversion'] ?? null;
+            $uom = $li['item_uom'] ?? '';
+            $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
 
             $items[] = [
                 'item_description' => $li['item_description'] ?? '',
                 'item_uom' => $li['item_uom'] ?? '',
+                'lot_number' => $li['lot_number'] ?? '',
                 'qty' => $liQty,
+                'cases' => $cases,
                 'price' => $itemPrice,
                 'amount' => $itemAmount,
             ];
@@ -286,10 +291,15 @@ class FinanceController {
             $qty = $delivery['delivery_quantity'] ?? 0;
             $price = $priceList['price_per_piece'] ?? 0;
             $amount = $qty * $price;
+            $conv = $delivery['uom_conversion'] ?? null;
+            $itemUom = $delivery['item_uom'] ?? '';
+            $cases = ($conv && $itemUom !== 'CS') ? round($qty / $conv, 2) : 0;
             $items[] = [
                 'item_description' => $delivery['item_description'] ?? '',
                 'item_uom' => $delivery['item_uom'] ?? '',
+                'lot_number' => $delivery['lot_number'] ?? '',
                 'qty' => $qty,
+                'cases' => $cases,
                 'price' => $price,
                 'amount' => $amount,
             ];
@@ -352,11 +362,16 @@ class FinanceController {
             $liQty = $li['qty'] ?? 0;
             $itemPrice = $priceList['price_per_piece'] ?? 0;
             $itemAmount = $liQty * $itemPrice;
+            $conv = $li['uom_conversion'] ?? null;
+            $uom = $li['item_uom'] ?? '';
+            $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
 
             $items[] = [
                 'item_description' => $li['item_description'] ?? '',
                 'item_uom' => $li['item_uom'] ?? '',
+                'lot_number' => $li['lot_number'] ?? '',
                 'qty' => $liQty,
+                'cases' => $cases,
                 'price' => $itemPrice,
                 'amount' => $itemAmount,
             ];
@@ -369,10 +384,15 @@ class FinanceController {
             $qty = $delivery['delivery_quantity'] ?? 0;
             $price = $priceList['price_per_piece'] ?? 0;
             $amount = $qty * $price;
+            $conv = $delivery['uom_conversion'] ?? null;
+            $itemUom = $delivery['item_uom'] ?? '';
+            $cases = ($conv && $itemUom !== 'CS') ? round($qty / $conv, 2) : 0;
             $items[] = [
                 'item_description' => $delivery['item_description'] ?? '',
                 'item_uom' => $delivery['item_uom'] ?? '',
+                'lot_number' => $delivery['lot_number'] ?? '',
                 'qty' => $qty,
+                'cases' => $cases,
                 'price' => $price,
                 'amount' => $amount,
             ];

@@ -78,7 +78,7 @@
         /* ─── HEADER RIGHT: Date, Terms, PO, DR ─── */
         .print-date {
             position: absolute;
-            top: 1.65in;
+            top: 1.69in;
             right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -98,7 +98,7 @@
 
         .print-po-number {
             position: absolute;
-            top: 2.42in;
+            top: 2.43in;
             right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -108,7 +108,7 @@
 
         .print-dr-number {
             position: absolute;
-            top: 2.65in;
+            top: 2.69in;
             right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -130,6 +130,16 @@
             text-overflow: clip;
         }
 
+        .print-item-lot {
+            position: absolute;
+            top: 3.39in;
+            left: 3.50in;
+            width: 0.8in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
+            text-align: center;
+        }
+
         .print-item-unit {
             position: absolute;
             top: 3.39in;
@@ -147,6 +157,16 @@
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
+            text-align: right;
+        }
+
+        .print-item-cases {
+            position: absolute;
+            top: 3.39in;
+            left: 5.10in;
+            width: 0.6in;
+            font-family: Calibri, sans-serif;
+            font-size: 10pt;
             text-align: right;
         }
 
@@ -335,8 +355,10 @@
     foreach ($items as $idx => $item):
     ?>
     <div class="print-item-desc" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_description']) ?></div>
+    <div class="print-item-lot" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['lot_number'] ?? '') ?></div>
     <div class="print-item-unit" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_uom']) ?></div>
     <div class="print-item-qty" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['qty']) ?></div>
+    <div class="print-item-cases" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= $item['cases'] > 0 ? $item['cases'] : '' ?></div>
     <div class="print-item-price" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['price'], 2) ?></div>
     <div class="print-item-amount" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['amount'], 2) ?></div>
     <?php endforeach; ?>
