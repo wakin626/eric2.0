@@ -331,6 +331,89 @@ class FinanceController {
         exit;
     }
 
+    public function printSalesInvoiceWD() {
+        $id = $_GET['id'] ?? null;
+        $delivery = $this->financeModel->getDeliveryById($id);
+
+        $priceList = null;
+        if (!empty($delivery['poi_item_id'])) {
+            $priceList = $this->priceListModel->getByItemId($delivery['poi_item_id']);
+        }
+
+        $lotItems = json_decode($delivery['lot_items'] ?? '[]', true);
+        if (!is_array($lotItems)) $lotItems = [];
+
+        $items = [];
+        $grandTotalQty = 0;
+        $grandTotalAmount = 0;
+        $vatType = $priceList['vat_type'] ?? 'non_vat';
+
+        foreach ($lotItems as $li) {
+            $liQty = $li['qty'] ?? 0;
+            $itemPrice = $priceList['price_per_piece'] ?? 0;
+            $itemAmount = $liQty * $itemPrice;
+
+            $items[] = [
+                'item_description' => $li['item_description'] ?? '',
+                'item_uom' => $li['item_uom'] ?? '',
+                'qty' => $liQty,
+                'price' => $itemPrice,
+                'amount' => $itemAmount,
+            ];
+
+            $grandTotalQty += $liQty;
+            $grandTotalAmount += $itemAmount;
+        }
+
+        if (empty($items) && $delivery) {
+            $qty = $delivery['delivery_quantity'] ?? 0;
+            $price = $priceList['price_per_piece'] ?? 0;
+            $amount = $qty * $price;
+            $items[] = [
+                'item_description' => $delivery['item_description'] ?? '',
+                'item_uom' => $delivery['item_uom'] ?? '',
+                'qty' => $qty,
+                'price' => $price,
+                'amount' => $amount,
+            ];
+            $grandTotalQty = $qty;
+            $grandTotalAmount = $amount;
+        }
+
+        if ($vatType === 'vat') {
+            $subtotal = $grandTotalAmount / 1.12;
+            $vat = $grandTotalAmount - $subtotal;
+        } else {
+            $subtotal = $grandTotalAmount;
+            $vat = 0;
+        }
+
+        $data = [
+            'delivery' => $delivery,
+            'date' => !empty($delivery['delivery_date']) ? date('j-M-Y', strtotime($delivery['delivery_date'])) : '',
+            'customer_name' => $delivery['customer_name'] ?? '',
+            'customer_tin' => $delivery['customer_tin'] ?? '',
+            'customer_address' => $delivery['customer_address'] ?? '',
+            'customer_terms' => ($delivery['customer_terms'] ?? 0) . ' DAYS',
+            'customer_code' => $delivery['customer_code'] ?? '',
+            'po_number' => $delivery['customer_po_number'] ?? '',
+            'dr_number' => $delivery['dr_number'] ?? '',
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'vat' => $vat,
+            'vatType' => $vatType,
+            'grand_total' => $grandTotalAmount,
+            'vatable_sales' => $vatType === 'vat' ? $subtotal : 0,
+            'vat_amount' => $vat,
+            'zero_rated_sales' => 0,
+            'vat_exempt_sales' => $vatType !== 'vat' ? $grandTotalAmount : 0,
+        ];
+
+        extract($data);
+        include __DIR__ . "/../views/deliveries/print_wd.php";
+        exit;
+    }
+
     private function render($view, $data = []) {
         extract($data);
         ob_start();

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sales Invoice</title>
+    <title>Sales Invoice (WD)</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -311,7 +311,7 @@
 <body>
 
 <div class="no-print">
-    <button onclick="window.print()"><i class="bi bi-printer"></i> Print Sales Invoice</button>
+    <button onclick="window.print()"><i class="bi bi-printer"></i> Print Sales Invoice (WD)</button>
     <button onclick="window.close()" style="background:#6c757d; margin-left:8px;">Close</button>
 </div>
 

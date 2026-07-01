@@ -90,8 +90,11 @@
     <div class="col-md-4">
         <div class="card data-card mb-4">
             <div class="card-body">
-                <a href="?controller=finance&action=printSalesInvoice&id=<?= $delivery['delivery_id'] ?>" target="_blank" class="btn btn-primary w-100">
-                    <i class="bi bi-printer me-2"></i>Print Sales Invoice
+                <a href="?controller=finance&action=printSalesInvoice&id=<?= $delivery['delivery_id'] ?>" target="_blank" class="btn btn-primary w-100 mb-2">
+                    <i class="bi bi-printer me-2"></i>Print Sales Invoice (SB)
+                </a>
+                <a href="?controller=finance&action=printSalesInvoiceWD&id=<?= $delivery['delivery_id'] ?>" target="_blank" class="btn btn-success w-100">
+                    <i class="bi bi-printer me-2"></i>Print Sales Invoice (WD)
                 </a>
             </div>
         </div>

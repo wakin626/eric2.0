@@ -40,8 +40,8 @@
 
         .dr-field-delivered-to {
             position: absolute;
-            top: 2.38in;
-            left: 1.65in;
+            top: 2.37in;
+            left: 1.70in;
             width: 4.00in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -61,7 +61,7 @@
         .dr-field-address {
             position: absolute;
             top: 2.60in;
-            left: 1.55in;
+            left: 1.70in;
             width: 5.50in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -71,7 +71,7 @@
         .dr-field-tin {
             position: absolute;
             top: 2.85in;
-            left: 1.55in;
+            left: 1.70in;
             width: 3.00in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
