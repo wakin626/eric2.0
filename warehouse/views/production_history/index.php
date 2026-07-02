@@ -54,7 +54,7 @@
                         <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
                             <span class="badge bg-warning text-dark" title="<?= htmlspecialchars($h['report_reason'] ?? '') ?>">Reported</span>
                         <?php endif; ?>
-                        <?php if (!empty($h['lot_number'])): ?>
+                        <?php if (!empty($h['poi_id'])): ?>
                             <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>')">
                                 <i class="bi bi-pencil"></i>
                             </button>
