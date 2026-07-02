@@ -823,14 +823,13 @@ class WarehouseModel extends BaseModel {
 
     public function editHistoryRecord($history_id, $new_added_quantity, $new_lot_number, $edited_by) {
         $conn = self::getConnection();
-        $stmt = $conn->prepare("SELECT poi_id, added_quantity, po_id, lot_number FROM production_history WHERE history_id = :history_id");
+        $stmt = $conn->prepare("SELECT poi_id, added_quantity, previous_quantity, po_id, lot_number FROM production_history WHERE history_id = :history_id");
         $stmt->execute(['history_id' => $history_id]);
         $history = $stmt->fetch();
         if (!$history) return false;
 
         $old_added = $history['added_quantity'];
         $delta = $new_added_quantity - $old_added;
-        $new_new_quantity = $history['added_quantity'] + ($new_added_quantity - $old_added);
         $new_new_quantity = $history['previous_quantity'] + $new_added_quantity;
 
         $conn->prepare("UPDATE production_history 
