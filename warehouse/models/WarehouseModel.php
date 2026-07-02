@@ -245,7 +245,7 @@ class WarehouseModel extends BaseModel {
         return true;
     }
 
-    public function updateItemProducedQuantity($poi_id, $added_quantity, $user_id = null) {
+    public function updateItemProducedQuantity($poi_id, $added_quantity, $user_id = null, $lot_number = null, $item_description = null) {
         $conn = self::getConnection();
 
         $stmt = $conn->prepare("SELECT produced_quantity, po_id FROM purchase_order_items WHERE poi_id = :poi_id");
@@ -264,9 +264,13 @@ class WarehouseModel extends BaseModel {
             ->execute(['po_id' => $item['po_id'], 'po_id2' => $item['po_id']]);
 
             if ($user_id) {
-                $conn->prepare("INSERT INTO production_history (po_id, user_id, previous_quantity, added_quantity, new_quantity, date_created) VALUES (:po_id, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())")
+                $conn->prepare("INSERT INTO production_history (po_id, poi_id, lot_number, item_description, user_id, previous_quantity, added_quantity, new_quantity, date_created) 
+                    VALUES (:po_id, :poi_id, :lot_number, :item_description, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())")
                     ->execute([
                         'po_id' => $item['po_id'],
+                        'poi_id' => $poi_id,
+                        'lot_number' => $lot_number,
+                        'item_description' => $item_description,
                         'user_id' => $user_id,
                         'previous_quantity' => $previous_quantity,
                         'added_quantity' => $added_quantity,
@@ -278,11 +282,14 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getProductionHistory() {
-        $sql = "SELECT ph.*, po.customer_po_number, c.customer_name, u.full_name 
+        $sql = "SELECT ph.*, po.customer_po_number, c.customer_name, u.full_name,
+                    pr.report_id, pr.status as report_status, pr.reason as report_reason,
+                    pr.new_lot_number as resolved_lot
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
-                LEFT JOIN users u ON ph.user_id = u.user_id 
+                LEFT JOIN users u ON ph.user_id = u.user_id
+                LEFT JOIN production_reports pr ON ph.history_id = pr.history_id AND pr.status = 'pending'
                 ORDER BY ph.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
@@ -733,5 +740,81 @@ class WarehouseModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    public function createProductionReport($history_id, $poi_id, $po_id, $old_lot_number, $user_id, $reason) {
+        $sql = "INSERT INTO production_reports (history_id, poi_id, po_id, old_lot_number, reported_by, reason)
+                VALUES (:history_id, :poi_id, :po_id, :old_lot_number, :reported_by, :reason)";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute([
+            'history_id' => $history_id,
+            'poi_id' => $poi_id,
+            'po_id' => $po_id,
+            'old_lot_number' => $old_lot_number,
+            'reported_by' => $user_id,
+            'reason' => $reason
+        ]);
+        return self::getConnection()->lastInsertId();
+    }
+
+    public function getProductionReportsCount() {
+        $sql = "SELECT COUNT(*) FROM production_reports WHERE status = 'pending'";
+        return self::getConnection()->query($sql)->fetchColumn();
+    }
+
+    public function getProductionReportById($report_id) {
+        $sql = "SELECT pr.*, ph.lot_number as history_lot, ph.item_description, ph.added_quantity,
+                    u.full_name as reporter_name
+                FROM production_reports pr
+                LEFT JOIN production_history ph ON pr.history_id = ph.history_id
+                LEFT JOIN users u ON pr.reported_by = u.user_id
+                WHERE pr.report_id = :report_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['report_id' => $report_id]);
+        return $stmt->fetch();
+    }
+
+    public function resolveProductionReport($report_id, $new_lot_number, $resolved_by) {
+        $conn = self::getConnection();
+        $report = $this->getProductionReportById($report_id);
+        if (!$report) return false;
+
+        $conn->prepare("UPDATE production_reports SET status = 'resolved', resolved_by = :resolved_by, 
+            new_lot_number = :new_lot_number, date_resolved = NOW() WHERE report_id = :report_id")
+            ->execute(['resolved_by' => $resolved_by, 'new_lot_number' => $new_lot_number, 'report_id' => $report_id]);
+
+        $conn->prepare("UPDATE production_history SET lot_number = :lot_number WHERE history_id = :history_id")
+            ->execute(['lot_number' => $new_lot_number, 'history_id' => $report['history_id']]);
+
+        if ($report['poi_id'] && $report['old_lot_number']) {
+            $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
+                WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
+                ->execute(['new_lot' => $new_lot_number, 'poi_id' => $report['poi_id'], 'old_lot' => $report['old_lot_number']]);
+        }
+
+        return true;
+    }
+
+    public function updateHistoryLotNumber($history_id, $new_lot_number) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT poi_id, lot_number FROM production_history WHERE history_id = :history_id");
+        $stmt->execute(['history_id' => $history_id]);
+        $history = $stmt->fetch();
+        if (!$history) return false;
+
+        $conn->prepare("UPDATE production_history SET lot_number = :lot_number WHERE history_id = :history_id")
+            ->execute(['lot_number' => $new_lot_number, 'history_id' => $history_id]);
+
+        if ($history['poi_id'] && $history['lot_number']) {
+            $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
+                WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
+                ->execute(['new_lot' => $new_lot_number, 'poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
+        }
+
+        $conn->prepare("UPDATE production_reports SET status = 'resolved', new_lot_number = :new_lot, date_resolved = NOW()
+            WHERE history_id = :history_id AND status = 'pending'")
+            ->execute(['new_lot' => $new_lot_number, 'history_id' => $history_id]);
+
+        return true;
     }
 }

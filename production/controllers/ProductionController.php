@@ -52,10 +52,11 @@ class ProductionController {
                 $lot_numbers = $_POST['lot_number'] ?? [];
                 foreach ($poi_ids as $i => $poi_id) {
                     if ($poi_id && isset($quantities[$i]) && $quantities[$i] > 0) {
-                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $quantities[$i], $_SESSION['user_id']);
                         $lot = $lot_numbers[$i] ?? null;
+                        $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
+                        $itemDesc = $poi['item_description'] ?? null;
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $quantities[$i], $_SESSION['user_id'], $lot, $itemDesc);
                         if ($lot && $lot !== '') {
-                            $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
                             $this->warehouseModel->updateLotQuantity($poi_id, $lot, $quantities[$i], $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
                         }
                     }
@@ -68,10 +69,11 @@ class ProductionController {
                 if (!is_array($lot_numbers)) $lot_numbers = [$lot_numbers];
                 foreach ($quantities as $i => $qty) {
                     if ($poi_id && $qty > 0) {
-                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $qty, $_SESSION['user_id']);
                         $lot = $lot_numbers[$i] ?? null;
+                        $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
+                        $itemDesc = $poi['item_description'] ?? null;
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $qty, $_SESSION['user_id'], $lot, $itemDesc);
                         if ($lot && $lot !== '') {
-                            $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
                             $this->warehouseModel->updateLotQuantity($poi_id, $lot, $qty, $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
                         }
                     }
@@ -92,8 +94,40 @@ class ProductionController {
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         $data['page_title'] = 'Production History';
         $this->render('history/index', $data);
+    }
+
+    public function reportHistory() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $history_id = $_POST['history_id'] ?? null;
+            $reason = trim($_POST['reason'] ?? '');
+            if (!$history_id || empty($reason)) {
+                $_SESSION['error'] = 'Missing history ID or reason.';
+                header('Location: ?controller=production&action=history');
+                exit;
+            }
+            $conn = \App\Core\BaseModel::getConnection();
+            $stmt = $conn->prepare("SELECT history_id, poi_id, po_id, lot_number FROM production_history WHERE history_id = :hid");
+            $stmt->execute(['hid' => $history_id]);
+            $history = $stmt->fetch();
+            if ($history) {
+                $this->warehouseModel->createProductionReport(
+                    $history['history_id'],
+                    $history['poi_id'],
+                    $history['po_id'],
+                    $history['lot_number'],
+                    $_SESSION['user_id'],
+                    $reason
+                );
+                $_SESSION['success'] = 'Report submitted successfully.';
+            } else {
+                $_SESSION['error'] = 'History record not found.';
+            }
+            header('Location: ?controller=production&action=history');
+            exit;
+        }
     }
 
     public function advanceProduction() {
@@ -119,6 +153,7 @@ class ProductionController {
     }
 
     private function render($view, $data = []) {
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         extract($data);
         ob_start();
         include __DIR__ . "/../views/{$view}.php";

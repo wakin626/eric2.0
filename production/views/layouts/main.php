@@ -70,6 +70,9 @@
                     <li class="nav-item">
                         <a class="nav-link <?= strpos($page_title ?? '', 'Production History') !== false ? 'active' : '' ?>" href="?controller=production&action=history">
                             <i class="bi bi-clock-history me-2"></i>Production History
+                            <?php if (!empty($reportsCount) && $reportsCount > 0): ?>
+                                <span class="badge bg-warning text-dark float-end"><?= $reportsCount ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
                     <li class="nav-item border-top border-secondary mt-3 pt-2">

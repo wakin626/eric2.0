@@ -78,7 +78,7 @@
         /* ─── HEADER RIGHT: Date, Terms, PO, DR ─── */
         .print-date {
             position: absolute;
-            top: 1.65in;
+            top: 1.68in;
             right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -98,7 +98,7 @@
 
         .print-po-number {
             position: absolute;
-            top: 2.42in;
+            top: 2.44in;
             right: 1.25in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -120,7 +120,7 @@
         .print-item-desc {
             position: absolute;
             top: 3.95in;
-            left: 0.79in;
+            left: 0.76in;
             width: 4.2in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -133,7 +133,7 @@
         .print-item-cases {
             position: absolute;
             top: 3.39in;
-            left: 3.50in;
+            left: 4.09in;
             width: 0.7in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -143,7 +143,7 @@
         .print-item-lot {
             position: absolute;
             top: 3.39in;
-            left: 4.15in;
+            left: 3.50in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
@@ -153,7 +153,7 @@
         .print-item-unit {
             position: absolute;
             top: 3.39in;
-            left: 4.85in;
+            left: 4.56in;
             width: 0.6in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -163,7 +163,7 @@
         .print-item-qty {
             position: absolute;
             top: 3.39in;
-            left: 5.30in;
+            left: 4.81in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -173,7 +173,7 @@
         .print-item-price {
             position: absolute;
             top: 3.39in;
-            left: 5.90in;
+            left: 5.60in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -183,7 +183,7 @@
         .print-item-amount {
             position: absolute;
             top: 3.50in;
-            left: 6.60in;
+            left: 6.46in;
             width: 1.1in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
@@ -355,8 +355,8 @@
     foreach ($items as $idx => $item):
     ?>
     <div class="print-item-desc" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_description']) ?></div>
-    <div class="print-item-cases" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= $item['cases'] > 0 ? $item['cases'] . ' CS' : '' ?></div>
     <div class="print-item-lot" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['lot_number'] ?? '') ?></div>
+    <div class="print-item-cases" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= $item['cases'] > 0 ? $item['cases'] . ' CS' : '' ?></div>
     <div class="print-item-unit" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_uom']) ?></div>
     <div class="print-item-qty" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['qty']) ?></div>
     <div class="print-item-price" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['price'], 2) ?></div>

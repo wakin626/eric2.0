@@ -124,6 +124,14 @@
 </a>
 </li>
 <li class="nav-item">
+<a class="nav-link <?= $currentAction === 'productionHistory' ? 'active' : '' ?>" href="?controller=admin&action=productionHistory">
+<i class="bi bi-clock-history me-2"></i>Production History
+<?php if (!empty($reportsCount) && $reportsCount > 0): ?>
+    <span class="badge bg-warning text-dark float-end"><?= $reportsCount ?></span>
+<?php endif; ?>
+</a>
+</li>
+<li class="nav-item">
 <a class="nav-link <?= in_array($currentAction, ['customers', 'customerCreate', 'customerEdit', 'customerDelete', 'customerUpdate', 'customerToggleStatus']) ? 'active' : '' ?>" href="?controller=admin&action=customers">
 <i class="bi bi-people me-2"></i>Customers
 </a>
@@ -161,6 +169,14 @@
                 <?php if (isset($_SESSION['error'])): ?>
                     <div class="alert alert-danger alert-dismissible fade show">
                         <i class="bi bi-exclamation-circle me-2"></i><?= $_SESSION['error']; unset($_SESSION['error']); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($reportsCount) && $reportsCount > 0 && basename($_SERVER['PHP_SELF'] ?? '') !== 'index.php'): ?>
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong><?= $reportsCount ?></strong> lot number report(s) require action.
+                        <a href="?controller=admin&action=productionHistory" class="alert-link ms-1">Review now</a>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>

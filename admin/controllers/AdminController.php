@@ -244,8 +244,38 @@ public function updateDelivery() {
     exit;
 }
 
+public function productionHistory() {
+    $allHistory = $this->warehouseModel->getProductionHistory();
+    $pagination = Pagination::paginate($allHistory, 10);
+    $data['history'] = $pagination['items'];
+    $data['page'] = $pagination['page'];
+    $data['totalPages'] = $pagination['totalPages'];
+    $data['total'] = $pagination['total'];
+    $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+    $data['page_title'] = 'Production History';
+    $this->render('production_history/index', $data);
+}
+
+public function editHistoryLot() {
+    header('Content-Type: application/json');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        echo json_encode(['success' => false, 'message' => 'Invalid request']);
+        exit;
+    }
+    $history_id = $_POST['history_id'] ?? null;
+    $new_lot = trim($_POST['new_lot_number'] ?? '');
+    if (!$history_id || empty($new_lot)) {
+        echo json_encode(['success' => false, 'message' => 'Missing history ID or lot number']);
+        exit;
+    }
+    $result = $this->warehouseModel->updateHistoryLotNumber($history_id, $new_lot);
+    echo json_encode(['success' => $result]);
+    exit;
+}
+
     private function render($view, $data = []) {
         $data['reportedCount'] = $this->warehouseModel->getReportedRemarksCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         extract($data);
         ob_start();
         include __DIR__ . "/../views/{$view}.php";

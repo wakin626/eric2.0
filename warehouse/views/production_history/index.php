@@ -7,6 +7,14 @@
     </div>
 </div>
 
+<?php if (!empty($reportsCount) && $reportsCount > 0): ?>
+<div class="alert alert-warning d-flex align-items-center mb-3">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong><?= $reportsCount ?></strong>&nbsp;lot number report(s) pending action.
+    <a href="#pendingReports" class="ms-2 text-decoration-underline">View pending</a>
+</div>
+<?php endif; ?>
+
 <div class="card data-card">
     <div class="table-responsive">
         <table class="table table-hover mb-0">
@@ -21,7 +29,7 @@
                     <th class="sortable" data-sort="added">Added Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="new">New Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
-                    <th>Report</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody id="historyTableBody">
@@ -45,9 +53,10 @@
                     <td>
                         <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
                             <span class="badge bg-warning text-dark" title="<?= htmlspecialchars($h['report_reason'] ?? '') ?>">Reported</span>
-                        <?php elseif (!empty($h['lot_number'])): ?>
-                            <button class="btn btn-sm btn-outline-danger" onclick="openReportModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>')">
-                                <i class="bi bi-flag"></i>
+                        <?php endif; ?>
+                        <?php if (!empty($h['lot_number'])): ?>
+                            <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>')">
+                                <i class="bi bi-pencil"></i>
                             </button>
                         <?php endif; ?>
                     </td>
@@ -61,31 +70,29 @@
     </div>
 </div>
 
-<!-- Report Modal -->
-<div class="modal fade" id="reportModal" tabindex="-1">
+<!-- Edit Lot Modal -->
+<div class="modal fade" id="editLotModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="?controller=production&action=reportHistory">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-flag me-2"></i>Report Wrong Lot Number</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Lot Number</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editHistoryId">
+                <div class="mb-3">
+                    <label class="form-label">Current Lot Number</label>
+                    <input type="text" id="editCurrentLot" class="form-control" readonly>
                 </div>
-                <div class="modal-body">
-                    <input type="hidden" name="history_id" id="reportHistoryId">
-                    <div class="mb-3">
-                        <label class="form-label">Current Lot Number</label>
-                        <input type="text" id="reportLotDisplay" class="form-control" readonly>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Reason for Report <span class="text-danger">*</span></label>
-                        <textarea name="reason" class="form-control" rows="3" placeholder="Explain why this lot number is wrong..." required></textarea>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label">New Lot Number <span class="text-danger">*</span></label>
+                    <input type="text" id="editNewLot" class="form-control" placeholder="Enter correct lot number" required>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger"><i class="bi bi-flag me-1"></i>Submit Report</button>
-                </div>
-            </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveEditLot()"><i class="bi bi-check-lg me-1"></i>Save</button>
+            </div>
         </div>
     </div>
 </div>
@@ -95,7 +102,7 @@
     <ul class="pagination justify-content-center mt-4">
         <?php for ($i = 1; $i <= $totalPages; $i++): ?>
         <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=production&action=history&page=<?= $i ?>"><?= $i ?></a>
+            <a class="page-link" href="?controller=warehouse&action=productionHistory&page=<?= $i ?>"><?= $i ?></a>
         </li>
         <?php endfor; ?>
     </ul>
@@ -103,10 +110,29 @@
 <?php endif; ?>
 
 <script>
-function openReportModal(historyId, lotNumber) {
-    document.getElementById('reportHistoryId').value = historyId;
-    document.getElementById('reportLotDisplay').value = lotNumber;
-    new bootstrap.Modal(document.getElementById('reportModal')).show();
+function openEditModal(historyId, currentLot) {
+    document.getElementById('editHistoryId').value = historyId;
+    document.getElementById('editCurrentLot').value = currentLot;
+    document.getElementById('editNewLot').value = '';
+    new bootstrap.Modal(document.getElementById('editLotModal')).show();
+}
+
+function saveEditLot() {
+    const historyId = document.getElementById('editHistoryId').value;
+    const newLot = document.getElementById('editNewLot').value.trim();
+    if (!newLot) { alert('Please enter a new lot number.'); return; }
+    
+    fetch('?controller=warehouse&action=editHistoryLot', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'history_id=' + encodeURIComponent(historyId) + '&new_lot_number=' + encodeURIComponent(newLot)
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to update lot number.');
+        }
+    }).catch(() => alert('An error occurred.'));
 }
 
 document.getElementById('searchHistory').addEventListener('keyup', function() {
