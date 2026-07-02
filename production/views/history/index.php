@@ -45,14 +45,14 @@
                             <span class="text-muted">-</span>
                         <?php endif; ?>
                         <?php if (!empty($h['date_edited']) && !empty($h['old_lot_number'])): ?>
-                            <br><small class="text-muted">(was: <?= htmlspecialchars($h['old_lot_number']) ?>)</small>
+                            <br><small class="text-muted">(old: <?= htmlspecialchars($h['old_lot_number']) ?>)</small>
                         <?php endif; ?>
                     </td>
                     <td><?= $h['previous_quantity'] ?></td>
                     <td>
                         <span class="text-success">+<?= $h['added_quantity'] ?></span>
                         <?php if (!empty($h['date_edited']) && $h['old_added_quantity'] !== null): ?>
-                            <br><small class="text-muted">(was: +<?= $h['old_added_quantity'] ?>)</small>
+                            <br><small class="text-muted">(old: +<?= $h['old_added_quantity'] ?>)</small>
                         <?php endif; ?>
                     </td>
                     <td><strong><?= $h['new_quantity'] ?></strong></td>
