@@ -844,12 +844,6 @@ class WarehouseModel extends BaseModel {
                 'history_id' => $history_id
             ]);
 
-        if ($lot_changed && $history['poi_id'] && $history['lot_number']) {
-            $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
-                WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
-                ->execute(['new_lot' => $new_lot_number, 'poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
-        }
-
         if ($history['poi_id'] && $delta != 0) {
             $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity + :delta WHERE poi_id = :poi_id")
                 ->execute(['delta' => $delta, 'poi_id' => $history['poi_id']]);
@@ -858,10 +852,22 @@ class WarehouseModel extends BaseModel {
                 SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
             ) WHERE po_id = :po_id2")
                 ->execute(['po_id' => $history['po_id'], 'po_id2' => $history['po_id']]);
+        }
 
+        if ($lot_changed && $history['poi_id'] && $history['lot_number']) {
+            $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
+                WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
+                ->execute(['new_lot' => $new_lot_number, 'poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
+
+            if ($delta != 0) {
+                $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced + :delta 
+                    WHERE poi_id = :poi_id AND lot_number = :lot AND `is_removed` = 0")
+                    ->execute(['delta' => $delta, 'poi_id' => $history['poi_id'], 'lot' => $new_lot_number]);
+            }
+        } elseif ($history['poi_id'] && $delta != 0) {
             $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced + :delta 
                 WHERE poi_id = :poi_id AND lot_number = :lot AND `is_removed` = 0")
-                ->execute(['delta' => $delta, 'poi_id' => $history['poi_id'], 'lot' => $new_lot_number]);
+                ->execute(['delta' => $delta, 'poi_id' => $history['poi_id'], 'lot' => $history['lot_number']]);
         }
 
         $conn->prepare("UPDATE production_reports SET status = 'resolved', new_lot_number = :new_lot, date_resolved = NOW()
