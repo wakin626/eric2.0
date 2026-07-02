@@ -283,12 +283,14 @@ class WarehouseModel extends BaseModel {
 
     public function getProductionHistory() {
         $sql = "SELECT ph.*, po.customer_po_number, c.customer_name, u.full_name,
+                    eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
-                    pr.new_lot_number as resolved_lot
+                    pr.report_type as report_type, pr.new_lot_number as resolved_lot
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON ph.user_id = u.user_id
+                LEFT JOIN users eu ON ph.edited_by = eu.user_id
                 LEFT JOIN production_reports pr ON ph.history_id = pr.history_id AND pr.status = 'pending'
                 ORDER BY ph.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -742,9 +744,9 @@ class WarehouseModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
-    public function createProductionReport($history_id, $poi_id, $po_id, $old_lot_number, $user_id, $reason) {
-        $sql = "INSERT INTO production_reports (history_id, poi_id, po_id, old_lot_number, reported_by, reason)
-                VALUES (:history_id, :poi_id, :po_id, :old_lot_number, :reported_by, :reason)";
+    public function createProductionReport($history_id, $poi_id, $po_id, $old_lot_number, $user_id, $reason, $report_type = 'lot_number') {
+        $sql = "INSERT INTO production_reports (history_id, poi_id, po_id, old_lot_number, reported_by, reason, report_type)
+                VALUES (:history_id, :poi_id, :po_id, :old_lot_number, :reported_by, :reason, :report_type)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'history_id' => $history_id,
@@ -752,7 +754,8 @@ class WarehouseModel extends BaseModel {
             'po_id' => $po_id,
             'old_lot_number' => $old_lot_number,
             'reported_by' => $user_id,
-            'reason' => $reason
+            'reason' => $reason,
+            'report_type' => $report_type
         ]);
         return self::getConnection()->lastInsertId();
     }
@@ -809,6 +812,56 @@ class WarehouseModel extends BaseModel {
             $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
                 WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
                 ->execute(['new_lot' => $new_lot_number, 'poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
+        }
+
+        $conn->prepare("UPDATE production_reports SET status = 'resolved', new_lot_number = :new_lot, date_resolved = NOW()
+            WHERE history_id = :history_id AND status = 'pending'")
+            ->execute(['new_lot' => $new_lot_number, 'history_id' => $history_id]);
+
+        return true;
+    }
+
+    public function editHistoryRecord($history_id, $new_added_quantity, $new_lot_number, $edited_by) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT poi_id, added_quantity, po_id, lot_number FROM production_history WHERE history_id = :history_id");
+        $stmt->execute(['history_id' => $history_id]);
+        $history = $stmt->fetch();
+        if (!$history) return false;
+
+        $old_added = $history['added_quantity'];
+        $delta = $new_added_quantity - $old_added;
+        $new_new_quantity = $history['added_quantity'] + ($new_added_quantity - $old_added);
+        $new_new_quantity = $history['previous_quantity'] + $new_added_quantity;
+
+        $conn->prepare("UPDATE production_history 
+            SET added_quantity = :added, new_quantity = :new_qty, lot_number = :lot, edited_by = :edited_by, date_edited = NOW()
+            WHERE history_id = :history_id")
+            ->execute([
+                'added' => $new_added_quantity,
+                'new_qty' => $new_new_quantity,
+                'lot' => $new_lot_number,
+                'edited_by' => $edited_by,
+                'history_id' => $history_id
+            ]);
+
+        if ($history['poi_id'] && $delta != 0) {
+            $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity + :delta WHERE poi_id = :poi_id")
+                ->execute(['delta' => $delta, 'poi_id' => $history['poi_id']]);
+
+            $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+            ) WHERE po_id = :po_id2")
+                ->execute(['po_id' => $history['po_id'], 'po_id2' => $history['po_id']]);
+
+            if ($new_lot_number && $history['lot_number'] && $new_lot_number !== $history['lot_number']) {
+                $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
+                    WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
+                    ->execute(['new_lot' => $new_lot_number, 'poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
+            }
+
+            $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced + :delta 
+                WHERE poi_id = :poi_id AND lot_number = :lot AND `is_removed` = 0")
+                ->execute(['delta' => $delta, 'poi_id' => $history['poi_id'], 'lot' => $new_lot_number]);
         }
 
         $conn->prepare("UPDATE production_reports SET status = 'resolved', new_lot_number = :new_lot, date_resolved = NOW()

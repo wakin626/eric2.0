@@ -10,8 +10,7 @@
 <?php if (!empty($reportsCount) && $reportsCount > 0): ?>
 <div class="alert alert-warning d-flex align-items-center mb-3">
     <i class="bi bi-exclamation-triangle-fill me-2"></i>
-    <strong><?= $reportsCount ?></strong>&nbsp;lot number report(s) pending action.
-    <a href="#pendingReports" class="ms-2 text-decoration-underline">View pending</a>
+    <strong><?= $reportsCount ?></strong>&nbsp;production report(s) pending action.
 </div>
 <?php endif; ?>
 
@@ -29,13 +28,21 @@
                     <th class="sortable" data-sort="added">Added Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="new">New Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
+                    <th>Report</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody id="historyTableBody">
                 <?php foreach ($history as $h): ?>
                 <tr>
-                    <td><?= date('Y-m-d H:i', strtotime($h['date_created'])) ?></td>
+                    <td>
+                        <?= date('Y-m-d H:i', strtotime($h['date_created'])) ?>
+                        <?php if (!empty($h['date_edited'])): ?>
+                            <br><small class="text-info" title="Edited by <?= htmlspecialchars($h['edited_by_name'] ?? '') ?>">
+                                <i class="bi bi-pencil-square"></i> Edited <?= date('m/d H:i', strtotime($h['date_edited'])) ?>
+                            </small>
+                        <?php endif; ?>
+                    </td>
                     <td><strong><?= htmlspecialchars($h['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
@@ -51,11 +58,28 @@
                     <td><strong><?= $h['new_quantity'] ?></strong></td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td>
-                        <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
-                            <span class="badge bg-warning text-dark" title="<?= htmlspecialchars($h['report_reason'] ?? '') ?>">Reported</span>
+                        <?php
+                        $hasReport = !empty($h['report_id']);
+                        $reportPending = $hasReport && $h['report_status'] === 'pending';
+                        $reportResolved = $hasReport && $h['report_status'] === 'resolved';
+                        $reportType = $h['report_type'] ?? 'lot_number';
+                        $typeLabel = $reportType === 'quantity' ? 'Quantity' : 'Lot No.';
+                        ?>
+                        <?php if ($reportPending): ?>
+                            <span style="color:red;font-weight:bold;" title="<?= htmlspecialchars($h['report_reason'] ?? '') ?>">
+                                <?= $typeLabel ?>: <?= htmlspecialchars($h['report_reason'] ?? '') ?>
+                            </span>
+                        <?php elseif ($reportResolved): ?>
+                            <span style="color:#e6a800;font-weight:bold;" title="Resolved">
+                                <?= $typeLabel ?>: <?= htmlspecialchars($h['report_reason'] ?? '') ?> &rarr; Resolved
+                            </span>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
                         <?php endif; ?>
+                    </td>
+                    <td>
                         <?php if (!empty($h['poi_id'])): ?>
-                            <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>')">
+                            <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>', <?= $h['added_quantity'] ?>)">
                                 <i class="bi bi-pencil"></i>
                             </button>
                         <?php endif; ?>
@@ -63,19 +87,19 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="10" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="11" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
 </div>
 
-<!-- Edit Lot Modal -->
-<div class="modal fade" id="editLotModal" tabindex="-1">
+<!-- Edit Record Modal -->
+<div class="modal fade" id="editRecordModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Lot Number</h5>
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Production Record</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -88,10 +112,21 @@
                     <label class="form-label">New Lot Number <span class="text-danger">*</span></label>
                     <input type="text" id="editNewLot" class="form-control" placeholder="Enter correct lot number" required>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label">Current Quantity</label>
+                    <input type="text" id="editCurrentQty" class="form-control" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">New Quantity <span class="text-danger">*</span></label>
+                    <input type="number" id="editNewQty" class="form-control" min="1" required>
+                </div>
+                <div class="alert alert-info py-2 mb-0">
+                    <small><i class="bi bi-info-circle me-1"></i>Changing quantity will update production progress.</small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveEditLot()"><i class="bi bi-check-lg me-1"></i>Save</button>
+                <button type="button" class="btn btn-primary" onclick="saveEditRecord()"><i class="bi bi-check-lg me-1"></i>Save</button>
             </div>
         </div>
     </div>
@@ -110,27 +145,33 @@
 <?php endif; ?>
 
 <script>
-function openEditModal(historyId, currentLot) {
+function openEditModal(historyId, currentLot, currentQty) {
     document.getElementById('editHistoryId').value = historyId;
     document.getElementById('editCurrentLot').value = currentLot;
-    document.getElementById('editNewLot').value = '';
-    new bootstrap.Modal(document.getElementById('editLotModal')).show();
+    document.getElementById('editNewLot').value = currentLot;
+    document.getElementById('editCurrentQty').value = currentQty;
+    document.getElementById('editNewQty').value = currentQty;
+    new bootstrap.Modal(document.getElementById('editRecordModal')).show();
 }
 
-function saveEditLot() {
+function saveEditRecord() {
     const historyId = document.getElementById('editHistoryId').value;
     const newLot = document.getElementById('editNewLot').value.trim();
-    if (!newLot) { alert('Please enter a new lot number.'); return; }
+    const newQty = parseInt(document.getElementById('editNewQty').value);
+    if (!newLot) { alert('Please enter a lot number.'); return; }
+    if (!newQty || newQty <= 0) { alert('Please enter a valid quantity.'); return; }
     
-    fetch('?controller=admin&action=editHistoryLot', {
+    fetch('?controller=admin&action=editHistoryRecord', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'history_id=' + encodeURIComponent(historyId) + '&new_lot_number=' + encodeURIComponent(newLot)
+        body: 'history_id=' + encodeURIComponent(historyId) + 
+              '&new_lot_number=' + encodeURIComponent(newLot) +
+              '&new_added_quantity=' + encodeURIComponent(newQty)
     }).then(r => r.json()).then(data => {
         if (data.success) {
             location.reload();
         } else {
-            alert(data.message || 'Failed to update lot number.');
+            alert(data.message || 'Failed to update record.');
         }
     }).catch(() => alert('An error occurred.'));
 }

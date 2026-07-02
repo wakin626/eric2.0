@@ -4,6 +4,11 @@ ALTER TABLE `production_history`
   ADD COLUMN `lot_number` VARCHAR(100) DEFAULT NULL AFTER `poi_id`,
   ADD COLUMN `item_description` VARCHAR(255) DEFAULT NULL AFTER `lot_number`;
 
+-- Add audit columns to production_history
+ALTER TABLE `production_history`
+  ADD COLUMN `edited_by` INT(11) DEFAULT NULL AFTER `user_id`,
+  ADD COLUMN `date_edited` DATETIME DEFAULT NULL AFTER `date_created`;
+
 -- Create production_reports table
 CREATE TABLE IF NOT EXISTS `production_reports` (
   `report_id` int(11) NOT NULL AUTO_INCREMENT,
@@ -13,6 +18,7 @@ CREATE TABLE IF NOT EXISTS `production_reports` (
   `old_lot_number` varchar(100) DEFAULT NULL,
   `reported_by` int(11) NOT NULL,
   `reason` text NOT NULL,
+  `report_type` enum('lot_number','quantity') DEFAULT 'lot_number',
   `status` enum('pending','resolved') DEFAULT 'pending',
   `resolved_by` int(11) DEFAULT NULL,
   `new_lot_number` varchar(100) DEFAULT NULL,

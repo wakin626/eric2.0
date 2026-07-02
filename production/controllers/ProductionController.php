@@ -103,6 +103,7 @@ class ProductionController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $history_id = $_POST['history_id'] ?? null;
             $reason = trim($_POST['reason'] ?? '');
+            $report_type = $_POST['report_type'] ?? 'lot_number';
             if (!$history_id || empty($reason)) {
                 $_SESSION['error'] = 'Missing history ID or reason.';
                 header('Location: ?controller=production&action=history');
@@ -119,7 +120,8 @@ class ProductionController {
                     $history['po_id'],
                     $history['lot_number'],
                     $_SESSION['user_id'],
-                    $reason
+                    $reason,
+                    $report_type
                 );
                 $_SESSION['success'] = 'Report submitted successfully.';
             } else {

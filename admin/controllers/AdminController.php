@@ -256,19 +256,20 @@ public function productionHistory() {
     $this->render('production_history/index', $data);
 }
 
-public function editHistoryLot() {
+public function editHistoryRecord() {
     header('Content-Type: application/json');
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         echo json_encode(['success' => false, 'message' => 'Invalid request']);
         exit;
     }
     $history_id = $_POST['history_id'] ?? null;
+    $new_added_quantity = intval($_POST['new_added_quantity'] ?? 0);
     $new_lot = trim($_POST['new_lot_number'] ?? '');
-    if (!$history_id || empty($new_lot)) {
-        echo json_encode(['success' => false, 'message' => 'Missing history ID or lot number']);
+    if (!$history_id || $new_added_quantity <= 0 || empty($new_lot)) {
+        echo json_encode(['success' => false, 'message' => 'Missing required fields']);
         exit;
     }
-    $result = $this->warehouseModel->updateHistoryLotNumber($history_id, $new_lot);
+    $result = $this->warehouseModel->editHistoryRecord($history_id, $new_added_quantity, $new_lot, $_SESSION['user_id']);
     echo json_encode(['success' => $result]);
     exit;
 }

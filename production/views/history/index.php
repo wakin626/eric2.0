@@ -46,7 +46,7 @@
                         <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
                             <span class="badge bg-warning text-dark" title="<?= htmlspecialchars($h['report_reason'] ?? '') ?>">Reported</span>
                         <?php elseif (!empty($h['lot_number'])): ?>
-                            <button class="btn btn-sm btn-outline-danger" onclick="openReportModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>')">
+                            <button class="btn btn-sm btn-outline-danger" onclick="openReportModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>', <?= $h['added_quantity'] ?>)">
                                 <i class="bi bi-flag"></i>
                             </button>
                         <?php endif; ?>
@@ -67,18 +67,25 @@
         <div class="modal-content">
             <form method="POST" action="?controller=production&action=reportHistory">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-flag me-2"></i>Report Wrong Lot Number</h5>
+                    <h5 class="modal-title" id="reportModalTitle"><i class="bi bi-flag me-2"></i>Report Issue</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="history_id" id="reportHistoryId">
                     <div class="mb-3">
-                        <label class="form-label">Current Lot Number</label>
-                        <input type="text" id="reportLotDisplay" class="form-control" readonly>
+                        <label class="form-label">Report Type <span class="text-danger">*</span></label>
+                        <select name="report_type" id="reportType" class="form-select" required onchange="updateReportTitle()">
+                            <option value="lot_number">Lot No.</option>
+                            <option value="quantity">Quantity</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" id="reportDisplayLabel">Current Lot Number</label>
+                        <input type="text" id="reportDisplayValue" class="form-control" readonly>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Reason for Report <span class="text-danger">*</span></label>
-                        <textarea name="reason" class="form-control" rows="3" placeholder="Explain why this lot number is wrong..." required></textarea>
+                        <textarea name="reason" class="form-control" rows="3" id="reportReason" placeholder="Explain the issue..." required></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -103,10 +110,30 @@
 <?php endif; ?>
 
 <script>
-function openReportModal(historyId, lotNumber) {
+function openReportModal(historyId, lotNumber, addedQty) {
     document.getElementById('reportHistoryId').value = historyId;
-    document.getElementById('reportLotDisplay').value = lotNumber;
+    document.getElementById('reportDisplayValue').value = lotNumber;
+    document.getElementById('reportType').value = 'lot_number';
+    document.getElementById('reportReason').value = '';
+    updateReportTitle();
     new bootstrap.Modal(document.getElementById('reportModal')).show();
+}
+
+function updateReportTitle() {
+    const type = document.getElementById('reportType').value;
+    const title = document.getElementById('reportModalTitle');
+    const label = document.getElementById('reportDisplayLabel');
+    const display = document.getElementById('reportDisplayValue');
+    const placeholder = document.getElementById('reportReason');
+    if (type === 'quantity') {
+        title.innerHTML = '<i class="bi bi-flag me-2"></i>Report Wrong Quantity';
+        label.textContent = 'Current Quantity';
+        placeholder.placeholder = 'Explain the quantity issue...';
+    } else {
+        title.innerHTML = '<i class="bi bi-flag me-2"></i>Report Wrong Lot Number';
+        label.textContent = 'Current Lot Number';
+        placeholder.placeholder = 'Explain why this lot number is wrong...';
+    }
 }
 
 document.getElementById('searchHistory').addEventListener('keyup', function() {
