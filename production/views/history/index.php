@@ -27,7 +27,14 @@
             <tbody id="historyTableBody">
                 <?php foreach ($history as $h): ?>
                 <tr>
-                    <td><?= date('Y-m-d H:i', strtotime($h['date_created'])) ?></td>
+                    <td>
+                        <?= date('Y-m-d H:i', strtotime($h['date_created'])) ?>
+                        <?php if (!empty($h['date_edited'])): ?>
+                            <br><small class="text-info" title="Edited by <?= htmlspecialchars($h['edited_by_name'] ?? '') ?>">
+                                <i class="bi bi-pencil-square"></i> Edited <?= date('m/d H:i', strtotime($h['date_edited'])) ?>
+                            </small>
+                        <?php endif; ?>
+                    </td>
                     <td><strong><?= htmlspecialchars($h['customer_po_number'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
@@ -37,9 +44,17 @@
                         <?php else: ?>
                             <span class="text-muted">-</span>
                         <?php endif; ?>
+                        <?php if (!empty($h['date_edited']) && !empty($h['old_lot_number'])): ?>
+                            <br><small class="text-muted">(was: <?= htmlspecialchars($h['old_lot_number']) ?>)</small>
+                        <?php endif; ?>
                     </td>
                     <td><?= $h['previous_quantity'] ?></td>
-                    <td><span class="text-success">+<?= $h['added_quantity'] ?></span></td>
+                    <td>
+                        <span class="text-success">+<?= $h['added_quantity'] ?></span>
+                        <?php if (!empty($h['date_edited']) && $h['old_added_quantity'] !== null): ?>
+                            <br><small class="text-muted">(was: +<?= $h['old_added_quantity'] ?>)</small>
+                        <?php endif; ?>
+                    </td>
                     <td><strong><?= $h['new_quantity'] ?></strong></td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td>

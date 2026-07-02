@@ -9,6 +9,11 @@ ALTER TABLE `production_history`
   ADD COLUMN `edited_by` INT(11) DEFAULT NULL AFTER `user_id`,
   ADD COLUMN `date_edited` DATETIME DEFAULT NULL AFTER `date_created`;
 
+-- Add old value columns to production_history
+ALTER TABLE `production_history`
+  ADD COLUMN `old_lot_number` VARCHAR(100) DEFAULT NULL AFTER `date_edited`,
+  ADD COLUMN `old_added_quantity` INT(11) DEFAULT NULL AFTER `old_lot_number`;
+
 -- Create production_reports table
 CREATE TABLE IF NOT EXISTS `production_reports` (
   `report_id` int(11) NOT NULL AUTO_INCREMENT,

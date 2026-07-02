@@ -834,12 +834,16 @@ class WarehouseModel extends BaseModel {
         $lot_changed = $new_lot_number !== $history['lot_number'];
 
         $conn->prepare("UPDATE production_history 
-            SET added_quantity = :added, new_quantity = :new_qty, lot_number = :lot, edited_by = :edited_by, date_edited = NOW()
+            SET added_quantity = :added, new_quantity = :new_qty, lot_number = :lot, 
+                old_added_quantity = :old_added, old_lot_number = :old_lot,
+                edited_by = :edited_by, date_edited = NOW()
             WHERE history_id = :history_id")
             ->execute([
                 'added' => $new_added_quantity,
                 'new_qty' => $new_new_quantity,
                 'lot' => $new_lot_number,
+                'old_added' => $old_added,
+                'old_lot' => $history['lot_number'],
                 'edited_by' => $edited_by,
                 'history_id' => $history_id
             ]);
