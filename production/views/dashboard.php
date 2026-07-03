@@ -21,7 +21,7 @@
     
     <div class="card data-card mb-4">
         <div class="card-header d-flex justify-content-between">
-            <span><i class="bi bi-cart3 me-2"></i>Recent Customer PO</span>
+            <span><i class="bi bi-cart3 me-2"></i>Open Purchase Order</span>
             <a href="?controller=production&action=purchaseOrders" class="btn btn-primary btn-sm">View All</a>
         </div>
         <div class="table-responsive">
@@ -38,7 +38,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach (array_slice($purchase_orders ?? [], 0, 5) as $po):
+                    <?php foreach ($purchase_orders ?? [] as $po):
                         $items = $po_items_map[$po['po_id']] ?? [];
                     ?>
                     <tr>
@@ -83,7 +83,7 @@
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
 <?php $conv = $item['uom_conversion'] ?? null; ?>
-<small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
+<small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>

@@ -14,6 +14,10 @@ ALTER TABLE `production_history`
   ADD COLUMN `old_lot_number` VARCHAR(100) DEFAULT NULL AFTER `date_edited`,
   ADD COLUMN `old_added_quantity` INT(11) DEFAULT NULL AFTER `old_lot_number`;
 
+-- Add STS ref column to production_history
+ALTER TABLE `production_history`
+  ADD COLUMN `sts_ref` VARCHAR(255) DEFAULT NULL AFTER `item_description`;
+
 -- Create production_reports table
 CREATE TABLE IF NOT EXISTS `production_reports` (
   `report_id` int(11) NOT NULL AUTO_INCREMENT,

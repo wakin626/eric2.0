@@ -85,7 +85,7 @@ if (function_exists('opcache_reset')) { opcache_reset(); }
                                         <?php foreach ($item['lots'] as $lot):
                                             $remaining = $lot['available_quantity'];
                                             $conv = $item['uom_conversion'] ?? null;
-                                            $cases = ($conv && $item['item_uom'] !== 'CS') ? round($remaining / $conv, 2) : null;
+                                            $cases = ($conv && $item['item_uom'] !== 'CS') ? floor($remaining / $conv) : null;
                                             $isExisting = in_array($lot['lot_id'], $existing_lot_ids);
                                         ?>
                                             <tr class="<?= $remaining <= 0 && !$isExisting ? 'table-secondary' : '' ?>" style="<?= $remaining <= 0 && !$isExisting ? 'opacity:0.6' : '' ?>">

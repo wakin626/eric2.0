@@ -77,7 +77,7 @@
         ?>
             <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
             <?php $conv = $item['uom_conversion'] ?? null; ?>
-            <small class="text-nowrap"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
+            <small class="text-nowrap"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
         <?php endforeach; ?>
     <?php else: ?>
         <small class="text-muted">-</small>
@@ -171,31 +171,40 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <p class="mb-1"><strong>Customer:</strong> <span id="updateCustomerName"></span></p>
+                    <p class="mb-1" id="updateItemNameRow" style="display:none;"><strong>Item:</strong> <span id="updateItemName"></span></p>
                 </div>
                 <form method="POST" action="?controller=production&action=updateQuantity" id="updatePOForm" novalidate>
                     <input type="hidden" name="po_id" id="updatePoIdInput" value="">
                     <input type="hidden" name="from" value="purchaseOrders">
+                    <div class="mb-3">
+                        <label class="form-label">STS Ref</label>
+                        <input type="text" name="sts_ref" id="updateStsRef" class="form-control" placeholder="Enter STS reference" required>
+                    </div>
 
                     <!-- Single item mode with lot rows -->
                     <div id="singleItemGroup">
                         <input type="hidden" name="poi_id" id="updatePoiIdInput" value="">
-                        <div class="mb-3">
-                            <p class="mb-1"><strong>Required Quantity:</strong> <span id="updateTotalQty">-</span></p>
-                            <p class="mb-1"><strong>Current Produced:</strong> <span id="updateCurrentProduced">-</span></p>
-                        </div>
                         <label class="form-label mb-2">Lot Entries</label>
                         <div id="singleLotContainer">
                             <div class="row g-2 mb-2 align-items-end single-lot-row">
-                                <div class="col-md-5">
+                                <div class="col-md-4">
+                                    <label class="form-label">Item</label>
+                                    <input type="text" class="form-control" readonly value="-">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Required / Produced</label>
+                                    <input type="text" class="form-control" readonly value="-">
+                                </div>
+                                <div class="col-md-3">
                                     <label class="form-label">Lot Number</label>
                                     <input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required>
                                 </div>
-                                <div class="col-md-5">
+                                <div class="col-md-2">
                                     <label class="form-label">Add Quantity</label>
                                     <input type="number" name="added_quantity[]" class="form-control" min="1" required>
                                 </div>
-                                <div class="col-md-2 text-end">
-                                    <button type="button" class="btn btn-outline-danger btn-sm remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button>
+                                <div class="col-md-1 text-end">
+                                    <button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button>
                                 </div>
                             </div>
                         </div>
@@ -214,6 +223,40 @@
                         <button type="submit" class="btn btn-primary">Update</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Production Update Preview Modal -->
+<div class="modal fade" id="updatePreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Confirm Production Update</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Please review the production update before saving.</p>
+                <table class="table table-bordered mb-2">
+                    <tr><th style="width:35%">PO Number</th><td id="prevUPONumber"></td></tr>
+                    <tr><th>Customer</th><td id="prevUCustomer"></td></tr>
+                    <tr><th>Item</th><td id="prevUItem"></td></tr>
+                </table>
+
+                <div class="mb-3">
+                    <strong>Existing Lots:</strong>
+                    <div id="prevUExistingLots"></div>
+                </div>
+
+                <div>
+                    <strong>Updating / Adding:</strong>
+                    <div id="prevULots"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmUpdateBtn"><i class="bi bi-check-lg me-1"></i>Confirm & Save</button>
             </div>
         </div>
     </div>
@@ -305,7 +348,7 @@ document.addEventListener('DOMContentLoaded', function() {
             '</div>' +
             '<div class="col-md-3">' +
                 '<label class="form-label">Lot Number</label>' +
-                '<input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001">' +
+                '<input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required>' +
             '</div>' +
             '<div class="col-md-2">' +
                 '<label class="form-label">Add Quantity</label>' +
@@ -352,10 +395,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('addSingleLotBtn').addEventListener('click', function() {
         const container = document.getElementById('singleLotContainer');
-        const template = container.querySelector('.single-lot-row').cloneNode(true);
-        template.querySelectorAll('input').forEach(el => el.value = '');
-        template.querySelector('.remove-single-lot').style.display = '';
-        container.appendChild(template);
+        const row = document.createElement('div');
+        row.className = 'row g-2 mb-2 align-items-end single-lot-row';
+        row.innerHTML =
+            '<div class="col-md-4"></div>' +
+            '<div class="col-md-2"></div>' +
+            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+            '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+            '<div class="col-md-1 text-end"><button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot"><i class="bi bi-trash"></i></button></div>';
+        container.appendChild(row);
         updateSingleLotRemoveButtons();
     });
 
@@ -389,13 +437,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     const po = data.po;
                     const items = data.po_items || [];
+                    window._currentPOItems = items;
                     
                     document.getElementById('updatePONumber').textContent = po.customer_po_number || '-';
                     document.getElementById('updateCustomerName').textContent = po.customer_name || '-';
                     document.getElementById('updatePoIdInput').value = poId;
                     document.getElementById('updatePoiIdInput').value = '';
-                    document.getElementById('updateTotalQty').textContent = '-';
-                    document.getElementById('updateCurrentProduced').textContent = '-';
+                    document.getElementById('updateStsRef').value = '';
+                    document.getElementById('updateItemNameRow').style.display = 'none';
 
                     const singleGroup = document.getElementById('singleItemGroup');
                     const bulkGroup = document.getElementById('bulkItemsGroup');
@@ -410,6 +459,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         document.getElementById('updatePoiIdInput').disabled = true;
                         singleLotContainer.querySelectorAll('input').forEach(function(el) { el.disabled = true; });
+
+                        var itemNames = items.map(function(item) { return item.item_description || '-'; });
+                        document.getElementById('updateItemName').textContent = itemNames.join(', ');
+                        document.getElementById('updateItemNameRow').style.display = '';
 
                         const firstRow = createBulkRow();
                         const firstSelect = firstRow.querySelector('.bulk-item-select');
@@ -427,13 +480,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         const item = items[0];
                         document.getElementById('updatePoiIdInput').disabled = false;
                         document.getElementById('updatePoiIdInput').value = item.poi_id;
-                        document.getElementById('updateTotalQty').textContent = item.quantity || 0;
-                        document.getElementById('updateCurrentProduced').textContent = item.produced_quantity || 0;
+                        document.getElementById('updateItemName').textContent = item.item_description || '-';
+                        document.getElementById('updateItemNameRow').style.display = '';
 
                         singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
-                            '<div class="col-md-5"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
-                            '<div class="col-md-5"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
-                            '<div class="col-md-2 text-end"><button type="button" class="btn btn-outline-danger btn-sm remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
+                            '<div class="col-md-4"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="' + (item.item_description || '-') + '"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="' + (item.quantity || 0) + ' / ' + (item.produced_quantity || 0) + '"></div>' +
+                            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+                            '<div class="col-md-1 text-end"><button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';
                         updateSingleLotRemoveButtons();
                     } else {
@@ -443,9 +498,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         window._currentBulkItems = [];
                         document.getElementById('updatePoiIdInput').disabled = false;
                         singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
-                            '<div class="col-md-5"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
-                            '<div class="col-md-5"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
-                            '<div class="col-md-2 text-end"><button type="button" class="btn btn-outline-danger btn-sm remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
+                            '<div class="col-md-4"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="-"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="-"></div>' +
+                            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+                            '<div class="col-md-1 text-end"><button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';
                         updateSingleLotRemoveButtons();
                     }
@@ -485,6 +542,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('updatePOForm').addEventListener('submit', function(e) {
+        if (window._updateFormConfirmed) return;
+        e.preventDefault();
+
         const singleGroup = document.getElementById('singleItemGroup');
         const bulkGroup = document.getElementById('bulkItemsGroup');
 
@@ -497,16 +557,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.bulk-qty').forEach(function(inp) {
                 if (inp.value && parseInt(inp.value) > 0) hasQuantity = true;
             });
-            if (!hasSelection) {
-                e.preventDefault();
-                alert('Please select at least one item.');
-                return;
-            }
-            if (!hasQuantity) {
-                e.preventDefault();
-                alert('Please enter a quantity for at least one item.');
-                return;
-            }
+            if (!hasSelection) { alert('Please select at least one item.'); return; }
+            if (!hasQuantity) { alert('Please enter a quantity for at least one item.'); return; }
         } else {
             let hasLot = false;
             let hasQty = false;
@@ -516,22 +568,140 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('#singleLotContainer input[name="added_quantity[]"]').forEach(function(inp) {
                 if (inp.value && parseInt(inp.value) > 0) hasQty = true;
             });
-            if (!hasLot) {
-                e.preventDefault();
-                alert('Please enter a lot number.');
-                return;
-            }
-            if (!hasQty) {
-                e.preventDefault();
-                alert('Please enter an add quantity.');
-                return;
-            }
+            if (!hasLot) { alert('Please enter a lot number.'); return; }
+            if (!hasQty) { alert('Please enter an add quantity.'); return; }
         }
+
+        // Build preview
+        var poNumber = document.getElementById('updatePONumber').textContent;
+        var customer = document.getElementById('updateCustomerName').textContent;
+        document.getElementById('prevUPONumber').textContent = poNumber;
+        document.getElementById('prevUCustomer').textContent = customer;
+
+        var items = window._currentPOItems || [];
+
+        if (!bulkGroup.classList.contains('d-none')) {
+            // Bulk mode
+            var selectedItems = [];
+            document.querySelectorAll('.bulk-item-row').forEach(function(row) {
+                var sel = row.querySelector('.bulk-item-select');
+                if (sel && sel.value && sel.options[sel.selectedIndex]) {
+                    var name = sel.options[sel.selectedIndex].textContent.trim();
+                    if (selectedItems.indexOf(name) === -1) selectedItems.push(name);
+                }
+            });
+            document.getElementById('prevUItem').textContent = selectedItems.length === 1 ? selectedItems[0] : (selectedItems.length > 1 ? selectedItems.join(', ') : '-');
+
+            // Existing lots: only for selected items per row
+            var existingHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item</th><th>Lot No.</th><th>Produced</th></tr></thead><tbody>';
+            var hasExisting = false;
+
+            // Build a map of poi_id -> item for quick lookup
+            var itemMap = {};
+            items.forEach(function(item) { itemMap[item.poi_id] = item; });
+
+            // Collect existing lots per selected item
+            document.querySelectorAll('.bulk-item-row').forEach(function(row) {
+                var sel = row.querySelector('.bulk-item-select');
+                var poiId = sel ? sel.value : '';
+                if (!poiId) return;
+                var item = itemMap[poiId];
+                if (!item) return;
+                var lots = item.lots || [];
+                lots.forEach(function(lot) {
+                    hasExisting = true;
+                    existingHtml += '<tr><td>' + (item.item_description || '-') + '</td><td>' + (lot.lot_number || '-') + '</td><td>' + (lot.quantity_produced || 0) + '</td></tr>';
+                });
+            });
+            if (!hasExisting) {
+                existingHtml += '<tr><td colspan="3" class="text-muted text-center">No lots recorded for selected items</td></tr>';
+            }
+            existingHtml += '</tbody></table>';
+            document.getElementById('prevUExistingLots').innerHTML = existingHtml;
+
+            // Updating/adding lots
+            var lotsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item</th><th>Lot No.</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
+            document.querySelectorAll('.bulk-item-row').forEach(function(row) {
+                var sel = row.querySelector('.bulk-item-select');
+                var poiId = sel ? sel.value : '';
+                var itemText = sel && sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent.trim() : '-';
+                var qty = parseInt(row.querySelector('.bulk-qty').value) || 0;
+                var lotInput = row.querySelector('input[name="lot_number[]"]');
+                var lot = lotInput ? lotInput.value.trim() : '';
+                if (lot && qty > 0) {
+                    // Check if lot exists for THIS item
+                    var item = itemMap[poiId];
+                    var itemLots = item ? (item.lots || []).map(function(l) { return l.lot_number; }) : [];
+                    var isNew = itemLots.indexOf(lot) === -1;
+                    var badge = isNew
+                        ? '<span class="badge bg-success">NEW</span>'
+                        : '<span class="badge bg-warning text-dark">UPDATE</span>';
+                    lotsHtml += '<tr><td>' + itemText + '</td><td>' + lot + '</td><td>' + qty + '</td><td>' + badge + '</td></tr>';
+                }
+            });
+            lotsHtml += '</tbody></table>';
+            document.getElementById('prevULots').innerHTML = lotsHtml;
+
+        } else {
+            // Single-item mode
+            var currentPoiId = document.getElementById('updatePoiIdInput').value;
+            var currentItem = null;
+            items.forEach(function(item) {
+                if (String(item.poi_id) === String(currentPoiId)) currentItem = item;
+            });
+
+            var itemDesc = currentItem ? (currentItem.item_description || '-') : '-';
+            document.getElementById('prevUItem').textContent = itemDesc;
+
+            // Existing lots: only for this item
+            var existingHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Lot No.</th><th>Produced</th></tr></thead><tbody>';
+            var existingLotNumbers = [];
+            if (currentItem && currentItem.lots) {
+                currentItem.lots.forEach(function(lot) {
+                    existingLotNumbers.push(lot.lot_number);
+                    existingHtml += '<tr><td>' + (lot.lot_number || '-') + '</td><td>' + (lot.quantity_produced || 0) + '</td></tr>';
+                });
+            }
+            if (existingLotNumbers.length === 0) {
+                existingHtml += '<tr><td colspan="2" class="text-muted text-center">No lots recorded yet</td></tr>';
+            }
+            existingHtml += '</tbody></table>';
+            document.getElementById('prevUExistingLots').innerHTML = existingHtml;
+
+            // Updating/adding lots
+            var lotsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Lot No.</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
+            var totalAdd = 0;
+            document.querySelectorAll('#singleLotContainer .single-lot-row').forEach(function(row) {
+                var lot = row.querySelector('input[name="lot_number[]"]').value.trim();
+                var qty = parseInt(row.querySelector('input[name="added_quantity[]"]').value) || 0;
+                if (lot && qty > 0) {
+                    var isNew = existingLotNumbers.indexOf(lot) === -1;
+                    var badge = isNew
+                        ? '<span class="badge bg-success">NEW</span>'
+                        : '<span class="badge bg-warning text-dark">UPDATE</span>';
+                    lotsHtml += '<tr><td>' + lot + '</td><td>' + qty + '</td><td>' + badge + '</td></tr>';
+                    totalAdd += qty;
+                }
+            });
+            lotsHtml += '</tbody></table>';
+            document.getElementById('prevULots').innerHTML = lotsHtml;
+        }
+
+        new bootstrap.Modal(document.getElementById('updatePreviewModal')).show();
+    });
+
+    window._updateFormConfirmed = false;
+
+    document.getElementById('confirmUpdateBtn').addEventListener('click', function() {
+        bootstrap.Modal.getInstance(document.getElementById('updatePreviewModal')).hide();
+        window._updateFormConfirmed = true;
+        document.getElementById('updatePOForm').submit();
     });
 
     document.getElementById('updatePOModal').addEventListener('hidden.bs.modal', function() {
         document.getElementById('updatePoiIdInput').disabled = false;
         window._currentBulkItems = [];
+        window._updateFormConfirmed = false;
     });
 });
 

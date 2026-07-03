@@ -27,6 +27,13 @@ class WarehouseModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    public function getItemsByCustomer($customer_id) {
+        $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 AND (customer_id = :customer_id OR customer_id IS NULL) ORDER BY item_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id]);
+        return $stmt->fetchAll();
+    }
+
     public function createPurchaseOrder($data) {
         $sql = "INSERT INTO purchase_orders (customer_po_number, customer_po_date, customer_id, requested_by, customer_terms, production_type, date_created) 
                 VALUES (:customer_po_number, :customer_po_date, :customer_id, :requested_by, :customer_terms, :production_type, NOW())";
@@ -79,6 +86,20 @@ class WarehouseModel extends BaseModel {
                 WHERE po.`remove` = 0
                 ORDER BY po.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getActivePOsForDashboard($limit = 5) {
+        $sql = "SELECT po.*, c.customer_name, u.full_name as requested_by_name 
+                FROM purchase_orders po 
+                LEFT JOIN customers c ON po.customer_id = c.customer_id 
+                LEFT JOIN users u ON po.requested_by = u.user_id 
+                WHERE po.`remove` = 0 AND po.produced_quantity > 0
+                ORDER BY po.last_update DESC
+                LIMIT :limit";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->bindValue(':limit', (int)$limit, \PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
     }
@@ -245,7 +266,7 @@ class WarehouseModel extends BaseModel {
         return true;
     }
 
-    public function updateItemProducedQuantity($poi_id, $added_quantity, $user_id = null, $lot_number = null, $item_description = null) {
+    public function updateItemProducedQuantity($poi_id, $added_quantity, $user_id = null, $lot_number = null, $item_description = null, $sts_ref = null) {
         $conn = self::getConnection();
 
         $stmt = $conn->prepare("SELECT produced_quantity, po_id FROM purchase_order_items WHERE poi_id = :poi_id");
@@ -264,13 +285,14 @@ class WarehouseModel extends BaseModel {
             ->execute(['po_id' => $item['po_id'], 'po_id2' => $item['po_id']]);
 
             if ($user_id) {
-                $conn->prepare("INSERT INTO production_history (po_id, poi_id, lot_number, item_description, user_id, previous_quantity, added_quantity, new_quantity, date_created) 
-                    VALUES (:po_id, :poi_id, :lot_number, :item_description, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())")
+                $conn->prepare("INSERT INTO production_history (po_id, poi_id, lot_number, item_description, sts_ref, user_id, previous_quantity, added_quantity, new_quantity, date_created) 
+                    VALUES (:po_id, :poi_id, :lot_number, :item_description, :sts_ref, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())")
                     ->execute([
                         'po_id' => $item['po_id'],
                         'poi_id' => $poi_id,
                         'lot_number' => $lot_number,
                         'item_description' => $item_description,
+                        'sts_ref' => $sts_ref,
                         'user_id' => $user_id,
                         'previous_quantity' => $previous_quantity,
                         'added_quantity' => $added_quantity,
@@ -403,6 +425,41 @@ class WarehouseModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
         return $stmt->fetchAll();
+    }
+
+    public function getAvailableLotsForPO($po_id) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT lot_items FROM deliveries 
+                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0");
+        $stmt->execute(['po_id' => $po_id]);
+        $jsonDelivered = [];
+        while ($r = $stmt->fetch()) {
+            $items = json_decode($r['lot_items'], true);
+            if (!is_array($items)) continue;
+            foreach ($items as $li) {
+                if (isset($li['lot_id'])) {
+                    $lid = intval($li['lot_id']);
+                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                }
+            }
+        }
+        $stmt2 = $conn->prepare("SELECT l.*, 
+                    COALESCE(
+                        (SELECT SUM(d.delivery_quantity) FROM deliveries d 
+                         WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
+                    ) AS delivered_legacy
+                FROM production_lots l 
+                JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
+                WHERE poi.po_id = :po_id AND l.`is_removed` = 0");
+        $stmt2->execute(['po_id' => $po_id]);
+        $lots = $stmt2->fetchAll();
+        $result = [];
+        foreach ($lots as $lot) {
+            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($lot['delivered_legacy'] ?? 0) - ($jsonDelivered[$lot['lot_id']] ?? 0));
+            if ($lot['available_quantity'] > 0) $result[] = $lot;
+        }
+        usort($result, function($a, $b) { return strcmp($a['lot_number'], $b['lot_number']); });
+        return $result;
     }
 
     public function getAvailableLotsForDelivery($poi_id) {
@@ -629,17 +686,135 @@ class WarehouseModel extends BaseModel {
     }
 
     public function reportDelivery($deliveryId, $remarks) {
-        $sql = "UPDATE deliveries SET remarks = :remarks, remarks_type = 'report'
+        $sql = "UPDATE deliveries SET report_remarks = :remarks, remarks_type = 'report'
                 WHERE delivery_id = :delivery_id AND `remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['remarks' => $remarks, 'delivery_id' => $deliveryId]);
     }
 
+    public function createDeliveryReport($deliveryId, $poiId, $poId, $lotId, $oldQuantity, $userId, $reason, $reportType = 'dr_number') {
+        $sql = "INSERT INTO delivery_reports (delivery_id, poi_id, po_id, lot_id, old_quantity, reported_by, reason, report_type)
+                VALUES (:delivery_id, :poi_id, :po_id, :lot_id, :old_quantity, :reported_by, :reason, :report_type)";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute([
+            'delivery_id' => $deliveryId,
+            'poi_id' => $poiId,
+            'po_id' => $poId,
+            'lot_id' => $lotId,
+            'old_quantity' => $oldQuantity,
+            'reported_by' => $userId,
+            'reason' => $reason,
+            'report_type' => $reportType
+        ]);
+        return self::getConnection()->lastInsertId();
+    }
+
+    public function getDeliveryReportsByDeliveryId($deliveryId) {
+        $sql = "SELECT dr.*, u.full_name as reporter_name, ru.full_name as resolver_name
+                FROM delivery_reports dr
+                LEFT JOIN users u ON dr.reported_by = u.user_id
+                LEFT JOIN users ru ON dr.resolved_by = ru.user_id
+                WHERE dr.delivery_id = :delivery_id
+                ORDER BY dr.date_reported DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['delivery_id' => $deliveryId]);
+        return $stmt->fetchAll();
+    }
+
+    public function getDeliveryReportsCount() {
+        $sql = "SELECT COUNT(DISTINCT delivery_id) FROM delivery_reports WHERE status = 'pending'";
+        return self::getConnection()->query($sql)->fetchColumn();
+    }
+
+    public function getDeliveryReportById($reportId) {
+        $sql = "SELECT dr.*, u.full_name as reporter_name, d.lot_items, d.dr_number
+                FROM delivery_reports dr
+                LEFT JOIN users u ON dr.reported_by = u.user_id
+                LEFT JOIN deliveries d ON dr.delivery_id = d.delivery_id
+                WHERE dr.report_id = :report_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['report_id' => $reportId]);
+        return $stmt->fetch();
+    }
+
+    public function resolveDeliveryReport($reportId, $newQuantity, $resolvedBy, $newDrNumber = null) {
+        $conn = self::getConnection();
+        $report = $this->getDeliveryReportById($reportId);
+        if (!$report) return false;
+
+        $deliveryId = $report['delivery_id'];
+
+        // 1. Mark report as resolved
+        $conn->prepare("UPDATE delivery_reports SET status = 'resolved', resolved_by = :resolved_by,
+            new_quantity = :new_quantity, date_resolved = NOW() WHERE report_id = :report_id")
+            ->execute(['resolved_by' => $resolvedBy, 'new_quantity' => $newQuantity, 'report_id' => $reportId]);
+
+        // 2. Update delivery remarks_type from 'report' to 'edited'
+        $conn->prepare("UPDATE deliveries SET remarks_type = 'edited'
+            WHERE delivery_id = :delivery_id AND remarks_type = 'report'")
+            ->execute(['delivery_id' => $deliveryId]);
+
+        if ($report['report_type'] === 'quantity' && $report['lot_id']) {
+            // 3a. Quantity report — update lot_items JSON
+            $lotId = $report['lot_id'];
+            $lotItems = json_decode($report['lot_items'] ?? '[]', true);
+            if (!is_array($lotItems)) $lotItems = [];
+            foreach ($lotItems as &$li) {
+                if (isset($li['lot_id']) && intval($li['lot_id']) === intval($lotId)) {
+                    $li['qty'] = $newQuantity;
+                    break;
+                }
+            }
+            unset($li);
+            $newLotItemsJson = json_encode($lotItems);
+
+            // 4a. Recalculate delivery_quantity = SUM of all lot_items qty
+            $newDeliveryQty = 0;
+            foreach ($lotItems as $li) {
+                $newDeliveryQty += intval($li['qty'] ?? 0);
+            }
+
+            $conn->prepare("UPDATE deliveries SET lot_items = :lot_items, delivery_quantity = :delivery_quantity
+                WHERE delivery_id = :delivery_id")
+                ->execute(['lot_items' => $newLotItemsJson, 'delivery_quantity' => $newDeliveryQty, 'delivery_id' => $deliveryId]);
+
+            // 5a. Recalculate purchase_order_items.delivered_quantity
+            $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = (
+                SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                WHERE d.poi_id = poi.poi_id AND d.`remove` = 0
+            ) WHERE poi.poi_id = :poi_id")
+                ->execute(['poi_id' => $report['poi_id']]);
+
+            // 6a. Recalculate purchase_orders.delivered_quantity
+            $conn->prepare("UPDATE purchase_orders po SET delivered_quantity = (
+                SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                WHERE d.po_id = po.po_id AND d.`remove` = 0
+            ) WHERE po.po_id = :po_id")
+                ->execute(['po_id' => $report['po_id']]);
+        } elseif ($report['report_type'] === 'dr_number' && $newDrNumber) {
+            // 3b. DR Number report — update dr_number
+            $conn->prepare("UPDATE deliveries SET dr_number = :dr_number
+                WHERE delivery_id = :delivery_id")
+                ->execute(['dr_number' => $newDrNumber, 'delivery_id' => $deliveryId]);
+        }
+
+        return true;
+    }
+
     public function updateDelivery($deliveryId, $data) {
+        $conn = self::getConnection();
         $fields = [];
         $params = ['delivery_id' => $deliveryId];
 
         if (isset($data['dr_number'])) {
+            // Get current dr_number to store as old
+            $stmt = $conn->prepare("SELECT dr_number FROM deliveries WHERE delivery_id = :delivery_id");
+            $stmt->execute(['delivery_id' => $deliveryId]);
+            $current = $stmt->fetch();
+            if ($current && $current['dr_number'] !== $data['dr_number'] && !empty($current['dr_number'])) {
+                $fields[] = 'old_dr_number = :old_dr_number';
+                $params['old_dr_number'] = $current['dr_number'];
+            }
             $fields[] = 'dr_number = :dr_number';
             $params['dr_number'] = $data['dr_number'];
         }
@@ -647,18 +822,132 @@ class WarehouseModel extends BaseModel {
             $fields[] = 'delivery_date = :delivery_date';
             $params['delivery_date'] = $data['delivery_date'];
         }
-        if (isset($data['remarks'])) {
-            $fields[] = 'remarks = :remarks';
-            $params['remarks'] = $data['remarks'];
+
+        // Handle lot quantity changes
+        $lotChanges = $data['lot_changes'] ?? [];
+        if (!empty($lotChanges)) {
+            // Get current lot_items
+            $stmt = $conn->prepare("SELECT lot_items, po_id, poi_id, delivery_quantity FROM deliveries WHERE delivery_id = :delivery_id");
+            $stmt->execute(['delivery_id' => $deliveryId]);
+            $delivery = $stmt->fetch();
+            if ($delivery) {
+                $lotItems = json_decode($delivery['lot_items'] ?? '[]', true);
+                if (!is_array($lotItems)) $lotItems = [];
+
+                // Validate: check available quantity for each lot change
+                foreach ($lotChanges as $change) {
+                    $changeLotId = intval($change['lot_id'] ?? 0);
+                    $newQty = intval($change['new_qty'] ?? 0);
+
+                    // Get lot produced quantity
+                    $stmtLot = $conn->prepare("SELECT quantity_produced FROM production_lots WHERE lot_id = :lot_id");
+                    $stmtLot->execute(['lot_id' => $changeLotId]);
+                    $lotProduced = $stmtLot->fetchColumn();
+
+                    // Get total delivered for this lot from ALL other deliveries
+                    $stmtDel = $conn->prepare("SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d WHERE d.`remove` = 0 AND d.delivery_id != :delivery_id");
+                    $stmtDel->execute(['delivery_id' => $deliveryId]);
+                    $otherDeliveryTotal = $stmtDel->fetchColumn();
+
+                    // Also count this lot from OTHER deliveries' lot_items JSON
+                    $stmtJson = $conn->prepare("SELECT lot_items FROM deliveries WHERE `remove` = 0 AND delivery_id != :delivery_id AND lot_items IS NOT NULL");
+                    $stmtJson->execute(['delivery_id' => $deliveryId]);
+                    $otherJsonDelivered = 0;
+                    while ($row = $stmtJson->fetch()) {
+                        $items = json_decode($row['lot_items'], true);
+                        if (!is_array($items)) continue;
+                        foreach ($items as $li) {
+                            if (isset($li['lot_id']) && intval($li['lot_id']) === $changeLotId) {
+                                $otherJsonDelivered += intval($li['qty'] ?? 0);
+                            }
+                        }
+                    }
+
+                    // Get current qty for this lot in THIS delivery
+                    $currentQty = 0;
+                    foreach ($lotItems as $li) {
+                        if (isset($li['lot_id']) && intval($li['lot_id']) === $changeLotId) {
+                            $currentQty = intval($li['qty'] ?? 0);
+                            break;
+                        }
+                    }
+
+                    // Available = produced - (other deliveries' qty for this lot)
+                    // The current delivery's old qty is being replaced, so it doesn't count
+                    $available = intval($lotProduced) - $otherJsonDelivered;
+
+                    if ($newQty > $available) {
+                        return ['success' => false, 'error' => 'Cannot set quantity to ' . $newQty . '. Only ' . $available . ' available for lot ' . $changeLotId . ' (produced: ' . $lotProduced . ', delivered by others: ' . $otherJsonDelivered . ')'];
+                    }
+                }
+
+                foreach ($lotChanges as $change) {
+                    $changeLotId = intval($change['lot_id'] ?? 0);
+                    $newQty = intval($change['new_qty'] ?? 0);
+                    foreach ($lotItems as &$li) {
+                        if (isset($li['lot_id']) && intval($li['lot_id']) === $changeLotId) {
+                            $oldQty = intval($li['qty'] ?? 0);
+                            $li['qty'] = $newQty;
+                            if ($oldQty !== $newQty) {
+                                $existingOld = json_decode($delivery['old_quantity'] ?? '{}', true);
+                                if (!is_array($existingOld)) $existingOld = [];
+                                $existingOld[strval($changeLotId)] = $oldQty;
+                                $fields[] = 'old_quantity = :old_quantity';
+                                $params['old_quantity'] = json_encode($existingOld);
+                            }
+                            break;
+                        }
+                    }
+                }
+                unset($li);
+
+                // Recalculate delivery_quantity
+                $newDeliveryQty = 0;
+                foreach ($lotItems as $li) {
+                    $newDeliveryQty += intval($li['qty'] ?? 0);
+                }
+
+                $fields[] = 'lot_items = :lot_items';
+                $params['lot_items'] = json_encode($lotItems);
+                $fields[] = 'delivery_quantity = :delivery_quantity';
+                $params['delivery_quantity'] = $newDeliveryQty;
+
+                // Recalculate purchase_order_items.delivered_quantity
+                $poiId = $delivery['poi_id'];
+                if ($poiId) {
+                    $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = (
+                        SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                        WHERE d.poi_id = poi.poi_id AND d.`remove` = 0
+                    ) WHERE poi.poi_id = :poi_id")->execute(['poi_id' => $poiId]);
+                }
+
+                // Recalculate purchase_orders.delivered_quantity
+                $poId = $delivery['po_id'];
+                if ($poId) {
+                    $conn->prepare("UPDATE purchase_orders po SET delivered_quantity = (
+                        SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                        WHERE d.po_id = po.po_id AND d.`remove` = 0
+                    ) WHERE po.po_id = :po_id")->execute(['po_id' => $poId]);
+                }
+            }
+        }
+
+        // Auto-resolve pending delivery reports when editing
+        $conn->prepare("UPDATE delivery_reports SET status = 'resolved', resolved_by = 1,
+            date_resolved = NOW() WHERE delivery_id = :delivery_id AND status = 'pending'")
+            ->execute(['delivery_id' => $deliveryId]);
+
+        if (!empty($fields)) {
             $fields[] = "remarks_type = 'edited'";
         }
 
-        if (empty($fields)) return;
+        if (empty($fields)) return true;
 
         $sql = "UPDATE deliveries SET " . implode(', ', $fields) .
                " WHERE delivery_id = :delivery_id AND `remove` = 0";
-        $stmt = self::getConnection()->prepare($sql);
+        $stmt = $conn->prepare($sql);
         $stmt->execute($params);
+        return true;
     }
 
     public function attachDRPhoto($data) {

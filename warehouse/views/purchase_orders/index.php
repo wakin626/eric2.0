@@ -187,19 +187,7 @@
                                 <div class="col-md-4">
                                     <label class="form-label">Item</label>
                                     <select name="item_id[]" class="form-select item-select" required>
-                                        <option value="">Select Item</option>
-                                        <?php 
-                                        $items = (new \App\Models\WarehouseModel())->getItems();
-                                        foreach ($items as $i): 
-                                        ?>
-                                            <option value="<?= $i['item_id'] ?>"
-                                                data-code="<?= htmlspecialchars($i['item_code']) ?>"
-                                                data-description="<?= htmlspecialchars($i['item_description']) ?>"
-                                                data-uom="<?= htmlspecialchars($i['item_uom']) ?>"
-                                                data-price="<?= $i['item_amount'] ?>">
-                                                <?= $i['item_code'] ?> - <?= $i['item_description'] ?>
-                                            </option>
-                                        <?php endforeach; ?>
+                                        <option value="">Select Customer first</option>
                                     </select>
                                 </div>
                                 <div class="col-md-2">
@@ -400,6 +388,13 @@ customerSelect.addEventListener('change', function() {
         customerDetails.classList.add('d-none');
         customerCode.value = customerName.value = customerAddress.value = customerTin.value = '';
         customerTerms.value = '';
+        document.querySelectorAll('.item-select').forEach(function(sel) {
+            sel.innerHTML = '<option value="">Select Customer first</option>';
+        });
+        document.querySelectorAll('.item-row').forEach(function(row, idx) {
+            if (idx > 0) row.remove();
+        });
+        updateRemoveButtons();
         return;
     }
     customerCode.value = option.dataset.code || '';
@@ -408,6 +403,18 @@ customerSelect.addEventListener('change', function() {
     customerTin.value = option.dataset.tin || '';
     customerTerms.value = option.dataset.terms || '0';
     customerDetails.classList.remove('d-none');
+
+    fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + this.value)
+        .then(function(r) { return r.json(); })
+        .then(function(items) {
+            var html = '<option value="">Select Item</option>';
+            items.forEach(function(item) {
+                html += '<option value="' + item.item_id + '" data-code="' + (item.item_code || '') + '" data-description="' + (item.item_description || '') + '" data-uom="' + (item.item_uom || '') + '" data-price="' + (item.item_amount || 0) + '">' + item.item_code + ' - ' + item.item_description + '</option>';
+            });
+            document.querySelectorAll('.item-select').forEach(function(sel) {
+                sel.innerHTML = html;
+            });
+        });
 });
 
 function updateRemoveButtons() {
@@ -541,7 +548,7 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                         const conv = item.uom_conversion || null;
                         let casesHtml = '—';
                         if (conv && item.item_uom !== 'CS') {
-                            casesHtml = (qty / conv).toFixed(2) + ' CS';
+                            casesHtml = Math.floor(qty / conv) + ' CS';
                         }
                         const row = '<tr>' +
                             '<td>' + (item.item_code || '-') + '</td>' +

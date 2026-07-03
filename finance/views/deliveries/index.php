@@ -223,7 +223,7 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
             total += item.qty || 0;
             var conv = item.uom_conversion || null;
             var uom = item.item_uom || '';
-            var cases = (conv && uom !== 'CS') ? Math.round((item.qty || 0) / conv * 100) / 100 : 0;
+            var cases = (conv && uom !== 'CS') ? Math.floor((item.qty || 0) / conv) : 0;
             var tr = document.createElement('tr');
             tr.innerHTML = '<td>' + (item.item_code || '-') + '</td>' +
                 '<td>' + (item.item_description || '-') + '</td>' +

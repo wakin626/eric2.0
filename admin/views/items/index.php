@@ -23,7 +23,7 @@
                     <td><?= date('Y-m-d', strtotime($item['date_created'])) ?></td>
                     <td><?= date('Y-m-d H:i', strtotime($item['last_update'])) ?></td>
                     <td>
-                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#itemEditModal" data-id="<?= $item['item_id'] ?>" data-code="<?= htmlspecialchars($item['item_code']) ?>" data-desc="<?= htmlspecialchars($item['item_description']) ?>" data-uom="<?= $item['item_uom'] ?>" data-conversion="<?= $item['uom_conversion'] ?? '' ?>"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#itemEditModal" data-id="<?= $item['item_id'] ?>" data-code="<?= htmlspecialchars($item['item_code']) ?>" data-desc="<?= htmlspecialchars($item['item_description']) ?>" data-uom="<?= $item['item_uom'] ?>" data-conversion="<?= $item['uom_conversion'] ?? '' ?>" data-customer="<?= $item['customer_id'] ?? '' ?>"><i class="bi bi-pencil"></i></button>
                         <a href="?controller=admin&action=itemToggleStatus&id=<?= $item['item_id'] ?>" class="btn btn-sm btn-warning"><i class="bi bi-toggle-on"></i></a>
                         <a href="?controller=admin&action=itemDelete&id=<?= $item['item_id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
                     </td>
@@ -54,6 +54,15 @@
                 <div class="modal-body">
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" class="form-control" required></div>
+                    <div class="mb-3">
+                        <label class="form-label">Customer</label>
+                        <select name="customer_id" class="form-select">
+                            <option value="">All Customers</option>
+                            <?php foreach ($customers as $c): ?>
+                                <option value="<?= $c['customer_id'] ?>"><?= htmlspecialchars($c['customer_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="mb-3"><label class="form-label">UOM</label><input type="text" class="form-control" value="PCS" readonly><input type="hidden" name="item_uom" value="PCS"></div>
                     <div class="mb-3"><label class="form-label">Cases Conversion</label><input type="number" name="uom_conversion" id="add_uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
@@ -75,6 +84,15 @@
                     <input type="hidden" name="item_id" id="edit_item_id">
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" id="edit_item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" id="edit_item_description" class="form-control" required></div>
+                    <div class="mb-3">
+                        <label class="form-label">Customer</label>
+                        <select name="customer_id" id="edit_customer_id" class="form-select">
+                            <option value="">All Customers</option>
+                            <?php foreach ($customers as $c): ?>
+                                <option value="<?= $c['customer_id'] ?>"><?= htmlspecialchars($c['customer_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="mb-3"><label class="form-label">UOM</label><input type="text" class="form-control" value="PCS" readonly><input type="hidden" name="item_uom" value="PCS"></div>
                     <div class="mb-3"><label class="form-label">Cases Conversion</label><input type="number" name="uom_conversion" id="edit_uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
@@ -99,5 +117,6 @@ document.getElementById('itemEditModal').addEventListener('show.bs.modal', funct
     document.getElementById('edit_item_code').value = button.getAttribute('data-code');
     document.getElementById('edit_item_description').value = button.getAttribute('data-desc');
     document.getElementById('edit_uom_conversion').value = button.getAttribute('data-conversion') || '';
+    document.getElementById('edit_customer_id').value = button.getAttribute('data-customer') || '';
 });
 </script>

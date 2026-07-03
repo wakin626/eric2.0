@@ -4,18 +4,18 @@ require_once __DIR__ . '/core/Config.php';
 
 spl_autoload_register(function ($class) {
     $paths = [
-        'C:\xampp\htdocs\eric2.0\core' => 'App\Core',
-        'C:\xampp\htdocs\eric2.0\app\helpers' => 'App\Helpers',
-        'C:\xampp\htdocs\eric2.0\admin\controllers' => 'App\Controllers',
-        'C:\xampp\htdocs\eric2.0\admin\models' => 'App\Models',
-        'C:\xampp\htdocs\eric2.0\auth\controllers' => 'App\Controllers',
-        'C:\xampp\htdocs\eric2.0\auth\models' => 'App\Models',
-        'C:\xampp\htdocs\eric2.0\warehouse\controllers' => 'App\Controllers',
-        'C:\xampp\htdocs\eric2.0\warehouse\models' => 'App\Models',
-        'C:\xampp\htdocs\eric2.0\production\controllers' => 'App\Controllers',
-        'C:\xampp\htdocs\eric2.0\production\models' => 'App\Models',
-        'C:\xampp\htdocs\eric2.0\finance\controllers' => 'App\Controllers',
-        'C:\xampp\htdocs\eric2.0\finance\models' => 'App\Models'
+        'C:\xampp\htdocs\order-billing-system\core' => 'App\Core',
+        'C:\xampp\htdocs\order-billing-system\app\helpers' => 'App\Helpers',
+        'C:\xampp\htdocs\order-billing-system\admin\controllers' => 'App\Controllers',
+        'C:\xampp\htdocs\order-billing-system\admin\models' => 'App\Models',
+        'C:\xampp\htdocs\order-billing-system\auth\controllers' => 'App\Controllers',
+        'C:\xampp\htdocs\order-billing-system\auth\models' => 'App\Models',
+        'C:\xampp\htdocs\order-billing-system\warehouse\controllers' => 'App\Controllers',
+        'C:\xampp\htdocs\order-billing-system\warehouse\models' => 'App\Models',
+        'C:\xampp\htdocs\order-billing-system\production\controllers' => 'App\Controllers',
+        'C:\xampp\htdocs\order-billing-system\production\models' => 'App\Models',
+        'C:\xampp\htdocs\order-billing-system\finance\controllers' => 'App\Controllers',
+        'C:\xampp\htdocs\order-billing-system\finance\models' => 'App\Models'
     ];
     
     foreach ($paths as $baseDir => $prefix) {

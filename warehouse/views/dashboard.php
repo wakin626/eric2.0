@@ -21,7 +21,7 @@
     
     <div class="card data-card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-cart3 me-2"></i>Recent Purchase Orders</span>
+            <span><i class="bi bi-cart3 me-2"></i>Open Purchase Order</span>
             <a href="?controller=warehouse&action=purchaseOrders" class="btn btn-primary btn-sm">View All</a>
         </div>
         <div class="table-responsive">
@@ -38,7 +38,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach (array_slice($purchase_orders ?? [], 0, 5) as $po):
+                    <?php foreach ($purchase_orders ?? [] as $po):
                         $items = $po_items_map[$po['po_id']] ?? [];
                     ?>
                     <tr>
@@ -264,10 +264,17 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Customer</label>
-                        <select name="customer_id" class="form-select" required>
+                        <select id="dashCustomerSelect" name="customer_id" class="form-select" required>
                             <option value="">Select Customer</option>
                             <?php foreach ($customers as $c): ?>
-                                <option value="<?= $c['customer_id'] ?>"><?= $c['customer_code'] ?> - <?= $c['customer_name'] ?></option>
+                                <option value="<?= $c['customer_id'] ?>"
+                                    data-code="<?= htmlspecialchars($c['customer_code']) ?>"
+                                    data-name="<?= htmlspecialchars($c['customer_name']) ?>"
+                                    data-address="<?= htmlspecialchars($c['customer_address']) ?>"
+                                    data-tin="<?= htmlspecialchars($c['customer_tin'] ?? '') ?>"
+                                    data-terms="<?= $c['customer_terms'] ?? 0 ?>">
+                                    <?= $c['customer_code'] ?> - <?= $c['customer_name'] ?>
+                                </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -277,10 +284,7 @@
                             <div class="row g-2 mb-2 item-row">
                                 <div class="col-5">
                                     <select name="item_id[]" class="form-select item-select" required>
-                                        <option value="">Select Item</option>
-                                        <?php foreach ($items as $i): ?>
-                                            <option value="<?= $i['item_id'] ?>" data-price="<?= $i['item_amount'] ?>"><?= $i['item_code'] ?> - <?= $i['item_description'] ?></option>
-                                        <?php endforeach; ?>
+                                        <option value="">Select Customer first</option>
                                     </select>
                                 </div>
                                 <div class="col-3">
@@ -313,6 +317,26 @@ document.getElementById('addItemBtn').addEventListener('click', function() {
     const itemTemplate = document.querySelector('.item-row').cloneNode(true);
     itemTemplate.querySelectorAll('select, input').forEach(el => el.value = '');
     container.appendChild(itemTemplate);
+});
+
+document.getElementById('dashCustomerSelect').addEventListener('change', function() {
+    if (!this.value) {
+        document.querySelectorAll('.item-select').forEach(function(sel) {
+            sel.innerHTML = '<option value="">Select Customer first</option>';
+        });
+        return;
+    }
+    fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + this.value)
+        .then(function(r) { return r.json(); })
+        .then(function(items) {
+            var html = '<option value="">Select Item</option>';
+            items.forEach(function(item) {
+                html += '<option value="' + item.item_id + '" data-price="' + (item.item_amount || 0) + '">' + item.item_code + ' - ' + item.item_description + '</option>';
+            });
+            document.querySelectorAll('.item-select').forEach(function(sel) {
+                sel.innerHTML = html;
+            });
+        });
 });
 
 document.addEventListener('click', function(e) {

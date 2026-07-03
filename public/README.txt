@@ -3,17 +3,17 @@ DOWNLOAD INSTRUCTIONS FOR LOCAL ASSETS:
 
 1. BOOTSTRAP 5.3.0 (CSS & JS):
    - Go to: https://github.com/twbs/bootstrap/releases/tag/v5.3.0
-   - Download: bootstrap-5.3.0-dist.zip
-   - Extract to: C:\xampp\htdocs\eric2.0\public\
-   - Should result in:
+- Download: bootstrap-5.3.0-dist.zip
+- Extract to: C:\xampp\htdocs\order-billing-system\public\
+- Should result in:
      - public/css/bootstrap.min.css
      - public/js/bootstrap.bundle.min.js
 
 2. BOOTSTRAP ICONS 1.10.0:
-   - Go to: https://github.com/twbs/icons/releases/tag/v1.10.0
-   - Download: bootstrap-icons-1.10.0.zip
-   - Extract to: C:\xampp\htdocs\eric2.0\public\
-   - Should result in:
+- Go to: https://github.com/twbs/icons/releases/tag/v1.10.0
+- Download: bootstrap-icons-1.10.0.zip
+- Extract to: C:\xampp\htdocs\order-billing-system\public\
+- Should result in:
      - public/css/bootstrap-icons.min.css
      - public/fonts/bootstrap-icons/...
 

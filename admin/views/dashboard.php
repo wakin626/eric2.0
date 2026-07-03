@@ -97,7 +97,7 @@
 
     <div class="card data-card mb-4">
         <div class="card-header d-flex justify-content-between">
-            <span><i class="bi bi-cart3 me-2"></i>Recent Customer PO</span>
+            <span><i class="bi bi-cart3 me-2"></i>Open Purchase Order</span>
             <a href="?controller=admin&action=purchaseOrders" class="btn btn-primary btn-sm">View All</a>
         </div>
         <div class="table-responsive">
@@ -114,7 +114,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach (array_slice($purchase_orders ?? [], 0, 5) as $po):
+                    <?php foreach ($purchase_orders ?? [] as $po):
                         $items = $po_items_map[$po['po_id']] ?? [];
                     ?>
                     <tr>
@@ -158,7 +158,7 @@
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                     <?php $conv = $item['uom_conversion'] ?? null; ?>
-                                    <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
+                                    <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>
@@ -219,9 +219,8 @@
                     <div class="mb-3"><label class="form-label">Customer Code *</label><input type="text" name="customer_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Customer Name *</label><input type="text" name="customer_name" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Delivery Address</label><textarea name="customer_address" class="form-control"></textarea></div>
-                    <div class="mb-3"><label class="form-label">Type</label><select name="customer_type" class="form-select" required><option value="vat">VAT %</option><option value="non_vat">Non-VAT</option></select></div>
                     <div class="mb-3"><label class="form-label">TIN</label><input type="text" name="customer_tin" class="form-control"></div>
-                    <div class="mb-3"><label class="form-label">Terms (Days)</label><input type="number" name="customer_terms" class="form-control" min="0" placeholder="e.g. 30"></div>
+                    <div class="mb-3"><label class="form-label">Terms (Days)</label><select name="customer_terms" class="form-select"><option value="15">15 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="120">120 days</option></select></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

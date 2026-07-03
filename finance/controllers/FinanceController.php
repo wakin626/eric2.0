@@ -271,7 +271,7 @@ class FinanceController {
             $itemAmount = $liQty * $itemPrice;
             $conv = $li['uom_conversion'] ?? null;
             $uom = $li['item_uom'] ?? '';
-            $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
+            $cases = ($conv && $uom !== 'CS') ? floor($liQty / $conv) : 0;
 
             $items[] = [
                 'item_description' => $li['item_description'] ?? '',
@@ -293,7 +293,7 @@ class FinanceController {
             $amount = $qty * $price;
             $conv = $delivery['uom_conversion'] ?? null;
             $itemUom = $delivery['item_uom'] ?? '';
-            $cases = ($conv && $itemUom !== 'CS') ? round($qty / $conv, 2) : 0;
+            $cases = ($conv && $itemUom !== 'CS') ? floor($qty / $conv) : 0;
             $items[] = [
                 'item_description' => $delivery['item_description'] ?? '',
                 'item_uom' => $delivery['item_uom'] ?? '',
@@ -364,7 +364,7 @@ class FinanceController {
             $itemAmount = $liQty * $itemPrice;
             $conv = $li['uom_conversion'] ?? null;
             $uom = $li['item_uom'] ?? '';
-            $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
+            $cases = ($conv && $uom !== 'CS') ? floor($liQty / $conv) : 0;
 
             $items[] = [
                 'item_description' => $li['item_description'] ?? '',
@@ -386,7 +386,7 @@ class FinanceController {
             $amount = $qty * $price;
             $conv = $delivery['uom_conversion'] ?? null;
             $itemUom = $delivery['item_uom'] ?? '';
-            $cases = ($conv && $itemUom !== 'CS') ? round($qty / $conv, 2) : 0;
+            $cases = ($conv && $itemUom !== 'CS') ? floor($qty / $conv) : 0;
             $items[] = [
                 'item_description' => $delivery['item_description'] ?? '',
                 'item_uom' => $delivery['item_uom'] ?? '',

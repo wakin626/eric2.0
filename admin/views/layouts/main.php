@@ -118,8 +118,8 @@
 <li class="nav-item">
 <a class="nav-link <?= $currentAction === 'delivered' ? 'active' : '' ?>" href="?controller=admin&action=delivered">
 <i class="bi bi-truck me-2"></i>Deliveries
-<?php if (!empty($reportedCount) && $reportedCount > 0): ?>
-    <span class="badge bg-danger float-end"><?= $reportedCount ?></span>
+<?php if (!empty($deliveryReportsCount) && $deliveryReportsCount > 0): ?>
+    <span class="badge bg-danger float-end"><?= $deliveryReportsCount ?></span>
 <?php endif; ?>
 </a>
 </li>
@@ -177,6 +177,14 @@
                         <i class="bi bi-exclamation-triangle-fill me-2"></i>
                         <strong><?= $reportsCount ?></strong> lot number report(s) require action.
                         <a href="?controller=admin&action=productionHistory" class="alert-link ms-1">Review now</a>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($deliveryReportsCount) && $deliveryReportsCount > 0 && basename($_SERVER['PHP_SELF'] ?? '') !== 'index.php'): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="bi bi-flag-fill me-2"></i>
+                        <strong><?= $deliveryReportsCount ?></strong> delivery report(s) require action.
+                        <a href="?controller=admin&action=delivered" class="alert-link ms-1">Review now</a>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 <?php endif; ?>

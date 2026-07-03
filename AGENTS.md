@@ -44,8 +44,8 @@ uploads/       - Receipt files (finance module)
 - Key tables: users, customers, items, purchase_orders, purchase_order_items, deliveries, manufacturing_requests, sales_orders, delivery_receipts, production_history
 
 ## Key Gotchas
-- Hardcoded absolute paths in autoloader (`C:\xampp\htdocs\eric2.0\...`) — won't work outside XAMPP default install
-- `URL_ROOT` hardcoded to `http://localhost/eric2.0/`
+- Hardcoded absolute paths in autoloader (`C:\xampp\htdocs\order-billing-system\...`) — won't work outside XAMPP default install
+- `URL_ROOT` hardcoded to `http://localhost/order-billing-system/`
 - `WarehouseModel` has methods spanning POs, deliveries, production, and users — it's a god model
 - `produced_quantity`, `delivered_quantity`, `delivery_quantity` columns referenced in models but not in `sql/schema.sql` — schema may be out of sync
 - No CSRF protection on forms

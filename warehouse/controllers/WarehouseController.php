@@ -24,9 +24,8 @@ class WarehouseController {
         $data['page_title'] = 'Warehouse Dashboard';
         $data['customers'] = $this->warehouseModel->getCustomers();
         $data['items'] = $this->warehouseModel->getItems();
-        $allPOs = $this->warehouseModel->getPurchaseOrders();
-        $data['purchase_orders'] = $allPOs;
-        $poIds = array_column($allPOs, 'po_id');
+        $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
+        $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
         $data['deliveries'] = $this->warehouseModel->getDeliveries();
         $this->render('dashboard', $data);
@@ -82,6 +81,18 @@ class WarehouseController {
         $data['po'] = $this->warehouseModel->getPurchaseOrderById($id);
         $data['po_items'] = $this->warehouseModel->getPurchaseOrderItems($id);
         $this->render('purchase_orders/view', $data);
+    }
+
+    public function getItemsByCustomer() {
+        header('Content-Type: application/json');
+        $customer_id = $_GET['customer_id'] ?? null;
+        if (!$customer_id) {
+            echo json_encode([]);
+            exit;
+        }
+        $items = $this->warehouseModel->getItemsByCustomer($customer_id);
+        echo json_encode($items);
+        exit;
     }
 
     public function getPODetails() {
@@ -306,12 +317,15 @@ class WarehouseController {
 
     public function getAvailableLots() {
         header('Content-Type: application/json');
+        $po_id = $_GET['po_id'] ?? null;
         $poi_id = $_GET['poi_id'] ?? null;
-        if (!$poi_id) {
-            echo json_encode([]);
-            exit;
+        if ($po_id) {
+            $lots = $this->warehouseModel->getAvailableLotsForPO($po_id);
+        } elseif ($poi_id) {
+            $lots = $this->warehouseModel->getAvailableLotsForDelivery($poi_id);
+        } else {
+            $lots = [];
         }
-        $lots = $this->warehouseModel->getAvailableLotsForDelivery($poi_id);
         echo json_encode($lots);
         exit;
     }
@@ -349,12 +363,34 @@ class WarehouseController {
         }
         $deliveryId = $_POST['delivery_id'] ?? null;
         $remarks = trim($_POST['remarks'] ?? '');
+        $reportType = $_POST['report_type'] ?? 'dr_number';
+        $lotId = $_POST['lot_id'] ?? null ? intval($_POST['lot_id']) : null;
+        $poiId = $_POST['poi_id'] ?? null ? intval($_POST['poi_id']) : null;
+        $poId = $_POST['po_id'] ?? null ? intval($_POST['po_id']) : null;
+        $oldQuantity = $_POST['old_quantity'] ?? null ? intval($_POST['old_quantity']) : null;
+
         if (!$deliveryId || empty($remarks)) {
             echo json_encode(['error' => 'Missing delivery_id or remarks']);
             exit;
         }
-        $this->warehouseModel->reportDelivery($deliveryId, $remarks);
-        echo json_encode(['success' => true]);
+
+        try {
+            // Update the delivery remarks
+            $this->warehouseModel->reportDelivery($deliveryId, $remarks);
+
+            // Create a structured delivery report
+            if ($poId) {
+                $this->warehouseModel->createDeliveryReport(
+                    $deliveryId, $poiId, $poId, $lotId, $oldQuantity,
+                    $_SESSION['user_id'], $remarks, $reportType
+                );
+            }
+
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to submit report: ' . $e->getMessage()]);
+        }
         exit;
     }
 

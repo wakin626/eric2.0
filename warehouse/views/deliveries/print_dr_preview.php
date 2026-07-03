@@ -170,6 +170,19 @@
     <div class="dr-field-terms"><?= htmlspecialchars($po['customer_terms'] ?? '') ?> DAYS</div>
     <div class="dr-field-po-number"><?= htmlspecialchars($po['customer_po_number'] ?? '') ?></div>
 
+    <?php
+    $allRemarks = [];
+    foreach ($dr_deliveries as $dd) {
+        $r = trim($dd['remarks'] ?? '');
+        if ($r !== '' && !in_array($r, $allRemarks)) $allRemarks[] = $r;
+    }
+    ?>
+    <?php if (!empty($allRemarks)): ?>
+    <div style="margin-top: 8px; font-size: 11px;">
+        <strong>Remarks:</strong> <?= htmlspecialchars(implode('; ', $allRemarks)) ?>
+    </div>
+    <?php endif; ?>
+
     <!-- TABLE BODY -->
     <div class="dr-table-start">
         <?php if (!empty($dr_deliveries)): ?>
@@ -177,7 +190,7 @@
                 $qty = $d['delivery_quantity'] ?? 0;
                 $conv = $d['uom_conversion'] ?? null;
                 $itemUom = $d['item_uom'] ?? '';
-                $cases = ($conv && $itemUom !== 'CS') ? round($qty / $conv, 2) : 0;
+                $cases = ($conv && $itemUom !== 'CS') ? floor($qty / $conv) : 0;
 
                 $descParts = [];
                 if (!empty($d['item_description'])) $descParts[] = $d['item_description'];

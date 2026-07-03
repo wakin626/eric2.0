@@ -22,9 +22,8 @@ class ProductionController {
 
     public function index() {
         $data['page_title'] = 'Production Dashboard';
-        $allPOs = $this->warehouseModel->getPurchaseOrders();
-        $data['purchase_orders'] = $allPOs;
-        $poIds = array_column($allPOs, 'po_id');
+        $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
+        $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
         $this->render('dashboard', $data);
     }
@@ -45,6 +44,7 @@ class ProductionController {
     public function updateQuantity() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $po_id = $_POST['po_id'] ?? '';
+            $sts_ref = trim($_POST['sts_ref'] ?? '') ?: null;
 
             if (is_array($_POST['poi_id'] ?? null)) {
                 $poi_ids = $_POST['poi_id'];
@@ -55,7 +55,7 @@ class ProductionController {
                         $lot = $lot_numbers[$i] ?? null;
                         $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
                         $itemDesc = $poi['item_description'] ?? null;
-                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $quantities[$i], $_SESSION['user_id'], $lot, $itemDesc);
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $quantities[$i], $_SESSION['user_id'], $lot, $itemDesc, $sts_ref);
                         if ($lot && $lot !== '') {
                             $this->warehouseModel->updateLotQuantity($poi_id, $lot, $quantities[$i], $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
                         }
@@ -72,7 +72,7 @@ class ProductionController {
                         $lot = $lot_numbers[$i] ?? null;
                         $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
                         $itemDesc = $poi['item_description'] ?? null;
-                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $qty, $_SESSION['user_id'], $lot, $itemDesc);
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $qty, $_SESSION['user_id'], $lot, $itemDesc, $sts_ref);
                         if ($lot && $lot !== '') {
                             $this->warehouseModel->updateLotQuantity($poi_id, $lot, $qty, $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
                         }
@@ -150,6 +150,11 @@ class ProductionController {
         $id = $_GET['id'] ?? null;
         $po = $this->warehouseModel->getPurchaseOrderById($id);
         $po_items = $this->warehouseModel->getPurchaseOrderItems($id);
+        // Attach lots to each item
+        foreach ($po_items as &$item) {
+            $item['lots'] = $this->warehouseModel->getLotsByPOItem($item['poi_id']);
+        }
+        unset($item);
         echo json_encode(['po' => $po, 'po_items' => $po_items]);
         exit;
     }

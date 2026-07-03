@@ -70,7 +70,7 @@
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                 <span class="badge bg-success"><?= $itemAvailable ?></span>
-                                <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
+                                <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>
@@ -212,7 +212,7 @@ function viewPODetails(poId) {
                     const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
                     const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
                     var conv = item.uom_conversion || null;
-                    var deliveredText = itemDelivered + ' PCS' + (conv ? ' / ' + (Math.round(itemDelivered / conv * 100) / 100) + ' CS' : '');
+                    var deliveredText = itemDelivered + ' PCS' + (conv ? ' / ' + Math.floor(itemDelivered / conv) + ' CS' : '');
                     html += `<tr>
                         <td>${item.item_code || '-'}</td>
                         <td>${item.item_description || '-'}</td>

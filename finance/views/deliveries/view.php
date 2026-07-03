@@ -27,6 +27,7 @@
                         <p><strong>DR No.:</strong> <?= htmlspecialchars($delivery['dr_number'] ?? '-') ?></p>
                         <p><strong>Delivered By:</strong> <?= htmlspecialchars($delivery['delivered_by_name'] ?? '-') ?></p>
                         <p><strong>Remarks:</strong> <?= htmlspecialchars($delivery['remarks'] ?? 'None') ?></p>
+                        <p><strong>Report / Edit:</strong> <?= htmlspecialchars($delivery['report_remarks'] ?? 'None') ?></p>
                     </div>
                 </div>
             </div>
@@ -59,7 +60,7 @@
                                 $liQty = $li['qty'] ?? 0;
                                 $conv = $li['uom_conversion'] ?? null;
                                 $uom = $li['item_uom'] ?? '';
-                                $cases = ($conv && $uom !== 'CS') ? round($liQty / $conv, 2) : 0;
+                                $cases = ($conv && $uom !== 'CS') ? floor($liQty / $conv) : 0;
                                 $totalQty += $liQty;
                                 $totalCases += $cases;
                         ?>

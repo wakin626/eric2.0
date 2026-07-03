@@ -26,10 +26,12 @@ class AdminController {
         $data['items'] = $this->itemModel->getAll(false);
         $allPOs = $this->warehouseModel->getPurchaseOrders();
         $data['allPOCount'] = count($allPOs);
-        $data['purchase_orders'] = $allPOs;
-        $poIds = array_column($allPOs, 'po_id');
+        $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
+        $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
         $data['deliveries'] = $this->warehouseModel->getDeliveries();
+        $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         $data['page_title'] = 'Admin Dashboard';
         $this->render('dashboard', $data);
     }
@@ -41,6 +43,8 @@ class AdminController {
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         $data['page_title'] = 'Customer Management';
         $this->render('customers/index', $data);
     }
@@ -90,6 +94,7 @@ class AdminController {
         $allItems = $this->itemModel->getAll(false);
         $pagination = Pagination::paginate($allItems, 10);
         $data['items'] = $pagination['items'];
+        $data['customers'] = $this->customerModel->getAll(false);
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
@@ -106,6 +111,7 @@ class AdminController {
                 exit;
             }
         }
+        $data['customers'] = $this->customerModel->getAll(false);
         $data['page_title'] = 'Add Item';
         $this->render('items/form', $data);
     }
@@ -126,6 +132,7 @@ class AdminController {
                 exit;
             }
         }
+        $data['customers'] = $this->customerModel->getAll(false);
         $data['page_title'] = 'Edit Item';
         $this->render('items/form', $data);
     }
@@ -185,6 +192,8 @@ public function purchaseOrders() {
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
+    $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+    $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
     $data['page_title'] = 'Customer PO';
     $this->render('purchase_orders/index', $data);
 }
@@ -192,6 +201,7 @@ public function purchaseOrders() {
 public function delivered() {
     $data['deliveries'] = $this->warehouseModel->getDeliveries();
     $data['reportedCount'] = $this->warehouseModel->getReportedRemarksCount();
+    $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['page_title'] = 'Deliveries';
     $this->render('delivered', $data);
 }
@@ -228,19 +238,69 @@ public function updateDelivery() {
     $deliveryId = $_POST['delivery_id'] ?? null;
     $drNumber = trim($_POST['dr_number'] ?? '');
     $deliveryDate = $_POST['delivery_date'] ?? '';
-    $remarks = trim($_POST['remarks'] ?? '');
+    $lotChangesJson = $_POST['lot_changes'] ?? '[]';
 
     if (!$deliveryId) {
         echo json_encode(['error' => 'Missing delivery_id']);
         exit;
     }
 
-    $this->warehouseModel->updateDelivery($deliveryId, [
+    $lotChanges = json_decode($lotChangesJson, true);
+    if (!is_array($lotChanges)) $lotChanges = [];
+
+    $result = $this->warehouseModel->updateDelivery($deliveryId, [
         'dr_number' => $drNumber,
         'delivery_date' => $deliveryDate,
-        'remarks' => $remarks
+        'lot_changes' => $lotChanges
     ]);
-    echo json_encode(['success' => true]);
+
+    if (is_array($result) && isset($result['success']) && !$result['success']) {
+        echo json_encode(['error' => $result['error']]);
+    } else {
+        echo json_encode(['success' => true]);
+    }
+    exit;
+}
+
+public function resolveDeliveryReport() {
+    header('Content-Type: application/json');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['error' => 'Method not allowed']);
+        exit;
+    }
+    $reportId = $_POST['report_id'] ?? null;
+    $newQuantity = $_POST['new_quantity'] ?? null;
+    $newDrNumber = trim($_POST['new_dr_number'] ?? '');
+
+    if (!$reportId) {
+        echo json_encode(['error' => 'Missing report_id']);
+        exit;
+    }
+
+    $result = $this->warehouseModel->resolveDeliveryReport(
+        $reportId,
+        $newQuantity !== null ? intval($newQuantity) : null,
+        $_SESSION['user_id'],
+        $newDrNumber ?: null
+    );
+    if ($result) {
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['error' => 'Failed to resolve report']);
+    }
+    exit;
+}
+
+public function getDeliveryReports() {
+    header('Content-Type: application/json');
+    $deliveryId = $_GET['delivery_id'] ?? null;
+    if (!$deliveryId) {
+        echo json_encode([]);
+        exit;
+    }
+    $reports = $this->warehouseModel->getDeliveryReportsByDeliveryId($deliveryId);
+    echo json_encode($reports);
     exit;
 }
 
@@ -252,6 +312,7 @@ public function productionHistory() {
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
     $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+    $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['page_title'] = 'Production History';
     $this->render('production_history/index', $data);
 }

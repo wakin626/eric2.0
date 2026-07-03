@@ -35,6 +35,7 @@
                     <th>Cases</th>
                     <th>Type</th>
                     <th>Remarks</th>
+                    <th>Report / Edit</th>
                     <th>Delivered By</th>
                     <th class="text-center">Actions</th>
                 </tr>
@@ -49,7 +50,12 @@
                 <tr class="<?= $isActive ? '' : 'text-decoration-line-through' ?>">
                     <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number']) ?></strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
+                    <td>
+                        <?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?>
+                        <?php if (!empty($d['old_dr_number'])): ?>
+                            <br><small style="color:#e6a800;font-weight:bold;">(old: <?= htmlspecialchars($d['old_dr_number']) ?>)</small>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if ($hasLotItems): ?>
                             <?php foreach ($lotItems as $idx => $li): ?>
@@ -71,13 +77,24 @@
                         <?php endif; ?>
                     </td>
                     <td>
+                        <?php
+                        $oldQtyMap = json_decode($d['old_quantity'] ?? '{}', true);
+                        if (!is_array($oldQtyMap)) $oldQtyMap = [];
+                        ?>
                         <?php if ($hasLotItems): ?>
                             <?php foreach ($lotItems as $idx => $li): ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                 <?= $li['qty'] ?? 0 ?>
+                                <?php if (isset($oldQtyMap[strval($li['lot_id'] ?? '')])): ?>
+                                    <br><small style="color:#e6a800;font-weight:bold;">(old: <?= $oldQtyMap[strval($li['lot_id'])] ?>)</small>
+                                <?php endif; ?>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <?= $d['delivery_quantity'] ?? 0 ?>
+                            <?php if (!empty($oldQtyMap)): ?>
+                                <?php $firstOld = reset($oldQtyMap); ?>
+                                <br><small style="color:#e6a800;font-weight:bold;">(old: <?= $firstOld ?>)</small>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
@@ -97,7 +114,7 @@
                                 $c = $info['conv'];
                                 $u = $info['uom'];
                                 if ($c && $u !== 'CS') {
-                                    $caseParts[] = htmlspecialchars($desc) . ': ' . round($info['qty'] / $c, 2) . ' CS';
+                                    $caseParts[] = htmlspecialchars($desc) . ': ' . floor($info['qty'] / $c) . ' CS';
                                 }
                             }
                             echo !empty($caseParts) ? implode('<br>', $caseParts) : '<span class="text-muted">—</span>';
@@ -106,7 +123,7 @@
                             $itemUom = $d['item_uom'] ?? '';
                             $desc = $d['item_description'] ?? '';
                             if ($conv && $itemUom !== 'CS') {
-                                echo htmlspecialchars($desc) . ': ' . round(($d['delivery_quantity'] ?? 0) / $conv, 2) . ' CS';
+                                echo htmlspecialchars($desc) . ': ' . floor(($d['delivery_quantity'] ?? 0) / $conv) . ' CS';
                             } else {
                                 echo '<span class="text-muted">—</span>';
                             }
@@ -122,13 +139,20 @@
                     </td>
                     <td>
                         <?php if (!empty($d['remarks'])): ?>
+                            <span><?= htmlspecialchars($d['remarks']) ?></span>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (!empty($d['report_remarks'])): ?>
                             <?php
                             $rmType = $d['remarks_type'] ?? '';
-                            if ($rmType === 'report') $rmStyle = 'color:red;font-weight:bold;';
-                            elseif ($rmType === 'edited') $rmStyle = 'color:#e6a800;font-weight:bold;';
+                            if ($rmType === 'edited') $rmStyle = 'color:#e6a800;font-weight:bold;';
+                            elseif ($rmType === 'report') $rmStyle = 'color:red;font-weight:bold;';
                             else $rmStyle = '';
                             ?>
-                            <span style="<?= $rmStyle ?>"><?= htmlspecialchars($d['remarks']) ?></span>
+                            <span style="<?= $rmStyle ?>"><?= htmlspecialchars($d['report_remarks']) ?></span>
                         <?php else: ?>
                             <span class="text-muted">-</span>
                         <?php endif; ?>
@@ -148,13 +172,9 @@
                             data-delivery-id="<?= $d['delivery_id'] ?>"
                             data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>"
                             data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>"
-                            data-remarks="<?= htmlspecialchars($d['remarks'] ?? '') ?>">
-                            <i class="bi bi-pencil"></i> Edit
-                        </button>
-                        <button type="button" class="btn btn-sm <?= $isActive ? 'btn-outline-secondary' : 'btn-outline-success' ?> toggleStatusBtn"
-                            data-delivery-id="<?= $d['delivery_id'] ?>"
-                            title="<?= $isActive ? 'Set Inactive' : 'Set Active' ?>">
-                            <?= $isActive ? 'Inactive' : 'Active' ?>
+                            data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
+                            data-po-id="<?= $d['po_id'] ?>">
+                            <i class="bi bi-pencil"></i>
                         </button>
                     </td>
                 </tr>
@@ -169,7 +189,7 @@
 
 <!-- Edit Delivery Modal -->
 <div class="modal fade" id="editDeliveryModal" tabindex="-1">
-    <div class="modal-dialog modal-md">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Delivery</h5>
@@ -178,17 +198,28 @@
             <form id="editDeliveryForm">
                 <div class="modal-body">
                     <input type="hidden" name="delivery_id" id="editDeliveryId">
-                    <div class="mb-3">
-                        <label class="form-label">DR Number</label>
-                        <input type="text" name="dr_number" id="editDrNumber" class="form-control">
+                    <input type="hidden" name="po_id" id="editPoId">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">DR Number</label>
+                            <input type="text" name="dr_number" id="editDrNumber" class="form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Delivery Date</label>
+                            <input type="date" name="delivery_date" id="editDeliveryDate" class="form-control">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Delivery Date</label>
-                        <input type="date" name="delivery_date" id="editDeliveryDate" class="form-control">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Remarks</label>
-                        <textarea name="remarks" id="editRemarks" class="form-control" rows="3"></textarea>
+                    <div id="editLotItemsRow" style="display:none;">
+                        <label class="form-label fw-bold">Lot Items — Edit Quantity</label>
+                        <div class="border rounded p-2" style="background:#f8f9fa;">
+                            <div class="row mb-1">
+                                <div class="col-md-4"><small class="text-muted fw-bold">Item</small></div>
+                                <div class="col-md-3"><small class="text-muted fw-bold">Lot Number</small></div>
+                                <div class="col-md-3"><small class="text-muted fw-bold">Quantity</small></div>
+                                <div class="col-md-2"><small class="text-muted fw-bold">Cases</small></div>
+                            </div>
+                            <div id="editLotItemsContainer"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -279,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             var qty = li.qty || 0;
                             var conv = li.uom_conversion || null;
                             var uom = li.item_uom || '';
-                            var cases = (conv && uom !== 'CS') ? Math.round(qty / conv * 100) / 100 : 0;
+                            var cases = (conv && uom !== 'CS') ? Math.floor(qty / conv) : 0;
 
                             var row = '<tr>' +
                                 '<td>' + (li.item_code || '-') + '</td>' +
@@ -351,7 +382,7 @@ function applyAdminFilters() {
         var cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
         var itemText = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
         var drText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
-        var deliveryDate = row.cells[4] ? row.cells[4].textContent.trim() : '';
+        var deliveryDate = row.cells[6] ? row.cells[6].textContent.trim() : '';
         var rowText = row.textContent.toLowerCase();
         var show = true;
         if (custFilter && !cust.includes(custFilter)) show = false;
@@ -382,7 +413,33 @@ document.querySelectorAll('.editDeliveryBtn').forEach(function(btn) {
         document.getElementById('editDeliveryId').value = this.dataset.deliveryId;
         document.getElementById('editDrNumber').value = this.dataset.dr || '';
         document.getElementById('editDeliveryDate').value = this.dataset.date || '';
-        document.getElementById('editRemarks').value = this.dataset.remarks || '';
+        document.getElementById('editPoId').value = this.dataset.poId || '';
+
+        var lotItems = JSON.parse(this.dataset.lotItems || '[]');
+        var container = document.getElementById('editLotItemsContainer');
+        container.innerHTML = '';
+
+        if (lotItems.length > 0) {
+            document.getElementById('editLotItemsRow').style.display = 'block';
+            lotItems.forEach(function(li, idx) {
+                var conv = li.uom_conversion || null;
+                var uom = li.item_uom || '';
+                var cases = (conv && uom !== 'CS') ? Math.floor((li.qty || 0) / conv) : 0;
+
+                var row = document.createElement('div');
+                row.className = 'row mb-2 align-items-center';
+                row.innerHTML = '<div class="col-md-4"><small class="fw-bold">' + (li.item_description || '-') + '</small></div>' +
+                    '<div class="col-md-3"><small class="text-muted">' + (li.lot_number || '-') + '</small></div>' +
+                    '<div class="col-md-3"><input type="number" class="form-control form-control-sm edit-lot-qty" ' +
+                    'data-lot-id="' + li.lot_id + '" data-poi-id="' + li.poi_id + '" ' +
+                    'data-old-qty="' + (li.qty || 0) + '" value="' + (li.qty || 0) + '" min="1"></div>' +
+                    '<div class="col-md-2"><small class="text-muted">' + (cases > 0 ? cases + ' CS' : '') + '</small></div>';
+                container.appendChild(row);
+            });
+        } else {
+            document.getElementById('editLotItemsRow').style.display = 'none';
+        }
+
         var modal = new bootstrap.Modal(document.getElementById('editDeliveryModal'));
         modal.show();
     });
@@ -391,6 +448,23 @@ document.querySelectorAll('.editDeliveryBtn').forEach(function(btn) {
 document.getElementById('editDeliveryForm').addEventListener('submit', function(e) {
     e.preventDefault();
     var formData = new FormData(this);
+
+    // Collect lot quantity changes
+    var lotChanges = [];
+    document.querySelectorAll('.edit-lot-qty').forEach(function(input) {
+        var oldQty = parseInt(input.dataset.oldQty) || 0;
+        var newQty = parseInt(input.value) || 0;
+        if (newQty !== oldQty) {
+            lotChanges.push({
+                lot_id: input.dataset.lotId,
+                poi_id: input.dataset.poiId,
+                old_qty: oldQty,
+                new_qty: newQty
+            });
+        }
+    });
+    formData.append('lot_changes', JSON.stringify(lotChanges));
+
     fetch('?controller=admin&action=updateDelivery', {
         method: 'POST',
         body: formData
@@ -398,6 +472,8 @@ document.getElementById('editDeliveryForm').addEventListener('submit', function(
     .then(function(response) { return response.json(); })
     .then(function(data) {
         if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('editDeliveryModal')).hide();
+            alert('Delivery updated successfully!');
             location.reload();
         } else {
             alert('Error: ' + (data.error || 'Failed to update delivery'));
@@ -405,29 +481,6 @@ document.getElementById('editDeliveryForm').addEventListener('submit', function(
     })
     .catch(function(err) {
         alert('Error updating delivery: ' + err.message);
-    });
-});
-
-document.querySelectorAll('.toggleStatusBtn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        var deliveryId = this.dataset.deliveryId;
-        var formData = new FormData();
-        formData.append('delivery_id', deliveryId);
-        fetch('?controller=admin&action=toggleDeliveryStatus', {
-            method: 'POST',
-            body: formData
-        })
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Error: ' + (data.error || 'Failed to toggle status'));
-            }
-        })
-        .catch(function(err) {
-            alert('Error: ' + err.message);
-        });
     });
 });
 </script>

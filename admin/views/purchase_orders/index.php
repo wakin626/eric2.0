@@ -77,7 +77,7 @@
         ?>
             <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
             <?php $conv = $item['uom_conversion'] ?? null; ?>
-            <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv, 2) . '/' . round($itemQty / $conv, 2) . ' cs' : '—/—' ?></small>
+            <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
         <?php endforeach; ?>
     <?php else: ?>
         <small class="text-muted">-</small>

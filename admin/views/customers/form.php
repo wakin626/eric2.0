@@ -23,13 +23,6 @@
                               placeholder="Enter full address"><?= htmlspecialchars($customer['customer_address'] ?? '') ?></textarea>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Type</label>
-                    <select name="customer_type" class="form-select">
-                        <option value="vat" <?= ($customer['customer_type'] ?? 'vat') === 'vat' ? 'selected' : '' ?>>VAT %</option>
-                        <option value="non_vat" <?= ($customer['customer_type'] ?? '') === 'non_vat' ? 'selected' : '' ?>>Non-VAT</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
                     <label class="form-label">TIN Number</label>
                     <input type="text" name="customer_tin" class="form-control" 
                            value="<?= htmlspecialchars($customer['customer_tin'] ?? '') ?>" 
@@ -37,9 +30,11 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Terms (Days)</label>
-                    <input type="number" name="customer_terms" class="form-control" min="0"
-                           value="<?= $customer['customer_terms'] ?? 0 ?>" 
-                           placeholder="e.g. 30">
+                    <select name="customer_terms" class="form-select">
+                        <?php foreach ([15, 30, 60, 90, 120] as $term): ?>
+                            <option value="<?= $term ?>" <?= ($customer['customer_terms'] ?? 0) == $term ? 'selected' : '' ?>><?= $term ?> days</option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <?php if (isset($customer)): ?>
                 <div class="col-md-4">
