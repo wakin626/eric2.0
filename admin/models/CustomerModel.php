@@ -12,7 +12,7 @@ class CustomerModel extends BaseModel {
         if ($activeOnly) {
             $sql .= " AND status = 1";
         }
-        $sql .= " ORDER BY customer_code ASC";
+        $sql .= " ORDER BY customer_id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -83,7 +83,7 @@ class CustomerModel extends BaseModel {
         $sql = "SELECT * FROM {$this->table} 
                 WHERE `remove` = 0 AND status = 1 
                 AND (customer_code LIKE :kw OR customer_name LIKE :kw)
-                ORDER BY customer_code ASC";
+                ORDER BY customer_id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['kw' => "%{$keyword}%"]);
         return $stmt->fetchAll();

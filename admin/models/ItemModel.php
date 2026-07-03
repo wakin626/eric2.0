@@ -11,7 +11,7 @@ class ItemModel extends BaseModel {
         if ($activeOnly) {
             $sql .= " AND status = 1";
         }
-        $sql .= " ORDER BY item_code ASC";
+        $sql .= " ORDER BY item_id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -88,7 +88,7 @@ class ItemModel extends BaseModel {
         $sql = "SELECT * FROM {$this->table} 
                 WHERE `remove` = 0 AND status = 1 
                 AND (item_code LIKE :kw OR item_description LIKE :kw)
-                ORDER BY item_code ASC";
+                ORDER BY item_id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['kw' => "%{$keyword}%"]);
         return $stmt->fetchAll();
