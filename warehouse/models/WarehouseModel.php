@@ -722,7 +722,9 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getDeliveryReportsCount() {
-        $sql = "SELECT COUNT(DISTINCT delivery_id) FROM delivery_reports WHERE status = 'pending'";
+        $sql = "SELECT COUNT(DISTINCT dr.delivery_id) FROM delivery_reports dr
+                LEFT JOIN deliveries d ON dr.delivery_id = d.delivery_id
+                WHERE dr.status = 'pending' AND (d.delivery_id IS NULL OR d.remove != 1)";
         return self::getConnection()->query($sql)->fetchColumn();
     }
 
