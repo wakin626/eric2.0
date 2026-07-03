@@ -19,7 +19,7 @@
                     <td><?= $c['customer_name'] ?></td>
                     <td><small><?= $c['customer_address'] ?? '-' ?></small></td>
                     <td><?= $c['customer_tin'] ?? '-' ?></td>
-                    <td><?= ($c['customer_terms'] ?? 0) > 0 ? $c['customer_terms'] . ' days' : '-' ?></td>
+                    <td><?php $terms = $c['customer_terms'] ?? ''; echo $terms !== '' && $terms !== '0' ? htmlspecialchars($terms) . (is_numeric($terms) ? ' days' : '') : '-'; ?></td>
                     <td><span class="badge bg-<?= $c['status'] ? 'success' : 'secondary' ?>"><?= $c['status'] ? 'Active' : 'Inactive' ?></span></td>
                     <td><?= date('Y-m-d', strtotime($c['date_created'])) ?></td>
                     <td><?= date('Y-m-d H:i', strtotime($c['last_update'])) ?></td>
@@ -103,6 +103,6 @@ document.getElementById('customerEditModal').addEventListener('show.bs.modal', f
     document.getElementById('edit_customer_name').value = button.getAttribute('data-name');
     document.getElementById('edit_customer_address').value = button.getAttribute('data-address');
     document.getElementById('edit_customer_tin').value = button.getAttribute('data-tin');
-    document.getElementById('edit_customer_terms').value = button.getAttribute('data-terms') || '0';
+    document.getElementById('edit_customer_terms').value = button.getAttribute('data-terms') || '';
 });
 </script>
