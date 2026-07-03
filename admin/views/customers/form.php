@@ -35,7 +35,7 @@
                             <option value="<?= $term ?>" <?= ($customer['customer_terms'] ?? '') == $term ? 'selected' : '' ?>><?= $term ?> days</option>
                         <?php endforeach; ?>
                         <option value="COD" <?= ($customer['customer_terms'] ?? '') == 'COD' ? 'selected' : '' ?>>COD</option>
-                        <option value="Undefined" <?= ($customer['customer_terms'] ?? '') == 'Undefined' ? 'selected' : '' ?>>Undefined</option>
+                        <option value="Undefined Credit Term" <?= ($customer['customer_terms'] ?? '') == 'Undefined Credit Term' ? 'selected' : '' ?>>Undefined Credit Term</option>
                     </select>
                 </div>
                 <?php if (isset($customer)): ?>

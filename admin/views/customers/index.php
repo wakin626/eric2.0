@@ -57,7 +57,7 @@
                     <div class="mb-3"><label class="form-label">Customer Name *</label><input type="text" name="customer_name" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Delivery Address</label><textarea name="customer_address" class="form-control"></textarea></div>
                     <div class="mb-3"><label class="form-label">TIN</label><input type="text" name="customer_tin" class="form-control"></div>
-                    <div class="mb-3"><label class="form-label">Terms (Days)</label><select name="customer_terms" class="form-select"><option value="15">15 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="120">120 days</option><option value="COD">COD</option><option value="Undefined">Undefined</option></select></div>
+                    <div class="mb-3"><label class="form-label">Terms (Days)</label><select name="customer_terms" class="form-select"><option value="15">15 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="120">120 days</option><option value="COD">COD</option><option value="Undefined Credit Term">Undefined Credit Term</option></select></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -79,7 +79,7 @@
                     <div class="mb-3"><label class="form-label">Customer Name *</label><input type="text" name="customer_name" id="edit_customer_name" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Delivery Address</label><textarea name="customer_address" id="edit_customer_address" class="form-control"></textarea></div>
                     <div class="mb-3"><label class="form-label">TIN</label><input type="text" name="customer_tin" id="edit_customer_tin" class="form-control"></div>
-                    <div class="mb-3"><label class="form-label">Terms (Days)</label><select name="customer_terms" id="edit_customer_terms" class="form-select"><option value="15">15 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="120">120 days</option><option value="COD">COD</option><option value="Undefined">Undefined</option></select></div>
+                    <div class="mb-3"><label class="form-label">Terms (Days)</label><select name="customer_terms" id="edit_customer_terms" class="form-select"><option value="15">15 days</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="120">120 days</option><option value="COD">COD</option><option value="Undefined Credit Term">Undefined Credit Term</option></select></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
