@@ -32,8 +32,10 @@
                     <label class="form-label">Terms (Days)</label>
                     <select name="customer_terms" class="form-select">
                         <?php foreach ([15, 30, 60, 90, 120] as $term): ?>
-                            <option value="<?= $term ?>" <?= ($customer['customer_terms'] ?? 0) == $term ? 'selected' : '' ?>><?= $term ?> days</option>
+                            <option value="<?= $term ?>" <?= ($customer['customer_terms'] ?? '') == $term ? 'selected' : '' ?>><?= $term ?> days</option>
                         <?php endforeach; ?>
+                        <option value="COD" <?= ($customer['customer_terms'] ?? '') == 'COD' ? 'selected' : '' ?>>COD</option>
+                        <option value="Undefined" <?= ($customer['customer_terms'] ?? '') == 'Undefined' ? 'selected' : '' ?>>Undefined</option>
                     </select>
                 </div>
                 <?php if (isset($customer)): ?>
