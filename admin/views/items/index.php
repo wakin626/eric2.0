@@ -63,8 +63,7 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="mb-3"><label class="form-label">UOM</label><input type="text" class="form-control" value="PCS" readonly><input type="hidden" name="item_uom" value="PCS"></div>
-                    <div class="mb-3"><label class="form-label">Cases Conversion</label><input type="number" name="uom_conversion" id="add_uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
+<div class="mb-3"><label class="form-label">Cases Conversion</label><input type="number" name="uom_conversion" id="add_uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -93,7 +92,7 @@
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="mb-3"><label class="form-label">UOM</label><input type="text" class="form-control" value="PCS" readonly><input type="hidden" name="item_uom" value="PCS"></div>
+                    <div class="mb-3"><label class="form-label">UOM</label><input type="text" class="form-control" name="item_uom" id="edit_item_uom" value="PCS"></div>
                     <div class="mb-3"><label class="form-label">Cases Conversion</label><input type="number" name="uom_conversion" id="edit_uom_conversion" class="form-control" min="1" placeholder="e.g. 10 means 10 PCS = 1 CS"></div>
                 </div>
                 <div class="modal-footer">
@@ -116,6 +115,7 @@ document.getElementById('itemEditModal').addEventListener('show.bs.modal', funct
     document.getElementById('edit_item_id').value = button.getAttribute('data-id');
     document.getElementById('edit_item_code').value = button.getAttribute('data-code');
     document.getElementById('edit_item_description').value = button.getAttribute('data-desc');
+    document.getElementById('edit_item_uom').value = button.getAttribute('data-uom') || 'PCS';
     document.getElementById('edit_uom_conversion').value = button.getAttribute('data-conversion') || '';
     document.getElementById('edit_customer_id').value = button.getAttribute('data-customer') || '';
 });

@@ -39,7 +39,7 @@ class ItemModel extends BaseModel {
             'item_code' => $data['item_code'],
             'item_description' => $data['item_description'],
             'customer_id' => !empty($data['customer_id']) ? $data['customer_id'] : null,
-            'item_uom' => $data['item_uom'],
+            'item_uom' => $data['item_uom'] ?? 'PCS',
             'uom_conversion' => !empty($data['uom_conversion']) ? $data['uom_conversion'] : null,
             'item_size' => $data['item_size'] ?? null,
             'item_amount' => $data['item_amount'] ?? 0.00
@@ -64,7 +64,7 @@ class ItemModel extends BaseModel {
             'item_code' => $data['item_code'],
             'item_description' => $data['item_description'],
             'customer_id' => !empty($data['customer_id']) ? $data['customer_id'] : null,
-            'item_uom' => $data['item_uom'],
+            'item_uom' => $data['item_uom'] ?? 'PCS',
             'uom_conversion' => !empty($data['uom_conversion']) ? $data['uom_conversion'] : null,
             'item_size' => $data['item_size'] ?? null,
             'item_amount' => $data['item_amount'] ?? 0.00,
