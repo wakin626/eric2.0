@@ -13,8 +13,12 @@
         <input type="date" id="filterDateTo" class="form-control form-control-sm" style="width: 160px;" title="To date">
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
         <div class="search-box" style="width: 250px;">
-            <i class="bi bi-search"></i>
-            <input type="text" id="searchDelivery" class="form-control" placeholder="Search delivery...">
+            <form method="GET" class="d-flex align-items-center">
+                <input type="hidden" name="controller" value="finance">
+                <input type="hidden" name="action" value="deliveries">
+                <i class="bi bi-search"></i>
+                <input type="text" name="search" id="searchDelivery" class="form-control" placeholder="Search delivery..." value="<?= htmlspecialchars($search ?? '') ?>">
+            </form>
         </div>
     </div>
 </div>
@@ -103,13 +107,24 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=finance&action=deliveries&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=finance&action=deliveries&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=finance&action=deliveries&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=finance&action=deliveries&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -143,27 +158,34 @@ function populateDeliveryFilters() {
 }
 
 function filterTable() {
-    const query = document.getElementById('searchDelivery').value.toLowerCase();
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
     const dateFrom = document.getElementById('filterDateFrom').value;
     const dateTo = document.getElementById('filterDateTo').value;
     document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
         if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
-        const text = row.textContent.toLowerCase();
         const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
         const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
         const rowDate = row.getAttribute('data-date') || '';
-        const matchesSearch = text.includes(query);
         const matchesCust = !custFilter || cust.includes(custFilter);
         const matchesItem = !itemFilter || itemText.includes(itemFilter);
         const matchesFrom = !dateFrom || rowDate >= dateFrom;
         const matchesTo = !dateTo || rowDate <= dateTo;
-        row.style.display = (matchesSearch && matchesCust && matchesItem && matchesFrom && matchesTo) ? '' : 'none';
+        row.style.display = (matchesCust && matchesItem && matchesFrom && matchesTo) ? '' : 'none';
     });
 }
 
-document.getElementById('searchDelivery').addEventListener('keyup', filterTable);
+var _searchTimer;
+document.getElementById('searchDelivery').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
+});
+
+(function() {
+    var s = document.getElementById('searchDelivery');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 document.getElementById('filterCustomer').addEventListener('change', filterTable);
 document.getElementById('filterItem').addEventListener('change', filterTable);
 document.getElementById('filterDateFrom').addEventListener('change', filterTable);
@@ -174,7 +196,9 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterDateFrom').value = '';
     document.getElementById('filterDateTo').value = '';
     document.getElementById('searchDelivery').value = '';
-    filterTable();
+    var form = document.querySelector('#searchDelivery').closest('form');
+    if (form) form.submit();
+    else filterTable();
 });
 
 document.addEventListener('DOMContentLoaded', populateDeliveryFilters);

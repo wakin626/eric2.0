@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS customers (
 -- Items Table
 CREATE TABLE IF NOT EXISTS items (
     item_id INT AUTO_INCREMENT PRIMARY KEY,
-    item_code VARCHAR(50) NOT NULL UNIQUE,
+    item_code VARCHAR(50) NOT NULL,
     item_description VARCHAR(255) NOT NULL,
     customer_id INT(11) DEFAULT NULL,
     item_uom VARCHAR(50) NOT NULL COMMENT 'PCS, PCKS, CS',
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     poi_id INT AUTO_INCREMENT PRIMARY KEY,
     po_id INT NOT NULL,
     item_id INT NOT NULL,
+    item_uom VARCHAR(50) NOT NULL DEFAULT 'PCS' COMMENT 'Stored UOM for the PO item, defaults to PCS',
     quantity INT NOT NULL,
     produced_quantity INT DEFAULT 0 COMMENT 'Produced quantity per item',
     delivered_quantity INT DEFAULT 0 COMMENT 'Delivered quantity per item',
@@ -149,4 +150,39 @@ CREATE TABLE IF NOT EXISTS sales_orders (
     last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Excess Production Table
+CREATE TABLE IF NOT EXISTS excess_production (
+    excess_id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    item_id INT NOT NULL,
+    source_po_id INT NOT NULL,
+    source_poi_id INT NOT NULL,
+    excess_quantity INT NOT NULL,
+    consumed_quantity INT DEFAULT 0,
+    remaining_quantity INT GENERATED ALWAYS AS (excess_quantity - consumed_quantity) STORED,
+    status ENUM('pending','partial','consumed') DEFAULT 'pending',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (item_id) REFERENCES items(item_id),
+    FOREIGN KEY (source_po_id) REFERENCES purchase_orders(po_id),
+    FOREIGN KEY (source_poi_id) REFERENCES purchase_order_items(poi_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Advance Production Consumption Table
+CREATE TABLE IF NOT EXISTS advance_production_consumption (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    advance_poi_id INT NOT NULL COMMENT 'Which advance PO item was consumed',
+    advance_po_id INT NOT NULL,
+    normal_poi_id INT NOT NULL COMMENT 'Which normal PO item received it',
+    normal_po_id INT NOT NULL,
+    quantity INT NOT NULL COMMENT 'How much was allocated',
+    date_allocated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (advance_poi_id) REFERENCES purchase_order_items(poi_id),
+    FOREIGN KEY (advance_po_id) REFERENCES purchase_orders(po_id),
+    FOREIGN KEY (normal_poi_id) REFERENCES purchase_order_items(poi_id),
+    FOREIGN KEY (normal_po_id) REFERENCES purchase_orders(po_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

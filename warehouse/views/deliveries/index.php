@@ -3,7 +3,7 @@
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeliveryModal">
             <i class="bi bi-plus-circle me-1"></i> Create Delivery Receipt
         </button>
-        <button type="button" class="btn btn-outline-primary ms-2" id="printDRBtn">
+        <button type="button" class="btn btn-primary ms-2" id="printDRBtn">
             <i class="bi bi-printer me-1"></i> Print DR
         </button>
     </div>
@@ -21,8 +21,12 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
     <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchDelivery" class="form-control" placeholder="Search PO number...">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="controller" value="warehouse">
+            <input type="hidden" name="action" value="deliveries">
+            <i class="bi bi-search"></i>
+            <input type="text" name="search" id="searchDelivery" class="form-control" placeholder="Search PO number..." value="<?= htmlspecialchars($search ?? '') ?>">
+        </form>
     </div>
 </div>
 
@@ -133,7 +137,7 @@
                         <?php $disAttr = $isActive ? '' : 'disabled'; ?>
                         <?php $disClass = $isActive ? '' : 'disabled'; ?>
                         <?php if ($hasLotItems): ?>
-                        <button type="button" class="btn btn-sm btn-outline-primary viewDeliveryBtn <?= $disClass ?>" <?= $disAttr ?>
+                        <button type="button" class="btn btn-sm btn-primary viewDeliveryBtn <?= $disClass ?>" <?= $disAttr ?>
                             data-bs-toggle="modal" data-bs-target="#viewDeliveryModal"
                             data-dr="<?= htmlspecialchars($d['dr_number']) ?>"
                             data-po="<?= htmlspecialchars($d['customer_po_number']) ?>"
@@ -149,7 +153,7 @@
                             <i class="bi bi-eye"></i> View
                         </button>
                         <?php endif; ?>
-                        <button type="button" class="btn btn-sm btn-outline-danger reportDeliveryBtn <?= $disClass ?>" <?= $disAttr ?>
+                        <button type="button" class="btn btn-sm btn-danger reportDeliveryBtn <?= $disClass ?>" <?= $disAttr ?>
                             data-delivery-id="<?= $d['delivery_id'] ?>"
                             data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>"
                             data-po-id="<?= $d['po_id'] ?>"
@@ -157,7 +161,7 @@
                             data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>">
                             <i class="bi bi-flag"></i> Edit
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-success attachDRBtn <?= $disClass ?>" <?= $disAttr ?>
+                        <button type="button" class="btn btn-sm btn-success attachDRBtn <?= $disClass ?>" <?= $disAttr ?>
                             data-delivery-id="<?= $d['delivery_id'] ?>"
                             data-po-id="<?= $d['po_id'] ?>"
                             data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>">
@@ -175,13 +179,24 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=warehouse&action=deliveries&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=warehouse&action=deliveries&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=warehouse&action=deliveries&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=warehouse&action=deliveries&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -475,9 +490,17 @@
 </div>
 
 <script>
-document.getElementById('searchDelivery').addEventListener('keyup', function() {
-    applyDeliveryFilters();
+var _searchTimer;
+document.getElementById('searchDelivery').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
 });
+
+(function() {
+    var s = document.getElementById('searchDelivery');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 
 function populateDeliveryFilters() {
     const customers = new Set();
@@ -518,20 +541,17 @@ function applyDeliveryFilters() {
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
     const drFilter = document.getElementById('filterDR').value.toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
-    const searchQuery = document.getElementById('searchDelivery').value.toLowerCase();
     document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
         if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
         const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
         const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
         const drText = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
         const deliveryDate = row.cells[7] ? row.cells[7].textContent.trim() : '';
-        const rowText = row.textContent.toLowerCase();
         let show = true;
         if (custFilter && !cust.includes(custFilter)) show = false;
         if (itemFilter && !itemText.includes(itemFilter)) show = false;
         if (drFilter && !drText.includes(drFilter)) show = false;
         if (dateFilter && deliveryDate !== dateFilter) show = false;
-        if (searchQuery && !rowText.includes(searchQuery)) show = false;
         row.style.display = show ? '' : 'none';
     });
 }
@@ -546,7 +566,9 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterDR').value = '';
     document.getElementById('filterDate').value = '';
     document.getElementById('searchDelivery').value = '';
-    applyDeliveryFilters();
+    var form = document.querySelector('#searchDelivery').closest('form');
+    if (form) form.submit();
+    else applyDeliveryFilters();
 });
 
 document.addEventListener('DOMContentLoaded', populateDeliveryFilters);

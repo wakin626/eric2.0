@@ -12,7 +12,7 @@ class CustomerModel extends BaseModel {
         if ($activeOnly) {
             $sql .= " AND status = 1";
         }
-        $sql .= " ORDER BY customer_id DESC";
+        $sql .= " ORDER BY status DESC, customer_id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -86,6 +86,17 @@ class CustomerModel extends BaseModel {
                 ORDER BY customer_id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['kw' => "%{$keyword}%"]);
+        return $stmt->fetchAll();
+    }
+
+    public function getWithItems() {
+        $sql = "SELECT DISTINCT c.customer_id, c.customer_name 
+                FROM {$this->table} c 
+                INNER JOIN items i ON c.customer_id = i.customer_id AND i.`remove` = 0
+                WHERE c.`remove` = 0 AND c.status = 1
+                ORDER BY c.customer_name ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
         return $stmt->fetchAll();
     }
 }

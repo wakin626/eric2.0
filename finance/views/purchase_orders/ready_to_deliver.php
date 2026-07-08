@@ -3,8 +3,12 @@
         <span class="text-muted">Showing <?= count($purchase_orders) ?> of <?= $total ?> POs ready to deliver</span>
     </div>
     <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchPO" class="form-control" placeholder="Search PO...">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="controller" value="finance">
+            <input type="hidden" name="action" value="readyToDeliver">
+            <i class="bi bi-search"></i>
+            <input type="text" name="search" id="searchPO" class="form-control" placeholder="Search PO..." value="<?= htmlspecialchars($search ?? '') ?>">
+        </form>
     </div>
 </div>
 
@@ -100,13 +104,24 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=finance&action=readyToDeliver&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=finance&action=readyToDeliver&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=finance&action=readyToDeliver&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=finance&action=readyToDeliver&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -126,12 +141,17 @@
 </div>
 
 <script>
-document.getElementById('searchPO').addEventListener('keyup', function() {
-    const query = this.value.toLowerCase();
-    document.querySelectorAll('#poTableBody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
-    });
+var _searchTimer;
+document.getElementById('searchPO').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
 });
+
+(function() {
+    var s = document.getElementById('searchPO');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 
 document.querySelectorAll('.sortable').forEach(th => {
     th.style.cursor = 'pointer';

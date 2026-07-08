@@ -12,8 +12,12 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
     <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchPO" class="form-control" placeholder="Search PO...">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="controller" value="production">
+            <input type="hidden" name="action" value="purchaseOrders">
+            <i class="bi bi-search"></i>
+            <input type="text" name="search" id="searchPO" class="form-control" placeholder="Search PO..." value="<?= htmlspecialchars($search ?? '') ?>">
+        </form>
     </div>
 </div>
 
@@ -43,7 +47,9 @@
                         <?php if (!empty($items)): ?>
                             <?php foreach ($items as $idx => $item): ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                <div class="d-flex align-items-center" style="min-height: 20px;">
+                                    <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                </div>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>
@@ -55,13 +61,17 @@
             $qty = $item['quantity'] ?? 0;
             $itemProduced = $item['produced_quantity'] ?? 0;
             $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+            $isExcess = $itemProduced > $qty;
         ?>
             <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-            <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center flex-wrap gap-1" style="min-height: 20px;">
                 <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                    <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                    <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
                 </div>
                 <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
+                <?php if ($isExcess): ?>
+                    <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     <?php else: ?>
@@ -84,10 +94,10 @@
     <?php endif; ?>
 </td>
                     <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
+                        <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-success update-po-btn" data-po-id="<?= $po['po_id'] ?>" data-produced="<?= $po['produced_quantity'] ?? 0 ?>">
+                        <button type="button" class="btn btn-sm btn-success update-po-btn" data-po-id="<?= $po['po_id'] ?>" data-produced="<?= $po['produced_quantity'] ?? 0 ?>">
                             <i class="bi bi-pencil"></i>
                         </button>
                     </td>
@@ -102,13 +112,24 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=production&action=purchaseOrders&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=production&action=purchaseOrders&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=production&action=purchaseOrders&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=production&action=purchaseOrders&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -176,18 +197,13 @@
                 <form method="POST" action="?controller=production&action=updateQuantity" id="updatePOForm" novalidate>
                     <input type="hidden" name="po_id" id="updatePoIdInput" value="">
                     <input type="hidden" name="from" value="purchaseOrders">
-                    <div class="mb-3">
-                        <label class="form-label">STS Ref</label>
-                        <input type="text" name="sts_ref" id="updateStsRef" class="form-control" placeholder="Enter STS reference" required>
-                    </div>
-
                     <!-- Single item mode with lot rows -->
                     <div id="singleItemGroup">
                         <input type="hidden" name="poi_id" id="updatePoiIdInput" value="">
                         <label class="form-label mb-2">Lot Entries</label>
                         <div id="singleLotContainer">
                             <div class="row g-2 mb-2 align-items-end single-lot-row">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label class="form-label">Item</label>
                                     <input type="text" class="form-control" readonly value="-">
                                 </div>
@@ -195,7 +211,11 @@
                                     <label class="form-label">Required / Produced</label>
                                     <input type="text" class="form-control" readonly value="-">
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
+                                    <label class="form-label">STS Ref</label>
+                                    <input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference">
+                                </div>
+                                <div class="col-md-2">
                                     <label class="form-label">Lot Number</label>
                                     <input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required>
                                 </div>
@@ -204,18 +224,18 @@
                                     <input type="number" name="added_quantity[]" class="form-control" min="1" required>
                                 </div>
                                 <div class="col-md-1 text-end">
-                                    <button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button>
+                                    <button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button>
                                 </div>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-outline-primary btn-sm mt-1" id="addSingleLotBtn"><i class="bi bi-plus"></i> Add Lot</button>
+                        <button type="button" class="btn btn-primary btn-sm mt-1" id="addSingleLotBtn"><i class="bi bi-plus"></i> Add Lot</button>
                     </div>
 
                     <!-- Bulk items mode -->
                     <div id="bulkItemsGroup" class="d-none">
                         <label class="form-label mb-2">Items</label>
                         <div id="bulkItemsContainer"></div>
-                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="addBulkItemBtn"><i class="bi bi-plus"></i> Add Item</button>
+                        <button type="button" class="btn btn-primary btn-sm mt-2" id="addBulkItemBtn"><i class="bi bi-plus"></i> Add Item</button>
                     </div>
 
                     <div class="modal-footer px-0 pb-0">
@@ -272,15 +292,19 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             const poId = this.getAttribute('data-po-id');
             console.log('View button clicked, poId:', poId);
-            fetch('?controller=production&action=getPODetails&id=' + poId)
+            fetch('?controller=production&action=getPODetails&id=' + poId, { credentials: 'same-origin' })
                 .then(function(response) {
-                    console.log('Response status:', response.status);
                     if (!response.ok) {
-                        throw new Error('HTTP error ' + response.status);
+                        return response.text().then(text => {
+                            throw new Error('HTTP error ' + response.status + ': ' + text);
+                        });
                     }
                     return response.json();
                 })
                 .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
                     const po = data.po;
                     const items = data.po_items;
                     
@@ -300,7 +324,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             const qty = item.quantity || 0;
                             const itemProduced = item.produced_quantity || 0;
                             const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                            const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                            const isExcess = itemProduced > qty;
+                            const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                            const barWidth = Math.min(itemPercent, 100);
+                            const excessBadge = isExcess ? '<span class="badge bg-danger">' + '+' + (itemProduced - qty) + '</span>' : '';
                             const lineTotal = item.quantity * item.unit_price;
                             const row = '<tr>' +
                                 '<td>' + (item.item_code || '-') + '</td>' +
@@ -308,11 +335,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 '<td>' + (item.item_uom || '-') + '</td>' +
                                 '<td>' + qty + '</td>' +
                                 '<td>' +
-                                    '<div class="d-flex align-items-center">' +
+                                    '<div class="d-flex align-items-center flex-wrap gap-1">' +
                                         '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
-                                            '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
+                                            '<div class="progress-bar ' + barClass + '" style="width: ' + barWidth + '%"></div>' +
                                         '</div>' +
                                         '<small class="text-muted">' + itemProduced + '/' + qty + ' pcs</small>' +
+                                        excessBadge +
                                     '</div>' +
                                 '</td>' +
                                 '</tr>';
@@ -327,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
-                    alert('Failed to load PO details');
+                    alert('Failed to load PO details: ' + (error.message || 'Unknown error'));
                 });
         });
     });
@@ -346,7 +374,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 '<label class="form-label">Required / Produced</label>' +
                 '<input type="text" class="form-control" readonly>' +
             '</div>' +
-            '<div class="col-md-3">' +
+            '<div class="col-md-2">' +
+                '<label class="form-label">STS Ref</label>' +
+                '<input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference">' +
+            '</div>' +
+            '<div class="col-md-2">' +
                 '<label class="form-label">Lot Number</label>' +
                 '<input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required>' +
             '</div>' +
@@ -355,7 +387,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 '<input type="number" name="added_quantity[]" class="form-control bulk-qty" min="0" required>' +
             '</div>' +
             '<div class="col-md-1 text-end">' +
-                '<button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-bulk-item"><i class="bi bi-trash"></i></button>' +
+                '<button type="button" class="btn btn-danger btn-sm mt-4 remove-bulk-item"><i class="bi bi-trash"></i></button>' +
             '</div>';
         return row;
     }
@@ -398,11 +430,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const row = document.createElement('div');
         row.className = 'row g-2 mb-2 align-items-end single-lot-row';
         row.innerHTML =
-            '<div class="col-md-4"></div>' +
+            '<div class="col-md-3"></div>' +
             '<div class="col-md-2"></div>' +
-            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
+            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
             '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
-            '<div class="col-md-1 text-end"><button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot"><i class="bi bi-trash"></i></button></div>';
+            '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot"><i class="bi bi-trash"></i></button></div>';
         container.appendChild(row);
         updateSingleLotRemoveButtons();
     });
@@ -431,19 +464,28 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             e.stopPropagation();
             const poId = this.getAttribute('data-po-id');
-            
-            fetch('?controller=production&action=getPODetails&id=' + poId)
-                .then(response => response.json())
+
+            fetch('?controller=production&action=getPODetails&id=' + poId, { credentials: 'same-origin' })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error('HTTP error ' + response.status + ': ' + text);
+                        });
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
                     const po = data.po;
                     const items = data.po_items || [];
                     window._currentPOItems = items;
-                    
+
                     document.getElementById('updatePONumber').textContent = po.customer_po_number || '-';
                     document.getElementById('updateCustomerName').textContent = po.customer_name || '-';
                     document.getElementById('updatePoIdInput').value = poId;
                     document.getElementById('updatePoiIdInput').value = '';
-                    document.getElementById('updateStsRef').value = '';
                     document.getElementById('updateItemNameRow').style.display = 'none';
 
                     const singleGroup = document.getElementById('singleItemGroup');
@@ -488,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="' + (item.quantity || 0) + ' / ' + (item.produced_quantity || 0) + '"></div>' +
                             '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
                             '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
-                            '<div class="col-md-1 text-end"><button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
+                            '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';
                         updateSingleLotRemoveButtons();
                     } else {
@@ -502,7 +544,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="-"></div>' +
                             '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
                             '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
-                            '<div class="col-md-1 text-end"><button type="button" class="btn btn-outline-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
+                            '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';
                         updateSingleLotRemoveButtons();
                     }
@@ -512,7 +554,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
-                    alert('Failed to load PO details');
+                    alert('Failed to load PO details: ' + (error.message || 'Unknown error'));
                 });
         });
     });
@@ -551,24 +593,29 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!bulkGroup.classList.contains('d-none')) {
             let hasSelection = false;
             let hasQuantity = false;
+            let allLotsFilled = true;
             document.querySelectorAll('.bulk-item-select').forEach(function(sel) {
                 if (sel.value) hasSelection = true;
             });
             document.querySelectorAll('.bulk-qty').forEach(function(inp) {
                 if (inp.value && parseInt(inp.value) > 0) hasQuantity = true;
             });
+            document.querySelectorAll('#bulkItemsContainer input[name="lot_number[]"]').forEach(function(inp) {
+                if (!inp.value.trim()) allLotsFilled = false;
+            });
             if (!hasSelection) { alert('Please select at least one item.'); return; }
-            if (!hasQuantity) { alert('Please enter a quantity for at least one item.'); return; }
+            if (!allLotsFilled) { alert('Please enter a lot number for every row.'); return; }
+            if (!hasQuantity) { alert('Please enter an add quantity for at least one item.'); return; }
         } else {
-            let hasLot = false;
+            let hasLot = true;
             let hasQty = false;
             document.querySelectorAll('#singleLotContainer input[name="lot_number[]"]').forEach(function(inp) {
-                if (inp.value.trim()) hasLot = true;
+                if (!inp.value.trim()) hasLot = false;
             });
             document.querySelectorAll('#singleLotContainer input[name="added_quantity[]"]').forEach(function(inp) {
                 if (inp.value && parseInt(inp.value) > 0) hasQty = true;
             });
-            if (!hasLot) { alert('Please enter a lot number.'); return; }
+            if (!hasLot) { alert('Please enter a lot number for every row.'); return; }
             if (!hasQty) { alert('Please enter an add quantity.'); return; }
         }
 
@@ -705,9 +752,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-document.getElementById('searchPO').addEventListener('keyup', function() {
-    applyFilters();
+var _searchTimer;
+document.getElementById('searchPO').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
 });
+
+(function() {
+    var s = document.getElementById('searchPO');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 
 function populateFilters() {
     const customers = new Set();
@@ -742,18 +797,15 @@ function applyFilters() {
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
-    const searchQuery = document.getElementById('searchPO').value.toLowerCase();
     document.querySelectorAll('#poTableBody tr').forEach(row => {
         if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
         const cust = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
         const itemText = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
         const poDate = row.cells[1] ? row.cells[1].textContent.trim() : '';
-        const rowText = row.textContent.toLowerCase();
         let show = true;
         if (custFilter && !cust.includes(custFilter)) show = false;
         if (itemFilter && !itemText.includes(itemFilter)) show = false;
         if (dateFilter && poDate !== dateFilter) show = false;
-        if (searchQuery && !rowText.includes(searchQuery)) show = false;
         row.style.display = show ? '' : 'none';
     });
 }
@@ -766,7 +818,9 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterItem').value = '';
     document.getElementById('filterDate').value = '';
     document.getElementById('searchPO').value = '';
-    applyFilters();
+    var form = document.querySelector('#searchPO').closest('form');
+    if (form) form.submit();
+    else applyFilters();
 });
 
 document.addEventListener('DOMContentLoaded', populateFilters);

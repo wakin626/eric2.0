@@ -49,21 +49,24 @@ class WarehouseModel extends BaseModel {
         return self::getConnection()->lastInsertId();
     }
 
-    public function createPurchaseOrderItem($po_id, $item_id, $quantity, $unit_price) {
-        $sql = "INSERT INTO purchase_order_items (po_id, item_id, quantity, unit_price) 
-                VALUES (:po_id, :item_id, :quantity, :unit_price)";
+    public function createPurchaseOrderItem($po_id, $item_id, $quantity, $unit_price, $uom = 'PCS') {
+        $sql = "INSERT INTO purchase_order_items (po_id, item_id, quantity, unit_price, item_uom) 
+                VALUES (:po_id, :item_id, :quantity, :unit_price, :item_uom)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'po_id' => $po_id,
             'item_id' => $item_id,
             'quantity' => $quantity,
-            'unit_price' => $unit_price
+            'unit_price' => $unit_price,
+            'item_uom' => $uom
         ]);
+        
+        $poi_id = self::getConnection()->lastInsertId();
         
         // Update the total quantity for the PO
         $this->updatePOTotalQuantity($po_id);
         
-        return $stmt->rowCount();
+        return $poi_id;
     }
     
     public function updatePOTotalQuantity($po_id) {
@@ -76,6 +79,22 @@ class WarehouseModel extends BaseModel {
                 WHERE po.po_id = :po_id2";
         $stmt = self::getConnection()->prepare($sql);
         return $stmt->execute(['po_id' => $po_id, 'po_id2' => $po_id]);
+    }
+
+    public function updatePurchaseOrderItem($poi_id, $quantity) {
+        $sql = "UPDATE purchase_order_items SET quantity = :quantity WHERE poi_id = :poi_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['quantity' => $quantity, 'poi_id' => $poi_id]);
+        
+        $poSql = "SELECT po_id FROM purchase_order_items WHERE poi_id = :poi_id";
+        $poStmt = self::getConnection()->prepare($poSql);
+        $poStmt->execute(['poi_id' => $poi_id]);
+        $row = $poStmt->fetch();
+        if ($row) {
+            $this->updatePOTotalQuantity($row['po_id']);
+        }
+        
+        return $stmt->rowCount();
     }
 
     public function getPurchaseOrders() {
@@ -96,6 +115,17 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON po.requested_by = u.user_id 
                 WHERE po.`remove` = 0 AND po.produced_quantity > 0
+                AND po.po_id NOT IN (
+                    SELECT sub.po_id FROM (
+                        SELECT poi.po_id
+                        FROM purchase_order_items poi
+                        INNER JOIN purchase_orders po2 ON poi.po_id = po2.po_id
+                        LEFT JOIN advance_production_consumption apc ON apc.advance_poi_id = poi.poi_id
+                        WHERE po2.production_type = 'advance'
+                        GROUP BY poi.po_id
+                        HAVING SUM(COALESCE(apc.quantity, 0)) >= SUM(poi.produced_quantity)
+                    ) sub
+                )
                 ORDER BY po.last_update DESC
                 LIMIT :limit";
         $stmt = self::getConnection()->prepare($sql);
@@ -115,20 +145,20 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getPurchaseOrderItems($po_id) {
-        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.uom_conversion 
-                FROM purchase_order_items poi 
-                LEFT JOIN items i ON poi.item_id = i.item_id 
-                WHERE poi.po_id = :po_id";
+        $sql = "SELECT poi.*, i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion 
+            FROM purchase_order_items poi 
+            LEFT JOIN items i ON poi.item_id = i.item_id 
+            WHERE poi.po_id = :po_id";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
         return $stmt->fetchAll();
     }
 
     public function getPurchaseOrderItemById($poi_id) {
-        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.uom_conversion 
-                FROM purchase_order_items poi 
-                LEFT JOIN items i ON poi.item_id = i.item_id 
-                WHERE poi.poi_id = :poi_id";
+        $sql = "SELECT poi.*, i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion 
+            FROM purchase_order_items poi 
+            LEFT JOIN items i ON poi.item_id = i.item_id 
+            WHERE poi.poi_id = :poi_id";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
         return $stmt->fetch();
@@ -137,7 +167,7 @@ class WarehouseModel extends BaseModel {
     public function getPurchaseOrderItemsByPOIds($poIds) {
         if (empty($poIds)) return [];
         $placeholders = implode(',', array_fill(0, count($poIds), '?'));
-        $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.uom_conversion 
+        $sql = "SELECT poi.*, i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion 
                 FROM purchase_order_items poi 
                 LEFT JOIN items i ON poi.item_id = i.item_id 
                 WHERE poi.po_id IN ($placeholders)
@@ -200,7 +230,7 @@ class WarehouseModel extends BaseModel {
                        c.customer_name, c.customer_code, c.customer_address, c.customer_tin,
                        u.full_name as delivered_by_name,
                        i.item_code as delivery_item_code, i.item_description as delivery_item_description,
-                       i.item_uom, i.uom_conversion,
+                       COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion,
                        l.lot_number
                 FROM deliveries d 
                 LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
@@ -217,7 +247,7 @@ class WarehouseModel extends BaseModel {
 
     public function getDeliveries() {
         $sql = "SELECT d.*, po.customer_po_number, po.customer_po_date, po.total_quantity, po.delivered_quantity, po.production_type, c.customer_name,
-                   poi.quantity as item_quantity, i.item_code, i.item_description, i.item_uom, i.uom_conversion, pl.lot_number,
+                   poi.quantity as item_quantity, i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion, pl.lot_number,
                    u.full_name as delivered_by_name
             FROM deliveries d 
             LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
@@ -307,13 +337,15 @@ class WarehouseModel extends BaseModel {
         $sql = "SELECT ph.*, po.customer_po_number, c.customer_name, u.full_name,
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
-                    pr.report_type as report_type, pr.new_lot_number as resolved_lot
+                    pr.report_type as report_type, pr.new_lot_number as resolved_lot,
+                    poi.quantity as ordered_quantity
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON ph.user_id = u.user_id
                 LEFT JOIN users eu ON ph.edited_by = eu.user_id
                 LEFT JOIN production_reports pr ON ph.history_id = pr.history_id AND pr.status = 'pending'
+                LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
                 ORDER BY ph.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
@@ -1170,5 +1202,200 @@ class WarehouseModel extends BaseModel {
             ->execute(['new_lot' => $new_lot_number, 'history_id' => $history_id]);
 
         return true;
+    }
+
+    public function getPendingExcessByCustomer($customer_id) {
+        $sql = "SELECT ep.*, i.item_code, i.item_description, po.customer_po_number as source_po_number
+                FROM excess_production ep
+                LEFT JOIN items i ON ep.item_id = i.item_id
+                LEFT JOIN purchase_orders po ON ep.source_po_id = po.po_id
+                WHERE ep.customer_id = :customer_id AND ep.status != 'consumed'
+                ORDER BY ep.created_at DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getPendingExcessForItem($customer_id, $item_id) {
+        $sql = "SELECT * FROM excess_production
+                WHERE customer_id = :customer_id AND item_id = :item_id AND status != 'consumed'
+                ORDER BY created_at ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id, 'item_id' => $item_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function consumeExcess($excess_id, $qty) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT excess_quantity, consumed_quantity FROM excess_production WHERE excess_id = :excess_id");
+        $stmt->execute(['excess_id' => $excess_id]);
+        $excess = $stmt->fetch();
+        if (!$excess) return false;
+
+        $newConsumed = $excess['consumed_quantity'] + $qty;
+        $remaining = $excess['excess_quantity'] - $newConsumed;
+
+        if ($remaining <= 0) {
+            $conn->prepare("DELETE FROM excess_production WHERE excess_id = :excess_id")
+                ->execute(['excess_id' => $excess_id]);
+        } else {
+            $newStatus = $newConsumed > 0 ? 'partial' : 'pending';
+            $conn->prepare("UPDATE excess_production SET consumed_quantity = :consumed, status = :status WHERE excess_id = :excess_id")
+                ->execute(['consumed' => $newConsumed, 'status' => $newStatus, 'excess_id' => $excess_id]);
+        }
+        return true;
+    }
+
+    public function insertExcessProduction($data) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT excess_id, excess_quantity FROM excess_production
+                WHERE customer_id = :customer_id AND item_id = :item_id AND status != 'consumed'
+                ORDER BY created_at ASC LIMIT 1");
+        $stmt->execute(['customer_id' => $data['customer_id'], 'item_id' => $data['item_id']]);
+        $existing = $stmt->fetch();
+
+        if ($existing) {
+            $newQty = $existing['excess_quantity'] + $data['excess_quantity'];
+            $conn->prepare("UPDATE excess_production SET excess_quantity = :qty, status = 'pending' WHERE excess_id = :excess_id")
+                ->execute(['qty' => $newQty, 'excess_id' => $existing['excess_id']]);
+            return $existing['excess_id'];
+        } else {
+            $conn->prepare("INSERT INTO excess_production (customer_id, item_id, source_po_id, source_poi_id, excess_quantity, notes)
+                    VALUES (:customer_id, :item_id, :source_po_id, :source_poi_id, :excess_quantity, :notes)")
+                ->execute([
+                    'customer_id' => $data['customer_id'],
+                    'item_id' => $data['item_id'],
+                    'source_po_id' => $data['source_po_id'],
+                    'source_poi_id' => $data['source_poi_id'],
+                    'excess_quantity' => $data['excess_quantity'],
+                    'notes' => $data['notes'] ?? null
+                ]);
+            return $conn->lastInsertId();
+        }
+    }
+
+    public function getAllExcess($filters = []) {
+        $sql = "SELECT ep.*, i.item_code, i.item_description, c.customer_name, c.customer_code,
+                       po.customer_po_number as source_po_number
+                FROM excess_production ep
+                LEFT JOIN items i ON ep.item_id = i.item_id
+                LEFT JOIN customers c ON ep.customer_id = c.customer_id
+                LEFT JOIN purchase_orders po ON ep.source_po_id = po.po_id
+                WHERE 1=1";
+        $params = [];
+
+        if (!empty($filters['customer_id'])) {
+            $sql .= " AND ep.customer_id = :customer_id";
+            $params['customer_id'] = $filters['customer_id'];
+        }
+        if (!empty($filters['status'])) {
+            $sql .= " AND ep.status = :status";
+            $params['status'] = $filters['status'];
+        }
+
+        $sql .= " ORDER BY ep.created_at DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function updateExcessNotes($excess_id, $notes) {
+        $sql = "UPDATE excess_production SET notes = :notes WHERE excess_id = :excess_id";
+        $stmt = self::getConnection()->prepare($sql);
+        return $stmt->execute(['notes' => $notes, 'excess_id' => $excess_id]);
+    }
+
+    public function getAllExcessForProduction() {
+        $sql = "SELECT ep.*, i.item_code, i.item_description, c.customer_name, c.customer_code,
+                       po.customer_po_number as source_po_number
+                FROM excess_production ep
+                LEFT JOIN items i ON ep.item_id = i.item_id
+                LEFT JOIN customers c ON ep.customer_id = c.customer_id
+                LEFT JOIN purchase_orders po ON ep.source_po_id = po.po_id
+                WHERE ep.status != 'consumed'
+                ORDER BY ep.created_at DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getAvailableAdvanceProduction($customer_id, $item_id) {
+        $sql = "SELECT poi.poi_id, poi.po_id, poi.quantity, poi.produced_quantity,
+                       po.customer_po_number,
+                       COALESCE(SUM(apc.quantity), 0) as consumed_quantity
+                FROM purchase_order_items poi
+                INNER JOIN purchase_orders po ON poi.po_id = po.po_id
+                LEFT JOIN advance_production_consumption apc ON apc.advance_poi_id = poi.poi_id
+                WHERE po.customer_id = :customer_id
+                  AND poi.item_id = :item_id
+                  AND po.production_type = 'advance'
+                  AND po.`remove` = 0
+                  AND poi.produced_quantity > 0
+                GROUP BY poi.poi_id
+                HAVING (poi.produced_quantity - consumed_quantity) > 0
+                ORDER BY po.date_created ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id, 'item_id' => $item_id]);
+        $results = $stmt->fetchAll();
+        foreach ($results as &$r) {
+            $r['available_quantity'] = $r['produced_quantity'] - $r['consumed_quantity'];
+        }
+        return $results;
+    }
+
+    public function consumeAdvanceProduction($advance_poi_id, $advance_po_id, $normal_poi_id, $normal_po_id, $qty) {
+        $conn = self::getConnection();
+        $conn->prepare("INSERT INTO advance_production_consumption (advance_poi_id, advance_po_id, normal_poi_id, normal_po_id, quantity)
+                        VALUES (:advance_poi_id, :advance_po_id, :normal_poi_id, :normal_po_id, :qty)")
+            ->execute([
+                'advance_poi_id' => $advance_poi_id,
+                'advance_po_id' => $advance_po_id,
+                'normal_poi_id' => $normal_poi_id,
+                'normal_po_id' => $normal_po_id,
+                'qty' => $qty
+            ]);
+    }
+
+    public function getAdvanceConsumptionByAdvancePoi($poi_id) {
+        $sql = "SELECT apc.*, po.customer_po_number as normal_po_number
+                FROM advance_production_consumption apc
+                INNER JOIN purchase_orders po ON apc.normal_po_id = po.po_id
+                WHERE apc.advance_poi_id = :poi_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getAdvanceProductionByCustomer($customer_id) {
+        $sql = "SELECT poi.*, po.customer_po_number, po.customer_id,
+                       COALESCE(SUM(apc.quantity), 0) as consumed_quantity
+                FROM purchase_order_items poi
+                INNER JOIN purchase_orders po ON poi.po_id = po.po_id
+                LEFT JOIN advance_production_consumption apc ON apc.advance_poi_id = poi.poi_id
+                WHERE po.customer_id = :customer_id
+                  AND po.production_type = 'advance'
+                  AND po.`remove` = 0
+                  AND poi.produced_quantity > 0
+                GROUP BY poi.poi_id
+                HAVING (poi.produced_quantity - consumed_quantity) > 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id]);
+        $results = $stmt->fetchAll();
+        foreach ($results as &$r) {
+            $r['available_quantity'] = $r['produced_quantity'] - $r['consumed_quantity'];
+        }
+        return $results;
+    }
+
+    public function getAdvanceConsumptionByPoiIds($poi_ids) {
+        if (empty($poi_ids)) return [];
+        $placeholders = implode(',', array_fill(0, count($poi_ids), '?'));
+        $sql = "SELECT apc.*, po.customer_po_number as normal_po_number
+                FROM advance_production_consumption apc
+                INNER JOIN purchase_orders po ON apc.normal_po_id = po.po_id
+                WHERE apc.advance_poi_id IN ($placeholders)";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($poi_ids);
+        return $stmt->fetchAll();
     }
 }

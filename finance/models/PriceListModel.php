@@ -6,10 +6,11 @@ use App\Core\BaseModel;
 class PriceListModel extends BaseModel {
 
     public function getAll() {
-        $sql = "SELECT pl.*, i.item_code, i.item_description, i.item_size as item_item_size
+        $sql = "SELECT pl.*, i.item_code, i.item_description, i.item_size as item_item_size, c.customer_name
                 FROM price_list pl
                 LEFT JOIN items i ON pl.item_id = i.item_id
-                WHERE pl.`remove` = 0 ORDER BY pl.product_name ASC";
+                LEFT JOIN customers c ON i.customer_id = c.customer_id
+                WHERE pl.`remove` = 0 ORDER BY pl.status DESC, pl.product_name ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -20,6 +21,33 @@ class PriceListModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['item_id' => $item_id]);
         return $stmt->fetch();
+    }
+
+    public function getUnpricedActiveItems() {
+        $sql = "SELECT i.* FROM items i
+                WHERE i.`remove` = 0 AND i.status = 1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM price_list pl
+                      WHERE pl.item_id = i.item_id AND pl.`remove` = 0
+                  )
+                ORDER BY i.item_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getUnpricedItemsByCustomer($customer_id) {
+        $sql = "SELECT i.item_id, i.item_code, i.item_description, i.item_size, i.item_uom, i.item_amount
+                FROM items i
+                WHERE i.`remove` = 0 AND i.status = 1 AND i.customer_id = :customer_id
+                  AND NOT EXISTS (
+                      SELECT 1 FROM price_list pl
+                      WHERE pl.item_id = i.item_id AND pl.`remove` = 0
+                  )
+                ORDER BY i.item_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id]);
+        return $stmt->fetchAll();
     }
 
     public function getById($id) {
@@ -75,6 +103,16 @@ class PriceListModel extends BaseModel {
         $sql = "UPDATE price_list SET status = NOT status WHERE price_list_id = :id AND `remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         return $stmt->execute(['id' => $id]);
+    }
+
+    public function getActiveCustomers() {
+        $sql = "SELECT customer_id, customer_name
+                FROM customers
+                WHERE `remove` = 0 AND status = 1
+                ORDER BY customer_name ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
     }
 
     public function softDelete($id) {

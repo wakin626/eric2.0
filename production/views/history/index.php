@@ -14,8 +14,12 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearHistoryFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
     <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchHistory" class="form-control" placeholder="Search...">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="controller" value="production">
+            <input type="hidden" name="action" value="history">
+            <i class="bi bi-search"></i>
+            <input type="text" name="search" id="searchHistory" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($search ?? '') ?>">
+        </form>
     </div>
 </div>
 
@@ -33,6 +37,7 @@
                     <th class="sortable" data-sort="prev">Previous Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="added">Added Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="new">New Qty <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="excess">Excess <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
                     <th>Report</th>
                 </tr>
@@ -70,6 +75,17 @@
                         <?php endif; ?>
                     </td>
                     <td><strong><?= $h['new_quantity'] ?></strong></td>
+                    <td>
+                        <?php
+                        $ordered = $h['ordered_quantity'] ?? 0;
+                        $excess = $ordered > 0 ? $h['new_quantity'] - $ordered : 0;
+                        ?>
+                        <?php if ($excess > 0): ?>
+                            <span class="badge bg-danger">+<?= $excess ?></span>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td>
                         <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
@@ -83,7 +99,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="11" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="12" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -127,13 +143,24 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=production&action=history&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=production&action=history&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=production&action=history&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=production&action=history&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -166,44 +193,31 @@ function updateReportTitle() {
 }
 
 function populateHistoryFilters() {
-    const customers = new Set();
-    const items = new Set();
-    const lots = new Set();
-    document.querySelectorAll('#historyTableBody tr').forEach(row => {
-        if (row.querySelector('td[colspan]')) return;
-        const cust = row.cells[2] ? row.cells[2].textContent.trim() : '';
-        const item = row.cells[3] ? row.cells[3].textContent.trim() : '';
-        const lotStrong = row.cells[4] ? row.cells[4].querySelector('strong') : null;
-        const lot = lotStrong ? lotStrong.textContent.trim() : '';
-        if (cust) customers.add(cust);
-        if (item) items.add(item);
-        if (lot && lot !== '-') lots.add(lot);
-    });
-    const custSel = document.getElementById('filterCustomer');
-    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
-    const itemSel = document.getElementById('filterItem');
-    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
-    const lotSel = document.getElementById('filterLot');
-    lots.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = l; lotSel.appendChild(o); });
+    var custData = <?= json_encode(array_values(array_unique(array_filter(array_column($history, 'customer_name'))))) ?>;
+    var itemData = <?= json_encode(array_values(array_unique(array_filter(array_column($history, 'item_description'))))) ?>;
+    var lotData = <?= json_encode(array_values(array_unique(array_filter(array_column($history, 'lot_number'))))) ?>;
+    var custSel = document.getElementById('filterCustomer');
+    custData.forEach(function(c) { var o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
+    var itemSel = document.getElementById('filterItem');
+    itemData.forEach(function(i) { var o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
+    var lotSel = document.getElementById('filterLot');
+    lotData.forEach(function(l) { var o = document.createElement('option'); o.value = l; o.textContent = l; lotSel.appendChild(o); });
 }
 
 function applyHistoryFilters() {
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
     const lotFilter = document.getElementById('filterLot').value.toLowerCase();
-    const searchQuery = document.getElementById('searchHistory').value.toLowerCase();
     document.querySelectorAll('#historyTableBody tr').forEach(row => {
         if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
         const cust = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
         const item = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
         const lotStrong = row.cells[4] ? row.cells[4].querySelector('strong') : null;
         const lot = lotStrong ? lotStrong.textContent.trim().toLowerCase() : '';
-        const rowText = row.textContent.toLowerCase();
         let show = true;
         if (custFilter && !cust.includes(custFilter)) show = false;
         if (itemFilter && !item.includes(itemFilter)) show = false;
         if (lotFilter && !lot.includes(lotFilter)) show = false;
-        if (searchQuery && !rowText.includes(searchQuery)) show = false;
         row.style.display = show ? '' : 'none';
     });
 }
@@ -211,13 +225,25 @@ function applyHistoryFilters() {
 document.getElementById('filterCustomer').addEventListener('change', applyHistoryFilters);
 document.getElementById('filterItem').addEventListener('change', applyHistoryFilters);
 document.getElementById('filterLot').addEventListener('change', applyHistoryFilters);
-document.getElementById('searchHistory').addEventListener('keyup', applyHistoryFilters);
+var _searchTimer;
+document.getElementById('searchHistory').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
+});
+
+(function() {
+    var s = document.getElementById('searchHistory');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 document.getElementById('clearHistoryFilters').addEventListener('click', function() {
     document.getElementById('filterCustomer').value = '';
     document.getElementById('filterItem').value = '';
     document.getElementById('filterLot').value = '';
     document.getElementById('searchHistory').value = '';
-    applyHistoryFilters();
+    var form = document.querySelector('#searchHistory').closest('form');
+    if (form) form.submit();
+    else applyHistoryFilters();
 });
 
 document.addEventListener('DOMContentLoaded', populateHistoryFilters);

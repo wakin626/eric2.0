@@ -15,8 +15,12 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
     <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchPO" class="form-control" placeholder="Search PO...">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="controller" value="warehouse">
+            <input type="hidden" name="action" value="purchaseOrders">
+            <i class="bi bi-search"></i>
+            <input type="text" name="search" id="searchPO" class="form-control" placeholder="Search PO..." value="<?= htmlspecialchars($search ?? '') ?>">
+        </form>
     </div>
 </div>
 
@@ -46,7 +50,9 @@
                             <?php if (!empty($items)): ?>
                                 <?php foreach ($items as $idx => $item): ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                    <div class="d-flex align-items-center" style="min-height: 20px;">
+                                        <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                    </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>
@@ -58,13 +64,41 @@
                                     $qty = $item['quantity'] ?? 0;
                                     $itemProduced = $item['produced_quantity'] ?? 0;
                                     $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                                    $isExcess = $itemProduced > $qty;
+                                    $isAdvance = ($po['production_type'] ?? 'normal') === 'advance';
+                                    $poiId = $item['poi_id'];
+                                    $consumedTotal = 0;
+                                    $consumedBy = [];
+                                    $crRecords = ($consumption_records ?? [])[$poiId] ?? [];
+                                    if (!empty($crRecords)) {
+                                        foreach ($crRecords as $cr) {
+                                            $consumedTotal += $cr['quantity'];
+                                            $consumedBy[] = htmlspecialchars($cr['normal_po_number']) . ' (' . $cr['quantity'] . ' pcs)';
+                                        }
+                                    }
+                                    $isFullyConsumed = $isAdvance && $consumedTotal > 0 && $consumedTotal >= $itemProduced;
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <div class="d-flex align-items-center">
-                                        <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                            <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                    <div class="d-flex align-items-center" style="min-height: 20px;">
+                                    <?php if ($isFullyConsumed): ?>
+                                        <div>
+                                            <span class="badge bg-info"><i class="bi bi-arrow-left-right me-1"></i>Consumed</span>
+                                            <br><small class="text-muted">To: <?= implode(', ', $consumedBy) ?></small>
                                         </div>
-                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
+                                    <?php else: ?>
+                                        <div class="d-flex align-items-center flex-wrap gap-1" style="min-height: 20px;">
+                                            <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
+                                                <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
+                                            </div>
+                                            <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
+                                            <?php if ($isExcess): ?>
+                                                <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
+                                            <?php endif; ?>
+                                            <?php if ($consumedTotal > 0): ?>
+                                                <br><small class="text-info"><i class="bi bi-arrow-left-right"></i> Consumed: <?= implode(', ', $consumedBy) ?></small>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -80,11 +114,14 @@
                         </td>
                         <td><?= htmlspecialchars($po['requested_by_name'] ?? '-') ?></td>
                         <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
-                        <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
+                <i class="bi bi-eye"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-success edit-po-btn" data-po-id="<?= $po['po_id'] ?>">
+                <i class="bi bi-pencil"></i>
+            </button>
+        </td>
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
@@ -96,13 +133,24 @@
     </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=warehouse&action=purchaseOrders&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=warehouse&action=purchaseOrders&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=warehouse&action=purchaseOrders&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=warehouse&action=purchaseOrders&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -114,7 +162,7 @@
                 <h5 class="modal-title"><i class="bi bi-cart3 me-2"></i>Create Purchase Order</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="?controller=warehouse&action=createPO">
+            <form method="POST" action="?controller=warehouse&action=createPO" id="createPOForm">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Customer</label>
@@ -184,29 +232,35 @@
                         <label class="form-label">Items</label>
                         <div id="itemsContainer">
                             <div class="row g-2 mb-2 item-row align-items-end">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label class="form-label">Item</label>
-                                    <select name="item_id[]" class="form-select item-select" required>
+                                    <select name="item_id[]" class="form-select item-select d-none" required>
                                         <option value="">Select Customer first</option>
                                     </select>
+                                    <div class="searchable-wrap">
+                                        <input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">
+                                        <i class="bi bi-chevron-down searchable-arrow"></i>
+                                        <ul class="searchable-list"></ul>
+                                    </div>
                                 </div>
                                 <div class="col-md-2">
-                                    <label class="form-label">Item Number</label>
+                                    <label class="form-label">Code</label>
                                     <input type="text" class="form-control item-code" readonly>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-4">
                                     <label class="form-label">Description</label>
                                     <input type="text" class="form-control item-description" readonly>
                                 </div>
-                                <div class="col-md-2">
+                                <div class="col-md-1">
                                     <label class="form-label">UOM</label>
                                     <input type="text" name="uom[]" class="form-control item-uom" readonly>
                                 </div>
-                                <div class="col-md-1">
+                                <div class="col-2">
                                     <label class="form-label">Qty</label>
                                     <input type="number" name="quantity[]" class="form-control" min="1" placeholder="Qty" required>
+                                    <small class="excess-badge text-danger fw-bold d-none"></small>
                                 </div>
-                                <div class="col-md-1 text-end">
+                                <div class="col-1 text-end">
                                     <button type="button" class="btn btn-outline-danger btn-sm remove-item mt-4"><i class="bi bi-trash"></i></button>
                                 </div>
                                 <input type="hidden" name="unit_price[]" class="unit-price">
@@ -221,6 +275,36 @@
                     <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Create PO</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Create PO Preview Modal -->
+<div class="modal fade" id="createPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Confirm Create PO</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Please review the PO details before saving.</p>
+                <table class="table table-bordered mb-3">
+                    <tr><th style="width:35%">Customer</th><td id="prevCCustomer"></td></tr>
+                    <tr><th>Customer Code</th><td id="prevCCustomerCode"></td></tr>
+                    <tr><th>Customer TIN</th><td id="prevCCustomerTin"></td></tr>
+                    <tr><th>PO Number</th><td id="prevCPONumber"></td></tr>
+                    <tr><th>PO Date</th><td id="prevCPODate"></td></tr>
+                    <tr><th>Terms</th><td id="prevCTerms"></td></tr>
+                    <tr><th>Production Type</th><td id="prevCProdType"></td></tr>
+                </table>
+                <strong>Items:</strong>
+                <div id="prevCItems"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmCreateBtn"><i class="bi bi-check-lg me-1"></i>Confirm & Save</button>
+            </div>
         </div>
     </div>
 </div>
@@ -273,9 +357,178 @@
     </div>
 </div>
 
+<div class="modal fade" id="editPOModal">
+    <div class="modal-dialog modal-xl modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit PO - <span id="editPONumber"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="?controller=warehouse&action=editPO" id="editPOForm">
+                <input type="hidden" name="po_id" id="editPoId">
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Customer Code</label>
+                            <input type="text" id="editCustomerCode" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Customer Name</label>
+                            <input type="text" id="editCustomerName" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">PO Number</label>
+                            <input type="text" id="editPONumDisplay" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Customer TIN</label>
+                            <input type="text" id="editCustomerTin" class="form-control" readonly>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label">Customer PO Date</label>
+                            <input type="date" name="customer_po_date" id="editPODate" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Production Process</label>
+                            <select name="production_type" id="editProductionType" class="form-select" required>
+                                <option value="normal">Normal Production</option>
+                                <option value="advance">Advance Production</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Terms</label>
+                            <div class="input-group">
+                                <input type="text" id="editCustomerTerms" class="form-control" readonly>
+                                <span class="input-group-text">days</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Items</label>
+                        <div id="editItemsContainer"></div>
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="editAddItemBtn"><i class="bi bi-plus"></i> Add Item</button>
+                    </div>
+                    <input type="hidden" name="items_json" id="editItemsJson">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit PO Preview Modal -->
+<div class="modal fade" id="editPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Confirm Edit PO</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Please review the PO changes before saving.</p>
+                <table class="table table-bordered mb-3">
+                    <tr><th style="width:35%">Customer</th><td id="prevECustomer"></td></tr>
+                    <tr><th>Customer Code</th><td id="prevECustomerCode"></td></tr>
+                    <tr><th>Customer TIN</th><td id="prevECustomerTin"></td></tr>
+                    <tr><th>PO Number</th><td id="prevEPONumber"></td></tr>
+                    <tr><th>PO Date</th><td id="prevEPODate"></td></tr>
+                    <tr><th>Terms</th><td id="prevETerms"></td></tr>
+                    <tr><th>Production Type</th><td id="prevEProdType"></td></tr>
+                </table>
+                <strong>Items:</strong>
+                <div id="prevEItems"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmEditBtn"><i class="bi bi-check-lg me-1"></i>Confirm & Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+
+/* ---- Searchable Select ---- */
+function makeSearchable(row) {
+    const wrap = row.querySelector('.searchable-wrap');
+    if (!wrap) return;
+    const select = row.querySelector('.item-select');
+    const input = wrap.querySelector('.searchable-input');
+    const list = wrap.querySelector('.searchable-list');
+
+    function rebuildList() {
+        list.innerHTML = '';
+        Array.from(select.options).forEach(function(opt) {
+            var li = document.createElement('li');
+            li.textContent = opt.textContent;
+            li.dataset.value = opt.value;
+            if (opt.disabled) li.classList.add('disabled');
+            if (opt.value === select.value) li.classList.add('active');
+            if (!opt.value) li.style.display = 'none';
+            list.appendChild(li);
+        });
+    }
+
+    rebuildList();
+
+    input.value = select.options[select.selectedIndex] && select.value ? select.options[select.selectedIndex].textContent : '';
+
+    input.addEventListener('focus', function() {
+        rebuildList();
+        list.classList.add('show');
+    });
+
+    input.addEventListener('input', function() {
+        var term = this.value.toLowerCase();
+        var found = false;
+        list.querySelectorAll('li').forEach(function(li) {
+            if (!li.dataset.value) { li.style.display = 'none'; return; }
+            var match = li.textContent.toLowerCase().indexOf(term) > -1;
+            li.style.display = match ? '' : 'none';
+            if (match) found = true;
+        });
+        if (!found && term) {
+            list.innerHTML = '<li class="no-results">No items found</li>';
+            list.classList.add('show');
+        } else if (!term) {
+            rebuildList();
+            list.classList.add('show');
+        }
+    });
+
+    list.addEventListener('mousedown', function(e) {
+        var li = e.target.closest('li');
+        if (!li || li.classList.contains('no-results') || li.classList.contains('disabled')) return;
+        select.value = li.dataset.value;
+        input.value = li.textContent;
+        list.classList.remove('show');
+        select.dispatchEvent(new Event('change'));
+    });
+
+    input.addEventListener('blur', function() {
+        setTimeout(function() { list.classList.remove('show'); }, 150);
+    });
+
+    wrap._rebuild = rebuildList;
+}
+
+function refreshSearchables() {
+    document.querySelectorAll('.item-row').forEach(function(row) {
+        var wrap = row.querySelector('.searchable-wrap');
+        if (wrap && wrap._rebuild) wrap._rebuild();
+    });
+}
+
+/* ---- Modal events ---- */
 document.getElementById('createPOModal').addEventListener('shown.bs.modal', function() {
     updateItemDropdowns();
+    refreshSearchables();
 });
 
 document.getElementById('createPOModal').addEventListener('hidden.bs.modal', function() {
@@ -285,32 +538,44 @@ document.getElementById('createPOModal').addEventListener('hidden.bs.modal', fun
     const customerDetails = document.getElementById('customerDetails');
     customerDetails.classList.add('d-none');
 
-    const customerCode = document.getElementById('customerCode');
-    const customerName = document.getElementById('customerName');
-    const customerAddress = document.getElementById('customerAddress');
-    const customerTin = document.getElementById('customerTin');
-    const customerTerms = document.getElementById('customerTerms');
-    customerCode.value = customerName.value = customerAddress.value = customerTin.value = '';
-    customerTerms.value = '';
+    document.getElementById('customerCode').value = '';
+    document.getElementById('customerName').value = '';
+    document.getElementById('customerAddress').value = '';
+    document.getElementById('customerTin').value = '';
+    document.getElementById('customerTerms').value = '';
 
     const itemsContainer = document.getElementById('itemsContainer');
     const firstRow = itemsContainer.querySelector('.item-row');
     itemsContainer.innerHTML = '';
     itemsContainer.appendChild(firstRow.cloneNode(true));
     const newFirstRow = itemsContainer.querySelector('.item-row');
-    newFirstRow.querySelectorAll('input').forEach(el => el.value = '');
-    newFirstRow.querySelector('select').value = '';
+    newFirstRow.querySelectorAll('input').forEach(function(el) { el.value = ''; });
+    newFirstRow.querySelector('.item-select').value = '';
+    var sInput = newFirstRow.querySelector('.searchable-input');
+    if (sInput) sInput.value = '';
+    var sList = newFirstRow.querySelector('.searchable-list');
+    if (sList) { sList.innerHTML = ''; sList.classList.remove('show'); }
+    var uomInput = newFirstRow.querySelector('.item-uom');
+    if (uomInput) uomInput.value = 'PCS';
     setupItemRow(newFirstRow);
 
     updateRemoveButtons();
     updateItemDropdowns();
-
     document.getElementById('itemsJson').value = '';
+    window._createFormConfirmed = false;
 });
 
-document.getElementById('searchPO').addEventListener('keyup', function() {
-    applyFilters();
+var _searchTimer;
+document.getElementById('searchPO').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
 });
+
+(function() {
+    var s = document.getElementById('searchPO');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 
 function populateFilters() {
     const customers = new Set();
@@ -345,18 +610,15 @@ function applyFilters() {
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
-    const searchQuery = document.getElementById('searchPO').value.toLowerCase();
     document.querySelectorAll('#poTableBody tr').forEach(row => {
         if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
         const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
         const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
         const poDate = row.cells[6] ? row.cells[6].textContent.trim() : '';
-        const rowText = row.textContent.toLowerCase();
         let show = true;
         if (custFilter && !cust.includes(custFilter)) show = false;
         if (itemFilter && !itemText.includes(itemFilter)) show = false;
         if (dateFilter && poDate !== dateFilter) show = false;
-        if (searchQuery && !rowText.includes(searchQuery)) show = false;
         row.style.display = show ? '' : 'none';
     });
 }
@@ -369,7 +631,9 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterItem').value = '';
     document.getElementById('filterDate').value = '';
     document.getElementById('searchPO').value = '';
-    applyFilters();
+    var form = document.querySelector('#searchPO').closest('form');
+    if (form) form.submit();
+    else applyFilters();
 });
 
 document.addEventListener('DOMContentLoaded', populateFilters);
@@ -381,6 +645,7 @@ const customerName = document.getElementById('customerName');
 const customerAddress = document.getElementById('customerAddress');
 const customerTin = document.getElementById('customerTin');
 const customerTerms = document.getElementById('customerTerms');
+window._customerExcess = {};
 
 customerSelect.addEventListener('change', function() {
     const option = this.options[this.selectedIndex];
@@ -391,10 +656,13 @@ customerSelect.addEventListener('change', function() {
         document.querySelectorAll('.item-select').forEach(function(sel) {
             sel.innerHTML = '<option value="">Select Customer first</option>';
         });
+        document.querySelectorAll('.searchable-input').forEach(function(inp) { inp.value = ''; });
+        document.querySelectorAll('.searchable-list').forEach(function(lst) { lst.innerHTML = ''; lst.classList.remove('show'); });
         document.querySelectorAll('.item-row').forEach(function(row, idx) {
             if (idx > 0) row.remove();
         });
         updateRemoveButtons();
+        window._customerExcess = {};
         return;
     }
     customerCode.value = option.dataset.code || '';
@@ -413,6 +681,24 @@ customerSelect.addEventListener('change', function() {
             });
             document.querySelectorAll('.item-select').forEach(function(sel) {
                 sel.innerHTML = html;
+            });
+            refreshSearchables();
+        });
+
+    fetch('?controller=warehouse&action=getExcessByCustomer&customer_id=' + this.value)
+        .then(function(r) { return r.json(); })
+        .then(function(excessItems) {
+            window._customerExcess = {};
+            window._customerAdvance = {};
+            excessItems.forEach(function(e) {
+                window._customerExcess[e.item_id] = e.total_remaining;
+                if (e.excess_remaining > 0 && e.advance_remaining > 0) {
+                    window._customerAdvance[e.item_id] = 'Excess: ' + e.excess_remaining + ' + Advance: ' + e.advance_remaining;
+                } else if (e.advance_remaining > 0) {
+                    window._customerAdvance[e.item_id] = 'Advance production: ' + e.advance_remaining + ' pcs';
+                } else {
+                    window._customerAdvance[e.item_id] = 'Excess from previous PO: ' + e.excess_remaining + ' pcs';
+                }
             });
         });
 });
@@ -441,6 +727,7 @@ function updateItemDropdowns() {
             opt.disabled = isSelectedElsewhere;
         });
     });
+    refreshSearchables();
 }
 
 function setupItemRow(row) {
@@ -449,14 +736,34 @@ function setupItemRow(row) {
     const descInput = row.querySelector('.item-description');
     const uomInput = row.querySelector('.item-uom');
     const priceInput = row.querySelector('.unit-price');
+    const qtyInput = row.querySelector('[name="quantity[]"]');
+    const excessBadge = row.querySelector('.excess-badge');
+
+    if (uomInput && !uomInput.value) uomInput.value = 'PCS';
 
     select.addEventListener('change', function() {
         const selected = this.options[this.selectedIndex];
         codeInput.value = selected.dataset.code || '';
         descInput.value = selected.dataset.description || '';
-        uomInput.value = selected.dataset.uom || '';
+        uomInput.value = selected.dataset.uom || 'PCS';
         priceInput.value = selected.dataset.price || '';
         updateItemDropdowns();
+
+        var itemId = this.value;
+        if (itemId && window._customerExcess && window._customerExcess[itemId]) {
+            var excessQty = window._customerExcess[itemId];
+            qtyInput.value = excessQty;
+            qtyInput.min = 1;
+            if (excessBadge) {
+                excessBadge.textContent = window._customerAdvance[itemId] || ('Available: ' + excessQty + ' pcs');
+                excessBadge.classList.remove('d-none');
+            }
+        } else {
+            if (excessBadge) {
+                excessBadge.textContent = '';
+                excessBadge.classList.add('d-none');
+            }
+        }
     });
 
     const removeButton = row.querySelector('.remove-item');
@@ -468,6 +775,8 @@ function setupItemRow(row) {
             updateItemDropdowns();
         }
     });
+
+    makeSearchable(row);
 }
 
 const initialRow = document.querySelector('.item-row');
@@ -479,37 +788,92 @@ updateItemDropdowns();
 
 document.getElementById('addItemBtn').addEventListener('click', function() {
     const container = document.getElementById('itemsContainer');
-    const itemTemplate = document.querySelector('.item-row').cloneNode(true);
-    itemTemplate.querySelectorAll('input').forEach(el => el.value = '');
-    itemTemplate.querySelector('select').value = '';
+    const itemTemplate = container.querySelector('.item-row').cloneNode(true);
+    itemTemplate.querySelectorAll('input').forEach(function(el) { el.value = ''; });
+    itemTemplate.querySelector('.item-select').value = '';
+    var sInput = itemTemplate.querySelector('.searchable-input');
+    if (sInput) sInput.value = '';
+    var sList = itemTemplate.querySelector('.searchable-list');
+    if (sList) { sList.innerHTML = ''; sList.classList.remove('show'); }
+    var uom = itemTemplate.querySelector('.item-uom');
+    if (uom) uom.value = 'PCS';
     setupItemRow(itemTemplate);
     container.appendChild(itemTemplate);
     updateRemoveButtons();
     updateItemDropdowns();
 });
 
-document.querySelector('form').addEventListener('submit', function() {
-    const items = [];
-    document.querySelectorAll('.item-row').forEach(row => {
-        const itemId = row.querySelector('[name="item_id[]"]').value;
-        const quantity = row.querySelector('[name="quantity[]"]').value;
-        const unitPrice = row.querySelector('.unit-price').value;
-        const uom = row.querySelector('[name="uom[]"]').value;
-        const itemCode = row.querySelector('.item-code').value;
-        const itemDescription = row.querySelector('.item-description').value;
+document.getElementById('createPOForm').addEventListener('submit', function(e) {
+    if (window._createFormConfirmed) return;
+    e.preventDefault();
 
+    var customerId = document.getElementById('customerSelect').value;
+    var poNumber = document.querySelector('#createPOForm input[name="customer_po_number"]').value.trim();
+    var poDate = document.querySelector('#createPOForm input[name="customer_po_date"]').value;
+    var prodType = document.querySelector('#createPOForm select[name="production_type"]').value;
+
+    if (!customerId) { alert('Please select a customer.'); return; }
+    if (!poNumber) { alert('Please enter a PO number.'); return; }
+    if (!poDate) { alert('Please enter a PO date.'); return; }
+
+    var items = [];
+    document.querySelectorAll('#itemsContainer .item-row').forEach(function(row) {
+        var itemId = row.querySelector('[name="item_id[]"]').value;
+        var quantity = row.querySelector('[name="quantity[]"]').value;
+        var unitPrice = row.querySelector('.unit-price').value;
+        var uom = row.querySelector('[name="uom[]"]').value;
+        var itemCode = row.querySelector('.item-code').value;
+        var itemDescription = row.querySelector('.item-description').value;
         if (itemId && quantity) {
             items.push({
-                item_id: itemId,
-                quantity: quantity,
-                unit_price: unitPrice,
-                uom: uom,
-                item_code: itemCode,
-                item_description: itemDescription
+                item_id: itemId, quantity: quantity, unit_price: unitPrice,
+                uom: uom, item_code: itemCode, item_description: itemDescription
             });
         }
     });
+
+    if (items.length === 0) { alert('Please add at least one item.'); return; }
+
     document.getElementById('itemsJson').value = JSON.stringify(items);
+
+    var customerName = document.getElementById('customerName').value || '-';
+    var customerCode = document.getElementById('customerCode').value || '-';
+    var customerTin = document.getElementById('customerTin').value || '-';
+    var terms = document.getElementById('customerTerms').value || '0';
+
+    document.getElementById('prevCCustomer').textContent = customerName;
+    document.getElementById('prevCCustomerCode').textContent = customerCode;
+    document.getElementById('prevCCustomerTin').textContent = customerTin;
+    document.getElementById('prevCPONumber').textContent = poNumber;
+    document.getElementById('prevCPODate').textContent = poDate;
+    document.getElementById('prevCTerms').textContent = terms + ' days';
+    document.getElementById('prevCProdType').textContent = prodType === 'advance' ? 'Advance' : 'Normal';
+
+    var itemsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item Code</th><th>Description</th><th>UOM</th><th>Qty</th></tr></thead><tbody>';
+    items.forEach(function(item) {
+        var qty = parseInt(item.quantity) || 0;
+        var availQty = (window._customerExcess && window._customerExcess[item.item_id]) ? parseInt(window._customerExcess[item.item_id]) : 0;
+        var qtyCell = '<td>' + qty + '</td>';
+        if (availQty > 0 && qty > availQty) {
+            var newProd = qty - availQty;
+            qtyCell = '<td>' + qty + '<br><small class="text-success"><i class="bi bi-arrow-return-right"></i> Available: ' + availQty + ' + New: ' + newProd + '</small></td>';
+        } else if (availQty > 0 && qty === availQty) {
+            qtyCell = '<td>' + qty + '<br><small class="text-success"><i class="bi bi-arrow-return-right"></i> All pre-produced: ' + availQty + '</small></td>';
+        }
+        itemsHtml += '<tr><td>' + (item.item_code || '-') + '</td><td>' + (item.item_description || '-') + '</td><td>' + (item.uom || 'PCS') + '</td>' + qtyCell + '</tr>';
+    });
+    itemsHtml += '</tbody></table>';
+    document.getElementById('prevCItems').innerHTML = itemsHtml;
+
+    new bootstrap.Modal(document.getElementById('createPreviewModal')).show();
+});
+
+window._createFormConfirmed = false;
+
+document.getElementById('confirmCreateBtn').addEventListener('click', function() {
+    bootstrap.Modal.getInstance(document.getElementById('createPreviewModal')).hide();
+    window._createFormConfirmed = true;
+    document.getElementById('createPOForm').submit();
 });
 
 document.querySelectorAll('.view-po-btn').forEach(function(btn) {
@@ -543,7 +907,10 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                         const qty = item.quantity || 0;
                         const itemProduced = item.produced_quantity || 0;
                         const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                        const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                        const isExcess = itemProduced > qty;
+                        const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                        const barWidth = Math.min(itemPercent, 100);
+                        const excessBadge = isExcess ? '<span class="badge bg-danger">' + '+' + (itemProduced - qty) + '</span>' : '';
                         const lineTotal = item.quantity * item.unit_price;
                         const conv = item.uom_conversion || null;
                         let casesHtml = '—';
@@ -557,11 +924,12 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                             '<td>' + qty + '</td>' +
                             '<td>' + casesHtml + '</td>' +
                             '<td>' +
-                                '<div class="d-flex align-items-center">' +
+                                '<div class="d-flex align-items-center flex-wrap gap-1">' +
                                     '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
-                                        '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
+                                        '<div class="progress-bar ' + barClass + '" style="width: ' + barWidth + '%"></div>' +
                                     '</div>' +
                                     '<small class="text-muted">' + itemProduced + '/' + qty + ' pcs</small>' +
+                                    excessBadge +
                                 '</div>' +
                             '</td>' +
                             '</tr>';
@@ -609,5 +977,277 @@ document.querySelectorAll('.sortable').forEach(th => {
         
         rows.forEach(row => tbody.appendChild(row));
     });
+});
+
+/* ============================================================
+   EDIT PO
+   ============================================================ */
+var editCustomerId = null;
+
+function buildEditItemRow(poiId, itemId, itemCode, itemDesc, itemUom, qty, unitPrice, allItems, usedIds) {
+    var row = document.createElement('div');
+    row.className = 'row g-2 mb-2 item-row align-items-end';
+    row.dataset.poiId = poiId || '';
+    row.dataset.itemId = itemId || '';
+    row.dataset.originalQty = qty || '';
+
+    var isExisting = !!poiId;
+    usedIds = usedIds || [];
+
+    var selectHtml = '<select name="item_id[]" class="form-select item-select d-none" required>';
+    selectHtml += '<option value="">Select Item</option>';
+    if (allItems) {
+        allItems.forEach(function(it) {
+            var sel = it.item_id == itemId ? ' selected' : '';
+            var dis = (!isExisting && it.item_id != itemId && usedIds.indexOf(String(it.item_id)) > -1) ? ' disabled' : '';
+            selectHtml += '<option value="' + it.item_id + '" data-code="' + (it.item_code || '') + '" data-description="' + (it.item_description || '') + '" data-uom="' + (it.item_uom || '') + '" data-price="' + (it.item_amount || 0) + '"' + sel + dis + '>' + it.item_code + ' - ' + it.item_description + '</option>';
+        });
+    }
+    selectHtml += '</select>';
+
+    var itemFieldHtml;
+    if (isExisting) {
+        itemFieldHtml =
+            '<label class="form-label">Item</label>' +
+            selectHtml +
+            '<div class="form-control" style="background:#f8fafc;cursor:default;">' + (itemCode || '') + ' - ' + (itemDesc || '') + '</div>';
+    } else {
+        itemFieldHtml =
+            '<label class="form-label">Item</label>' +
+            selectHtml +
+            '<div class="searchable-wrap">' +
+                '<input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">' +
+                '<i class="bi bi-chevron-down searchable-arrow"></i>' +
+                '<ul class="searchable-list"></ul>' +
+            '</div>';
+    }
+
+    row.innerHTML =
+        '<input type="hidden" name="poi_id[]" class="edit-poi-id" value="' + (poiId || '') + '">' +
+        '<div class="col-md-3">' + itemFieldHtml + '</div>' +
+        '<div class="col-md-2">' +
+            '<label class="form-label">Code</label>' +
+            '<input type="text" class="form-control item-code" readonly value="' + (itemCode || '') + '">' +
+        '</div>' +
+        '<div class="col-md-3">' +
+            '<label class="form-label">Description</label>' +
+            '<input type="text" class="form-control item-description" readonly value="' + (itemDesc || '') + '">' +
+        '</div>' +
+        '<div class="col-md-1">' +
+            '<label class="form-label">UOM</label>' +
+            '<input type="text" name="uom[]" class="form-control item-uom" readonly value="' + (itemUom || 'PCS') + '">' +
+        '</div>' +
+        '<div class="col-md-2">' +
+            '<label class="form-label">Qty</label>' +
+            '<input type="number" name="quantity[]" class="form-control" min="1" placeholder="Qty" value="' + (qty || '') + '" required>' +
+        '</div>' +
+        (isExisting
+            ? '<div class="col-md-1"></div>'
+            : '<div class="col-md-1 text-end"><button type="button" class="btn btn-outline-danger btn-sm remove-item mt-4"><i class="bi bi-trash"></i></button></div>'
+        ) +
+        '<input type="hidden" name="unit_price[]" class="unit-price" value="' + (unitPrice || 0) + '">';
+
+    return row;
+}
+
+function setupEditItemRow(row) {
+    var select = row.querySelector('.item-select');
+    var codeInput = row.querySelector('.item-code');
+    var descInput = row.querySelector('.item-description');
+    var uomInput = row.querySelector('.item-uom');
+    var priceInput = row.querySelector('.unit-price');
+
+    select.addEventListener('change', function() {
+        var selected = this.options[this.selectedIndex];
+        codeInput.value = selected.dataset.code || '';
+        descInput.value = selected.dataset.description || '';
+        uomInput.value = selected.dataset.uom || 'PCS';
+        priceInput.value = selected.dataset.price || '';
+    });
+
+    var removeButton = row.querySelector('.remove-item');
+    if (removeButton) {
+        removeButton.addEventListener('click', function() {
+            var rows = document.querySelectorAll('#editItemsContainer .item-row');
+            if (rows.length > 1) {
+                row.remove();
+                updateEditRemoveButtons();
+            }
+        });
+    }
+
+    makeSearchable(row);
+}
+
+function updateEditRemoveButtons() {
+    var rows = document.querySelectorAll('#editItemsContainer .item-row');
+    var newRows = [];
+    rows.forEach(function(row) {
+        var btn = row.querySelector('.remove-item');
+        if (btn) newRows.push(row);
+    });
+    newRows.forEach(function(row) {
+        var btn = row.querySelector('.remove-item');
+        if (btn) {
+            btn.style.display = newRows.length > 1 ? 'inline-flex' : 'none';
+            btn.disabled = newRows.length <= 1;
+        }
+    });
+}
+
+document.querySelectorAll('.edit-po-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var poId = this.dataset.poId;
+
+        fetch('?controller=warehouse&action=getPODetails&id=' + poId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var po = data.po;
+                var poItems = data.po_items;
+
+                document.getElementById('editPoId').value = po.po_id;
+                document.getElementById('editPONumber').textContent = po.customer_po_number || '';
+                document.getElementById('editPONumDisplay').value = po.customer_po_number || '';
+                document.getElementById('editCustomerCode').value = po.customer_code || '';
+                document.getElementById('editCustomerName').value = po.customer_name || '';
+                document.getElementById('editCustomerTin').value = po.customer_tin || '';
+                document.getElementById('editPODate').value = po.customer_po_date || '';
+                document.getElementById('editProductionType').value = po.production_type || 'normal';
+                document.getElementById('editCustomerTerms').value = (po.customer_terms || 0) + ' days';
+                editCustomerId = po.customer_id;
+
+                fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + po.customer_id)
+                    .then(function(r2) { return r2.json(); })
+                    .then(function(allItems) {
+                        var container = document.getElementById('editItemsContainer');
+                        container.innerHTML = '';
+
+                        if (poItems && poItems.length > 0) {
+                            poItems.forEach(function(item) {
+                                var row = buildEditItemRow(
+                                    item.poi_id, item.item_id,
+                                    item.item_code, item.item_description,
+                                    item.item_uom, item.quantity, item.unit_price,
+                                    allItems
+                                );
+                                container.appendChild(row);
+                                setupEditItemRow(row);
+                            });
+                        }
+
+                        updateEditRemoveButtons();
+
+                        var modal = new bootstrap.Modal(document.getElementById('editPOModal'));
+                        modal.show();
+                    });
+            })
+            .catch(function() {
+                alert('Failed to load PO details');
+            });
+    });
+});
+
+document.getElementById('editAddItemBtn').addEventListener('click', function() {
+    fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + editCustomerId)
+        .then(function(r) { return r.json(); })
+        .then(function(allItems) {
+            var usedIds = [];
+            document.querySelectorAll('#editItemsContainer .item-row').forEach(function(r) {
+                var v = r.querySelector('.item-select').value;
+                if (v) usedIds.push(v);
+            });
+            var container = document.getElementById('editItemsContainer');
+            var row = buildEditItemRow('', '', '', '', '', '', 0, allItems, usedIds);
+            container.appendChild(row);
+            setupEditItemRow(row);
+            updateEditRemoveButtons();
+        });
+});
+
+document.getElementById('editPOModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('editItemsContainer').innerHTML = '';
+    document.getElementById('editItemsJson').value = '';
+    window._editFormConfirmed = false;
+});
+
+document.getElementById('editPOForm').addEventListener('submit', function(e) {
+    if (window._editFormConfirmed) return;
+    e.preventDefault();
+
+    var poDate = document.getElementById('editPODate').value;
+    if (!poDate) { alert('Please enter a PO date.'); return; }
+
+    var items = [];
+    document.querySelectorAll('#editItemsContainer .item-row').forEach(function(row) {
+        var itemId = row.querySelector('.item-select').value;
+        var quantity = row.querySelector('[name="quantity[]"]').value;
+        var unitPrice = row.querySelector('.unit-price').value;
+        var uom = row.querySelector('[name="uom[]"]').value;
+        var poiId = row.querySelector('.edit-poi-id').value;
+        if (itemId && quantity) {
+            items.push({
+                poi_id: poiId || null,
+                item_id: itemId,
+                quantity: quantity,
+                unit_price: unitPrice,
+                uom: uom
+            });
+        }
+    });
+
+    if (items.length === 0) { alert('Please add at least one item.'); return; }
+
+    document.getElementById('editItemsJson').value = JSON.stringify(items);
+
+    var customerName = document.getElementById('editCustomerName').value || '-';
+    var customerCode = document.getElementById('editCustomerCode').value || '-';
+    var customerTin = document.getElementById('editCustomerTin').value || '-';
+    var poNumber = document.getElementById('editPONumDisplay').value || '-';
+    var terms = document.getElementById('editCustomerTerms').value || '-';
+    var prodType = document.getElementById('editProductionType').value;
+
+    document.getElementById('prevECustomer').textContent = customerName;
+    document.getElementById('prevECustomerCode').textContent = customerCode;
+    document.getElementById('prevECustomerTin').textContent = customerTin;
+    document.getElementById('prevEPONumber').textContent = poNumber;
+    document.getElementById('prevEPODate').textContent = poDate;
+    document.getElementById('prevETerms').textContent = terms;
+    document.getElementById('prevEProdType').textContent = prodType === 'advance' ? 'Advance' : 'Normal';
+
+    var itemsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item Code</th><th>Description</th><th>UOM</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
+    document.querySelectorAll('#editItemsContainer .item-row').forEach(function(row) {
+        var itemId = row.querySelector('.item-select').value;
+        var quantity = row.querySelector('[name="quantity[]"]').value;
+        var poiId = row.querySelector('.edit-poi-id').value;
+        var code = row.querySelector('.item-code') ? row.querySelector('.item-code').value : '';
+        var desc = row.querySelector('.item-description') ? row.querySelector('.item-description').value : '';
+        var uom = row.querySelector('[name="uom[]"]') ? row.querySelector('[name="uom[]"]').value : 'PCS';
+        if (!itemId || !quantity) return;
+        var origQty = row.dataset.originalQty || '';
+        var isNew = !poiId;
+        var isChanged = poiId && origQty !== '' && String(quantity) !== String(origQty);
+        var badge;
+        if (isNew) {
+            badge = '<span class="badge bg-success">NEW</span>';
+        } else if (isChanged) {
+            badge = '<span class="badge bg-warning text-dark">UPDATE</span>';
+        } else {
+            badge = '<span class="badge bg-secondary">EXISTING</span>';
+        }
+        itemsHtml += '<tr><td>' + (code || '-') + '</td><td>' + (desc || '-') + '</td><td>' + (uom || 'PCS') + '</td><td>' + quantity + '</td><td>' + badge + '</td></tr>';
+    });
+    itemsHtml += '</tbody></table>';
+    document.getElementById('prevEItems').innerHTML = itemsHtml;
+
+    new bootstrap.Modal(document.getElementById('editPreviewModal')).show();
+});
+
+window._editFormConfirmed = false;
+
+document.getElementById('confirmEditBtn').addEventListener('click', function() {
+    bootstrap.Modal.getInstance(document.getElementById('editPreviewModal')).hide();
+    window._editFormConfirmed = true;
+    document.getElementById('editPOForm').submit();
 });
 </script>

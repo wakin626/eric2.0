@@ -12,8 +12,12 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
     </div>
     <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchPO" class="form-control" placeholder="Search PO...">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="controller" value="admin">
+            <input type="hidden" name="action" value="purchaseOrders">
+            <i class="bi bi-search"></i>
+            <input type="text" name="search" id="searchPO" class="form-control" placeholder="Search PO..." value="<?= htmlspecialchars($search ?? '') ?>">
+        </form>
     </div>
 </div>
 
@@ -44,7 +48,9 @@
                         <?php if (!empty($items)): ?>
                             <?php foreach ($items as $idx => $item): ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                <div class="d-flex align-items-center" style="min-height: 20px;">
+                                    <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                </div>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>
@@ -56,14 +62,40 @@
             $qty = $item['quantity'] ?? 0;
             $itemProduced = $item['produced_quantity'] ?? 0;
             $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+            $isExcess = $itemProduced > $qty;
+            $isAdvance = ($po['production_type'] ?? 'normal') === 'advance';
+            $poiId = $item['poi_id'];
+            $consumedTotal = 0;
+            $consumedBy = [];
+            $crRecords = ($consumption_records ?? [])[$poiId] ?? [];
+            if (!empty($crRecords)) {
+                foreach ($crRecords as $cr) {
+                    $consumedTotal += $cr['quantity'];
+                    $consumedBy[] = htmlspecialchars($cr['normal_po_number']) . ' (' . $cr['quantity'] . ' pcs)';
+                }
+            }
+            $isFullyConsumed = $isAdvance && $consumedTotal > 0 && $consumedTotal >= $itemProduced;
         ?>
             <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-            <div class="d-flex align-items-center">
-                <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                    <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+            <?php if ($isFullyConsumed): ?>
+                <div>
+                    <span class="badge bg-info"><i class="bi bi-arrow-left-right me-1"></i>Consumed</span>
+                    <br><small class="text-muted">To: <?= implode(', ', $consumedBy) ?></small>
                 </div>
-                <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
-            </div>
+            <?php else: ?>
+                <div class="d-flex align-items-center" style="min-height: 20px;">
+                    <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
+                        <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
+                    </div>
+                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
+                    <?php if ($isExcess): ?>
+                        <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
+                    <?php endif; ?>
+                    <?php if ($consumedTotal > 0): ?>
+                        <br><small class="text-info"><i class="bi bi-arrow-left-right"></i> Consumed: <?= implode(', ', $consumedBy) ?></small>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         <?php endforeach; ?>
     <?php else: ?>
         <small class="text-muted">-</small>
@@ -106,13 +138,24 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=admin&action=purchaseOrders&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=admin&action=purchaseOrders&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=admin&action=purchaseOrders&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=admin&action=purchaseOrders&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -227,9 +270,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-document.getElementById('searchPO').addEventListener('keyup', function() {
-    applyFilters();
+var _searchTimer;
+document.getElementById('searchPO').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
 });
+
+(function() {
+    var s = document.getElementById('searchPO');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 
 function populateFilters() {
     const customers = new Set();
@@ -264,18 +315,15 @@ function applyFilters() {
     const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
     const itemFilter = document.getElementById('filterItem').value.toLowerCase();
     const dateFilter = document.getElementById('filterDate').value;
-    const searchQuery = document.getElementById('searchPO').value.toLowerCase();
     document.querySelectorAll('#poTableBody tr').forEach(row => {
         if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
         const cust = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
         const itemText = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
         const poDate = row.cells[1] ? row.cells[1].textContent.trim() : '';
-        const rowText = row.textContent.toLowerCase();
         let show = true;
         if (custFilter && !cust.includes(custFilter)) show = false;
         if (itemFilter && !itemText.includes(itemFilter)) show = false;
         if (dateFilter && poDate !== dateFilter) show = false;
-        if (searchQuery && !rowText.includes(searchQuery)) show = false;
         row.style.display = show ? '' : 'none';
     });
 }
@@ -288,7 +336,9 @@ document.getElementById('clearFilters').addEventListener('click', function() {
     document.getElementById('filterItem').value = '';
     document.getElementById('filterDate').value = '';
     document.getElementById('searchPO').value = '';
-    applyFilters();
+    var form = document.querySelector('#searchPO').closest('form');
+    if (form) form.submit();
+    else applyFilters();
 });
 
 document.addEventListener('DOMContentLoaded', populateFilters);

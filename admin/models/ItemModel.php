@@ -7,11 +7,13 @@ class ItemModel extends BaseModel {
     protected $table = 'items';
 
     public function getAll($activeOnly = true) {
-        $sql = "SELECT * FROM {$this->table} WHERE `remove` = 0";
+        $sql = "SELECT i.*, c.customer_name FROM {$this->table} i
+                LEFT JOIN customers c ON i.customer_id = c.customer_id AND c.`remove` = 0
+                WHERE i.`remove` = 0";
         if ($activeOnly) {
-            $sql .= " AND status = 1";
+            $sql .= " AND i.status = 1";
         }
-        $sql .= " ORDER BY item_id DESC";
+        $sql .= " ORDER BY i.status DESC, i.item_id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -32,22 +34,48 @@ class ItemModel extends BaseModel {
     }
 
     public function create($data) {
+        $customerId = !empty($data['customer_id']) ? $data['customer_id'] : null;
+        if (!$customerId) {
+            throw new \Exception("Customer is required.");
+        }
+        $conn = self::getConnection();
+
+        $check = $conn->prepare("SELECT item_id FROM {$this->table} WHERE item_code = :code AND customer_id = :cid AND `remove` = 0");
+        $check->execute(['code' => $data['item_code'], 'cid' => $customerId]);
+        if ($check->fetch()) {
+            throw new \Exception("Item code already exists for this customer.");
+        }
+
         $sql = "INSERT INTO {$this->table} (item_code, item_description, customer_id, item_uom, uom_conversion, item_size, item_amount) 
                 VALUES (:item_code, :item_description, :customer_id, :item_uom, :uom_conversion, :item_size, :item_amount)";
-        $stmt = self::getConnection()->prepare($sql);
+        $stmt = $conn->prepare($sql);
         $stmt->execute([
             'item_code' => $data['item_code'],
             'item_description' => $data['item_description'],
-            'customer_id' => !empty($data['customer_id']) ? $data['customer_id'] : null,
+            'customer_id' => $customerId,
             'item_uom' => $data['item_uom'] ?? 'PCS',
             'uom_conversion' => !empty($data['uom_conversion']) ? $data['uom_conversion'] : null,
             'item_size' => $data['item_size'] ?? null,
             'item_amount' => $data['item_amount'] ?? 0.00
         ]);
-        return self::getConnection()->lastInsertId();
+        return $conn->lastInsertId();
     }
 
     public function update($id, $data) {
+        $customerId = !empty($data['customer_id']) ? $data['customer_id'] : null;
+        $conn = self::getConnection();
+
+        if ($customerId !== null) {
+            $check = $conn->prepare("SELECT item_id FROM {$this->table} WHERE item_code = :code AND customer_id = :cid AND item_id != :id AND `remove` = 0");
+            $check->execute(['code' => $data['item_code'], 'cid' => $customerId, 'id' => $id]);
+        } else {
+            $check = $conn->prepare("SELECT item_id FROM {$this->table} WHERE item_code = :code AND customer_id IS NULL AND item_id != :id AND `remove` = 0");
+            $check->execute(['code' => $data['item_code'], 'id' => $id]);
+        }
+        if ($check->fetch()) {
+            throw new \Exception("Item code already exists for this customer.");
+        }
+
         $sql = "UPDATE {$this->table} SET 
                 item_code = :item_code, 
                 item_description = :item_description, 
@@ -58,12 +86,12 @@ class ItemModel extends BaseModel {
                 item_amount = :item_amount,
                 status = :status
                 WHERE item_id = :id AND `remove` = 0";
-        $stmt = self::getConnection()->prepare($sql);
+        $stmt = $conn->prepare($sql);
         return $stmt->execute([
             'id' => $id,
             'item_code' => $data['item_code'],
             'item_description' => $data['item_description'],
-            'customer_id' => !empty($data['customer_id']) ? $data['customer_id'] : null,
+            'customer_id' => $customerId,
             'item_uom' => $data['item_uom'] ?? 'PCS',
             'uom_conversion' => !empty($data['uom_conversion']) ? $data['uom_conversion'] : null,
             'item_size' => $data['item_size'] ?? null,

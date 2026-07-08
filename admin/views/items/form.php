@@ -18,9 +18,9 @@
                            placeholder="Enter item description" required>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Customer</label>
-                    <select name="customer_id" class="form-select">
-                        <option value="">All Customers</option>
+                    <label class="form-label">Customer <span class="text-danger">*</span></label>
+                    <select name="customer_id" class="form-select" required>
+                        <option value="">Select Customer</option>
                         <?php foreach ($customers as $c): ?>
                             <option value="<?= $c['customer_id'] ?>" <?= ($item['customer_id'] ?? '') == $c['customer_id'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($c['customer_name']) ?>

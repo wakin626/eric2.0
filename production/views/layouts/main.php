@@ -8,38 +8,62 @@
     <link href="public/css/bootstrap-icons.min.css" rel="stylesheet">
     <link href="public/css/style.css" rel="stylesheet">
     <style>
-        /* Fixed sidebar width */
-        :root { --sidebar-width: 250px; }
-        
-        /* SIDEBAR - Fixed position creates overlay that slides in/out */
-        .sidebar { 
-            /* transition: Enables smooth sliding animation */
+        :root {
+            --sidebar-bg: #1a2332;
+            --sidebar-hover: #2d3a4f;
+            --accent: #4a90d9;
+            --accent-hover: #3a7bc8;
+            --sidebar-width: 250px;
+        }
+        body { background: #f1f5f9; font-family: 'Inter', sans-serif; }
+
+        .sidebar {
+            min-height: 100vh;
+            background: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
             transition: transform 0.3s ease;
-            /* position: fixed removes from document flow - sits on top */
             position: fixed;
             top: 0;
             left: 0;
             z-index: 1000;
             width: var(--sidebar-width);
         }
-        
-        /* COLLAPSED STATE - translateX(-100%) moves sidebar off-screen left */
-        .sidebar.collapsed {
-            transform: translateX(-100%);
-        }
-        
-        /* MAIN CONTENT - Always full width, adjusts padding only */
+        .sidebar.collapsed { transform: translateX(-100%); }
+
         .main-wrapper {
             width: 100%;
-            /* Smoothly adjusts padding when sidebar toggles */
             transition: padding-left 0.3s ease;
             padding-left: var(--sidebar-width);
         }
-        
-        /* When sidebar is closed, remove left padding */
-        .main-wrapper.sidebar-closed {
-            padding-left: 0;
+        .main-wrapper.sidebar-closed { padding-left: 0; }
+
+        .sidebar .sidebar-menu { flex: 1; padding-top: 0.5rem; }
+        .sidebar .nav-link {
+            color: #94a3b8;
+            padding: 0.65rem 1.25rem;
+            margin: 2px 10px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
         }
+        .sidebar .nav-link i { margin-right: 10px; width: 20px; text-align: center; }
+        .sidebar .nav-link:hover { background: var(--sidebar-hover); color: #e2e8f0; }
+        .sidebar .nav-link.active {
+            background: rgba(74,144,217,0.15);
+            color: #fff;
+            font-weight: 600;
+            border-left: 3px solid var(--accent);
+            margin-left: 7px;
+            padding-left: 10px;
+        }
+        .alert { animation: slideInDown 0.3s ease; }
+        @keyframes slideInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .alert-success { border-left: 4px solid #22c55e; background: #f0fdf4; color: #166534; }
+        .alert-danger { border-left: 4px solid #ef4444; background: #fef2f2; color: #991b1b; }
     </style>
 </head>
 <body>
@@ -47,11 +71,11 @@
         <div class="row g-0">
             <!-- SIDEBAR NAV - Slides in/out via CSS transform -->
             <nav class="sidebar" id="sidebar">
-                <div class="text-center text-white py-4 border-bottom border-secondary">
-                    <h5><?= ucfirst($_SESSION['department'] ?? 'Production') ?></h5>
-                    <small><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
+                <div class="text-center py-3 border-bottom" style="border-color: rgba(255,255,255,0.08) !important">
+                    <h5 class="mb-0" style="color: #fff; font-weight: 700; letter-spacing: 0.5px; font-size: 1rem;"><?= ucfirst($_SESSION['department'] ?? 'Production') ?></h5>
+                    <small style="color: #64748b; font-size: 0.7rem;"><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
-                <ul class="nav flex-column mt-2 sidebar-menu">
+                <ul class="nav flex-column sidebar-menu">
                     <li class="nav-item">
                         <a class="nav-link <?= $page_title == 'Production Dashboard' ? 'active' : '' ?>" href="?controller=production">
                             <i class="bi bi-speedometer2 me-2"></i>Dashboard
@@ -75,8 +99,8 @@
                             <?php endif; ?>
                         </a>
                     </li>
-                    <li class="nav-item border-top border-secondary mt-3 pt-2">
-                        <a class="nav-link text-white-50" href="?controller=auth&action=logout">
+                    <li class="nav-item mt-auto">
+                        <a class="nav-link" href="?controller=auth&action=logout" style="color: #64748b; transition: all 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
                             <i class="bi bi-box-arrow-left me-2"></i>Logout
                         </a>
                     </li>
@@ -115,24 +139,13 @@
     <script src="public/js/app.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Get DOM elements
     const sidebar = document.getElementById('sidebar');
     const mainWrapper = document.getElementById('mainWrapper');
     const toggleBtn = document.getElementById('sidebarToggle');
 
-    /* TOGGLE LOGIC:
-       1. classList.toggle() adds/removes 'collapsed' on sidebar
-       2. Triggers CSS transition: transform for smooth slide
-       3. main-wrapper adjusts padding to fill gap when sidebar hidden
-    */
     toggleBtn.addEventListener('click', function() {
-        // Toggle 'collapsed' class - triggers translateX transform
         sidebar.classList.toggle('collapsed');
-        
-        // Toggle padding adjustment on main content
         mainWrapper.classList.toggle('sidebar-closed');
-        
-        // Swap icon to reflect current state
         const icon = toggleBtn.querySelector('i');
         if (sidebar.classList.contains('collapsed')) {
             icon.classList.remove('bi-list');
@@ -143,7 +156,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Modal reset logic (existing code)
     document.querySelectorAll('.modal').forEach(function(modal) {
         modal.addEventListener('hidden.bs.modal', function() {
             const form = this.querySelector('form');
@@ -154,6 +166,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
+    });
+
+    // Auto-dismiss flash alerts after 4 seconds
+    const flashAlerts = document.querySelectorAll('.alert.alert-dismissible.fade.show');
+    flashAlerts.forEach(function(alertElement) {
+        setTimeout(function() {
+            const alert = bootstrap.Alert.getOrCreateInstance(alertElement);
+            alert.close();
+        }, 4000);
     });
 });
 </script>

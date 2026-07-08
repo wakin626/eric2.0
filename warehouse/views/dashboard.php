@@ -49,7 +49,9 @@
                             <?php if (!empty($items)): ?>
                                 <?php foreach ($items as $idx => $item): ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                    <div class="d-flex align-items-center" style="min-height: 20px;">
+                                        <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                    </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>
@@ -63,7 +65,7 @@
                                     $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <div class="d-flex align-items-center">
+                                    <div class="d-flex align-items-center" style="min-height: 20px;">
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                             <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                         </div>
@@ -243,16 +245,16 @@
                 <h5 class="modal-title"><i class="bi bi-cart3 me-2"></i>Create Purchase Order</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="?controller=warehouse&action=createPO">
+            <form method="POST" action="?controller=warehouse&action=createPO" id="createPOFormDash">
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label">PO Number</label>
-                            <input type="text" name="po_number" class="form-control" required>
+                            <input type="text" name="customer_po_number" class="form-control" required>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">PO Date</label>
-                            <input type="date" name="po_date" class="form-control" required>
+                            <input type="date" name="customer_po_date" class="form-control" required>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Production Process</label>
@@ -283,9 +285,14 @@
                         <div id="itemsContainer">
                             <div class="row g-2 mb-2 item-row">
                                 <div class="col-5">
-                                    <select name="item_id[]" class="form-select item-select" required>
+                                    <select name="item_id[]" class="form-select item-select d-none" required>
                                         <option value="">Select Customer first</option>
                                     </select>
+                                    <div class="searchable-wrap">
+                                        <input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">
+                                        <i class="bi bi-chevron-down searchable-arrow"></i>
+                                        <ul class="searchable-list"></ul>
+                                    </div>
                                 </div>
                                 <div class="col-3">
                                     <input type="number" name="quantity[]" class="form-control" placeholder="Quantity" required>
@@ -301,6 +308,7 @@
                         <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="addItemBtn"><i class="bi bi-plus"></i> Add Item</button>
                     </div>
                     <input type="hidden" name="items_json" id="itemsJson">
+                    <input type="hidden" name="customer_terms" id="dashCustomerTerms" value="0">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -312,20 +320,88 @@
 </div>
 
 <script>
+
+/* ---- Searchable Select ---- */
+function makeSearchable(row) {
+    const wrap = row.querySelector('.searchable-wrap');
+    if (!wrap) return;
+    const select = row.querySelector('.item-select');
+    const input = wrap.querySelector('.searchable-input');
+    const list = wrap.querySelector('.searchable-list');
+
+    function rebuildList() {
+        list.innerHTML = '';
+        Array.from(select.options).forEach(function(opt) {
+            var li = document.createElement('li');
+            li.textContent = opt.textContent;
+            li.dataset.value = opt.value;
+            if (opt.disabled) li.classList.add('disabled');
+            if (opt.value === select.value) li.classList.add('active');
+            if (!opt.value) li.style.display = 'none';
+            list.appendChild(li);
+        });
+    }
+
+    rebuildList();
+    input.value = select.options[select.selectedIndex] && select.value ? select.options[select.selectedIndex].textContent : '';
+
+    input.addEventListener('focus', function() { rebuildList(); list.classList.add('show'); });
+    input.addEventListener('input', function() {
+        var term = this.value.toLowerCase();
+        var found = false;
+        list.querySelectorAll('li').forEach(function(li) {
+            if (!li.dataset.value) { li.style.display = 'none'; return; }
+            var match = li.textContent.toLowerCase().indexOf(term) > -1;
+            li.style.display = match ? '' : 'none';
+            if (match) found = true;
+        });
+        if (!found && term) { list.innerHTML = '<li class="no-results">No items found</li>'; list.classList.add('show'); }
+        else if (!term) { rebuildList(); list.classList.add('show'); }
+    });
+    list.addEventListener('mousedown', function(e) {
+        var li = e.target.closest('li');
+        if (!li || li.classList.contains('no-results') || li.classList.contains('disabled')) return;
+        select.value = li.dataset.value;
+        input.value = li.textContent;
+        list.classList.remove('show');
+        select.dispatchEvent(new Event('change'));
+    });
+    input.addEventListener('blur', function() { setTimeout(function() { list.classList.remove('show'); }, 150); });
+    wrap._rebuild = rebuildList;
+}
+
+function refreshSearchables() {
+    document.querySelectorAll('.item-row').forEach(function(row) {
+        var wrap = row.querySelector('.searchable-wrap');
+        if (wrap && wrap._rebuild) wrap._rebuild();
+    });
+}
+
 document.getElementById('addItemBtn').addEventListener('click', function() {
     const container = document.getElementById('itemsContainer');
-    const itemTemplate = document.querySelector('.item-row').cloneNode(true);
-    itemTemplate.querySelectorAll('select, input').forEach(el => el.value = '');
+    const itemTemplate = container.querySelector('.item-row').cloneNode(true);
+    itemTemplate.querySelectorAll('input').forEach(function(el) { el.value = ''; });
+    itemTemplate.querySelector('.item-select').value = '';
+    var sInput = itemTemplate.querySelector('.searchable-input');
+    if (sInput) sInput.value = '';
+    var sList = itemTemplate.querySelector('.searchable-list');
+    if (sList) { sList.innerHTML = ''; sList.classList.remove('show'); }
     container.appendChild(itemTemplate);
+    makeSearchable(itemTemplate);
 });
 
 document.getElementById('dashCustomerSelect').addEventListener('change', function() {
     if (!this.value) {
+        document.getElementById('dashCustomerTerms').value = '0';
         document.querySelectorAll('.item-select').forEach(function(sel) {
             sel.innerHTML = '<option value="">Select Customer first</option>';
         });
+        document.querySelectorAll('.searchable-input').forEach(function(inp) { inp.value = ''; });
+        document.querySelectorAll('.searchable-list').forEach(function(lst) { lst.innerHTML = ''; lst.classList.remove('show'); });
         return;
     }
+    const option = this.options[this.selectedIndex];
+    document.getElementById('dashCustomerTerms').value = option.dataset.terms || '0';
     fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + this.value)
         .then(function(r) { return r.json(); })
         .then(function(items) {
@@ -333,9 +409,8 @@ document.getElementById('dashCustomerSelect').addEventListener('change', functio
             items.forEach(function(item) {
                 html += '<option value="' + item.item_id + '" data-price="' + (item.item_amount || 0) + '">' + item.item_code + ' - ' + item.item_description + '</option>';
             });
-            document.querySelectorAll('.item-select').forEach(function(sel) {
-                sel.innerHTML = html;
-            });
+            document.querySelectorAll('.item-select').forEach(function(sel) { sel.innerHTML = html; });
+            refreshSearchables();
         });
 });
 
@@ -353,7 +428,9 @@ document.querySelectorAll('.item-select').forEach(select => {
     });
 });
 
-document.querySelector('form').addEventListener('submit', function() {
+document.querySelectorAll('.item-row').forEach(function(row) { makeSearchable(row); });
+
+document.getElementById('createPOFormDash').addEventListener('submit', function() {
     const items = [];
     document.querySelectorAll('.item-row').forEach(row => {
         items.push({

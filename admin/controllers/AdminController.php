@@ -5,6 +5,7 @@ use App\Models\CustomerModel;
 use App\Models\ItemModel;
 use App\Models\WarehouseModel;
 use App\Helpers\Pagination;
+use App\Helpers\CsvExport;
 
 class AdminController {
     private $customerModel;
@@ -38,22 +39,75 @@ class AdminController {
 
     public function customers() {
         $allCustomers = $this->customerModel->getAll(false);
-        $pagination = Pagination::paginate($allCustomers, 10);
-        $data['customers'] = $pagination['items'];
-        $data['page'] = $pagination['page'];
-        $data['totalPages'] = $pagination['totalPages'];
-        $data['total'] = $pagination['total'];
+        $search = $_GET['search'] ?? '';
+        if ($search) $allCustomers = Pagination::filterBySearch($allCustomers, $search);
+
+        $hasFilters = ($search !== '');
+        if ($hasFilters) {
+            $data['customers'] = $allCustomers;
+            $data['page'] = 1;
+            $data['totalPages'] = 1;
+            $data['total'] = count($allCustomers);
+        } else {
+            $pagination = Pagination::paginate($allCustomers, 10);
+            $data['customers'] = $pagination['items'];
+            $data['page'] = $pagination['page'];
+            $data['totalPages'] = $pagination['totalPages'];
+            $data['total'] = $pagination['total'];
+        }
+        $data['search'] = $search;
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         $data['page_title'] = 'Customer Management';
         $this->render('customers/index', $data);
     }
 
+    public function customersExport() {
+        $allCustomers = $this->customerModel->getAll(false);
+        $search = $_GET['search'] ?? '';
+        if ($search) $allCustomers = Pagination::filterBySearch($allCustomers, $search);
+
+        $headers = ['Code', 'Name', 'Delivery Address', 'TIN', 'Terms'];
+        $rows = [];
+        foreach ($allCustomers as $c) {
+            $terms = $c['customer_terms'] ?? '';
+            $termsDisplay = $terms !== '' && $terms !== '0' ? $terms . (is_numeric($terms) ? ' days' : '') : '-';
+            $rows[] = [
+                $c['customer_code'],
+                $c['customer_name'],
+                $c['customer_address'] ?? '-',
+                $c['customer_tin'] ?? '-',
+                $termsDisplay
+            ];
+        }
+        CsvExport::export('customers_' . date('Y-m-d') . '.csv', $headers, $rows);
+    }
+
+    public function customersPrint() {
+        $allCustomers = $this->customerModel->getAll(false);
+        $search = $_GET['search'] ?? '';
+        if ($search) $allCustomers = Pagination::filterBySearch($allCustomers, $search);
+
+        $data['customers'] = $allCustomers;
+        $data['search'] = $search;
+        $data['total'] = count($allCustomers);
+        $data['pageTitle'] = 'Customer List';
+        extract($data);
+        include __DIR__ . "/../views/customers/print.php";
+        exit;
+    }
+
     public function customerCreate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $result = $this->customerModel->create($_POST);
-            if ($result) {
-                $_SESSION['success'] = 'Customer created successfully';
+            try {
+                $result = $this->customerModel->create($_POST);
+                if ($result) {
+                    $_SESSION['success'] = 'Customer created successfully';
+                    header('Location: ?controller=admin&action=customers');
+                    exit;
+                }
+            } catch (\PDOException $e) {
+                $_SESSION['error'] = $this->getDbErrorMessage($e, 'customer_code', 'Customer code');
                 header('Location: ?controller=admin&action=customers');
                 exit;
             }
@@ -92,21 +146,96 @@ class AdminController {
 
     public function items() {
         $allItems = $this->itemModel->getAll(false);
-        $pagination = Pagination::paginate($allItems, 10);
-        $data['items'] = $pagination['items'];
-        $data['customers'] = $this->customerModel->getAll(false);
-        $data['page'] = $pagination['page'];
-        $data['totalPages'] = $pagination['totalPages'];
-        $data['total'] = $pagination['total'];
+        $search = $_GET['search'] ?? '';
+        $customerFilter = $_GET['customer_id'] ?? '';
+        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
+        if ($customerFilter) {
+            $allItems = array_filter($allItems, function($item) use ($customerFilter) {
+                return isset($item['customer_id']) && $item['customer_id'] == $customerFilter;
+            });
+            $allItems = array_values($allItems);
+        }
+
+        $hasFilters = ($search !== '' || $customerFilter !== '');
+        if ($hasFilters) {
+            $data['items'] = $allItems;
+            $data['page'] = 1;
+            $data['totalPages'] = 1;
+            $data['total'] = count($allItems);
+        } else {
+            $pagination = Pagination::paginate($allItems, 10);
+            $data['items'] = $pagination['items'];
+            $data['page'] = $pagination['page'];
+            $data['totalPages'] = $pagination['totalPages'];
+            $data['total'] = $pagination['total'];
+        }
+        $data['customers'] = $this->customerModel->getWithItems();
+        $data['allCustomers'] = $this->customerModel->getAll(false);
+        $data['search'] = $search;
+        $data['customerFilter'] = $customerFilter;
         $data['page_title'] = 'Item Management';
         $this->render('items/index', $data);
     }
 
+    public function itemsExport() {
+        $allItems = $this->itemModel->getAll(false);
+        $search = $_GET['search'] ?? '';
+        $customerFilter = $_GET['customer_id'] ?? '';
+        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
+        if ($customerFilter) {
+            $allItems = array_filter($allItems, function($item) use ($customerFilter) {
+                return isset($item['customer_id']) && $item['customer_id'] == $customerFilter;
+            });
+            $allItems = array_values($allItems);
+        }
+
+        $headers = ['Code', 'Description', 'Customer', 'UOM', 'Conversion'];
+        $rows = [];
+        foreach ($allItems as $item) {
+            $rows[] = [
+                $item['item_code'],
+                $item['item_description'],
+                $item['customer_name'] ?? '-',
+                $item['item_uom'],
+                $item['uom_conversion'] ?? '-'
+            ];
+        }
+        CsvExport::export('items_' . date('Y-m-d') . '.csv', $headers, $rows);
+    }
+
+    public function itemsPrint() {
+        $allItems = $this->itemModel->getAll(false);
+        $search = $_GET['search'] ?? '';
+        $customerFilter = $_GET['customer_id'] ?? '';
+        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
+        if ($customerFilter) {
+            $allItems = array_filter($allItems, function($item) use ($customerFilter) {
+                return isset($item['customer_id']) && $item['customer_id'] == $customerFilter;
+            });
+            $allItems = array_values($allItems);
+        }
+
+        $data['items'] = $allItems;
+        $data['search'] = $search;
+        $data['customerFilter'] = $customerFilter;
+        $data['total'] = count($allItems);
+        $data['pageTitle'] = 'Item List';
+        extract($data);
+        include __DIR__ . "/../views/items/print.php";
+        exit;
+    }
+
     public function itemCreate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $result = $this->itemModel->create($_POST);
-            if ($result) {
-                $_SESSION['success'] = 'Item created successfully';
+            try {
+                $result = $this->itemModel->create($_POST);
+                if ($result) {
+                    $_SESSION['success'] = 'Item created successfully';
+                    header('Location: ?controller=admin&action=items');
+                    exit;
+                }
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
                 header('Location: ?controller=admin&action=items');
                 exit;
             }
@@ -159,6 +288,15 @@ class AdminController {
         exit;
     }
 
+    private function getDbErrorMessage(\PDOException $e, $indexName, $fieldLabel) {
+        $errorCode = $e->errorInfo[1] ?? null;
+        $errorMessage = $e->getMessage();
+        if ($errorCode === 1062) {
+            return "$fieldLabel already exists. Please try a new value.";
+        }
+        return "Database error: $errorMessage";
+    }
+
     public function customerUpdate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = $_POST['customer_id'] ?? null;
@@ -173,10 +311,14 @@ class AdminController {
 
     public function itemUpdate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $id = $_POST['item_id'] ?? null;
-            $result = $this->itemModel->update($id, $_POST);
-            if ($result) {
-                $_SESSION['success'] = 'Item updated successfully';
+            try {
+                $id = $_POST['item_id'] ?? null;
+                $result = $this->itemModel->update($id, $_POST);
+                if ($result) {
+                    $_SESSION['success'] = 'Item updated successfully';
+                }
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
             }
         }
         header('Location: ?controller=admin&action=items');
@@ -185,13 +327,31 @@ class AdminController {
 
 public function purchaseOrders() {
     $allPOs = $this->warehouseModel->getPurchaseOrders();
+    $search = $_GET['search'] ?? '';
+    if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
     $pagination = Pagination::paginate($allPOs, 10);
     $poIds = array_column($pagination['items'], 'po_id');
     $data['allPOs'] = $pagination['items'];
     $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+
+    // Get advance consumption records for advance PO items on this page
+    $allPoiIds = [];
+    foreach ($data['po_items_map'] as $items) {
+        foreach ($items as $item) {
+            $allPoiIds[] = $item['poi_id'];
+        }
+    }
+    $rawConsumption = $this->warehouseModel->getAdvanceConsumptionByPoiIds($allPoiIds);
+    $consumptionByPoi = [];
+    foreach ($rawConsumption as $cr) {
+        $consumptionByPoi[$cr['advance_poi_id']][] = $cr;
+    }
+    $data['consumption_records'] = $consumptionByPoi;
+
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
+    $data['search'] = $search;
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
     $data['page_title'] = 'Customer PO';
@@ -306,11 +466,14 @@ public function getDeliveryReports() {
 
 public function productionHistory() {
     $allHistory = $this->warehouseModel->getProductionHistory();
+    $search = $_GET['search'] ?? '';
+    if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
     $pagination = Pagination::paginate($allHistory, 10);
     $data['history'] = $pagination['items'];
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
+    $data['search'] = $search;
     $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['page_title'] = 'Production History';

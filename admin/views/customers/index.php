@@ -1,6 +1,14 @@
 <div class="d-flex justify-content-between mb-4">
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#customerModal">Add Customer</button>
-    <input type="text" id="searchCustomer" class="form-control w-25" placeholder="Search...">
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#customerModal">Add Customer</button>
+        <a href="?controller=admin&action=customersExport&search=<?= urlencode($search ?? '') ?>" class="btn btn-success"><i class="bi bi-download me-1"></i>Export Excel</a>
+        <a href="?controller=admin&action=customersPrint&search=<?= urlencode($search ?? '') ?>" class="btn btn-danger" target="_blank"><i class="bi bi-printer me-1"></i>Print PDF</a>
+    </div>
+    <form method="GET" class="d-flex" style="width:25%">
+        <input type="hidden" name="controller" value="admin">
+        <input type="hidden" name="action" value="customers">
+        <input type="text" name="search" id="searchCustomer" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($search ?? '') ?>">
+    </form>
 </div>
 
 <div class="card data-card">
@@ -36,13 +44,24 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=admin&action=customers&page=<?= $i ?>"><?= $i ?></a>
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=admin&action=customers&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
         </li>
-        <?php endfor; ?>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?controller=admin&action=customers&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?controller=admin&action=customers&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+        </li>
     </ul>
 </nav>
 <?php endif; ?>
@@ -91,10 +110,17 @@
 </div>
 
 <script>
-document.getElementById('searchCustomer').onkeyup = function() {
-    let q = this.value.toLowerCase();
-    document.querySelectorAll('#customerTableBody tr').forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none');
-};
+var _searchTimer;
+document.getElementById('searchCustomer').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
+});
+
+(function() {
+    var s = document.getElementById('searchCustomer');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
 
 document.getElementById('customerEditModal').addEventListener('show.bs.modal', function(event) {
     const button = event.relatedTarget;

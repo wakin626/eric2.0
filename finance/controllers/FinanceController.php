@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Models\FinanceModel;
 use App\Models\PriceListModel;
 use App\Helpers\Pagination;
+use App\Helpers\CsvExport;
 
 class FinanceController {
     private $financeModel;
@@ -15,7 +16,7 @@ class FinanceController {
             exit;
         }
         $action = $_GET['action'] ?? '';
-        $allowedActions = ['getPODetails', 'getDeliveryDetails'];
+        $allowedActions = ['getPODetails', 'getDeliveryDetails', 'getUnpricedItemsByCustomer'];
         if (!in_array($action, $allowedActions) && ($_SESSION['department'] ?? '') !== 'finance') {
             header('Location: ?controller=admin');
             exit;
@@ -35,11 +36,14 @@ class FinanceController {
 
     public function purchaseOrders() {
         $allPOs = $this->financeModel->getAllPurchaseOrders();
+        $search = $_GET['search'] ?? '';
+        if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
         $pagination = Pagination::paginate($allPOs, 10);
         $data['purchase_orders'] = $pagination['items'];
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['search'] = $search;
         $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
         $data['page_title'] = 'Customer PO';
         $this->render('purchase_orders/index', $data);
@@ -47,11 +51,14 @@ class FinanceController {
 
     public function readyToDeliver() {
         $readyPOs = $this->financeModel->getPOsReadyToDeliver();
+        $search = $_GET['search'] ?? '';
+        if ($search) $readyPOs = Pagination::filterBySearch($readyPOs, $search);
         $pagination = Pagination::paginate($readyPOs, 10);
         $data['purchase_orders'] = $pagination['items'];
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['search'] = $search;
         $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
         $data['page_title'] = 'Ready to Deliver';
         $this->render('purchase_orders/ready_to_deliver', $data);
@@ -59,11 +66,14 @@ class FinanceController {
 
     public function deliveries() {
         $allDeliveries = $this->financeModel->getAllDeliveries();
+        $search = $_GET['search'] ?? '';
+        if ($search) $allDeliveries = Pagination::filterBySearch($allDeliveries, $search);
         $pagination = Pagination::paginate($allDeliveries, 10);
         $data['deliveries'] = $pagination['items'];
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['search'] = $search;
         $data['page_title'] = 'Deliveries';
         $this->render('deliveries/index', $data);
     }
@@ -191,14 +201,103 @@ class FinanceController {
 
     public function priceList() {
         $allItems = $this->priceListModel->getAll();
-        $pagination = Pagination::paginate($allItems, 20);
-        $data['price_items'] = $pagination['items'];
-        $data['page'] = $pagination['page'];
-        $data['totalPages'] = $pagination['totalPages'];
-        $data['total'] = $pagination['total'];
-        $data['all_items'] = $this->financeModel->getAllActiveItems();
+        $search = $_GET['search'] ?? '';
+        $filterStatus = $_GET['status'] ?? '';
+        $filterCustomer = $_GET['customer'] ?? '';
+
+        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
+
+        if ($filterStatus !== '') {
+            $allItems = array_filter($allItems, function($item) use ($filterStatus) {
+                return $item['status'] == $filterStatus;
+            });
+        }
+
+        if ($filterCustomer !== '') {
+            $allItems = array_filter($allItems, function($item) use ($filterCustomer) {
+                return ($item['customer_name'] ?? '') === $filterCustomer;
+            });
+        }
+
+        $allItems = array_values($allItems);
+
+        $hasFilters = ($search !== '' || $filterStatus !== '' || $filterCustomer !== '');
+        if ($hasFilters) {
+            $data['price_items'] = $allItems;
+            $data['page'] = 1;
+            $data['perPage'] = count($allItems);
+            $data['totalPages'] = 1;
+            $data['total'] = count($allItems);
+            $data['hasNext'] = false;
+            $data['hasPrev'] = false;
+        } else {
+            $pagination = Pagination::paginate($allItems, 10);
+            $data['price_items'] = $pagination['items'];
+            $data['page'] = $pagination['page'];
+            $data['perPage'] = $pagination['perPage'];
+            $data['totalPages'] = $pagination['totalPages'];
+            $data['total'] = $pagination['total'];
+            $data['hasNext'] = $pagination['hasNext'];
+            $data['hasPrev'] = $pagination['hasPrev'];
+        }
+        $data['search'] = $search;
+        $data['filterStatus'] = $filterStatus;
+        $data['filterCustomer'] = $filterCustomer;
+        $data['all_items'] = $this->priceListModel->getUnpricedActiveItems();
+        $data['customers'] = $this->priceListModel->getActiveCustomers();
         $data['page_title'] = 'Price List';
         $this->render('price_list', $data);
+    }
+
+    private function getFilteredPriceItems() {
+        $allItems = $this->priceListModel->getAll();
+        $search = $_GET['search'] ?? '';
+        $filterStatus = $_GET['status'] ?? '';
+        $filterCustomer = $_GET['customer'] ?? '';
+
+        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
+        if ($filterStatus !== '') {
+            $allItems = array_filter($allItems, function($item) use ($filterStatus) {
+                return $item['status'] == $filterStatus;
+            });
+        }
+        if ($filterCustomer !== '') {
+            $allItems = array_filter($allItems, function($item) use ($filterCustomer) {
+                return ($item['customer_name'] ?? '') === $filterCustomer;
+            });
+        }
+        return array_values($allItems);
+    }
+
+    public function priceListExport() {
+        $items = $this->getFilteredPriceItems();
+        $headers = ['Product Name', 'Customer', 'Item Code', 'Net/Size', 'Price/Piece', 'Price/Pack', 'Price/Case', 'VAT Type'];
+        $rows = [];
+        foreach ($items as $item) {
+            $rows[] = [
+                $item['product_name'],
+                $item['customer_name'] ?? '-',
+                $item['item_code'] ?? '-',
+                $item['net_size'] ?? '-',
+                number_format($item['price_per_piece'] ?? 0, 2),
+                number_format($item['price_per_pack'], 2),
+                number_format($item['price_per_case'], 2),
+                $item['vat_type'] === 'vat' ? 'VAT' : 'Non-VAT'
+            ];
+        }
+        CsvExport::export('price_list_' . date('Y-m-d') . '.csv', $headers, $rows);
+    }
+
+    public function priceListPrint() {
+        $data['items'] = $this->getFilteredPriceItems();
+        $data['search'] = $_GET['search'] ?? '';
+        $data['filterStatus'] = $_GET['status'] ?? '';
+        $data['filterCustomer'] = $_GET['customer'] ?? '';
+        $data['total'] = count($data['items']);
+        $data['pageTitle'] = 'Price List';
+        extract($data);
+        include __DIR__ . "/../views/price_list/print.php";
+        exit;
     }
 
     public function priceListCreate() {
@@ -245,6 +344,18 @@ class FinanceController {
             $_SESSION['success'] = 'Status updated successfully';
         }
         header('Location: ?controller=finance&action=priceList');
+        exit;
+    }
+
+    public function getUnpricedItemsByCustomer() {
+        header('Content-Type: application/json');
+        $customer_id = $_GET['customer_id'] ?? null;
+        if (!$customer_id) {
+            echo json_encode([]);
+            exit;
+        }
+        $items = $this->priceListModel->getUnpricedItemsByCustomer($customer_id);
+        echo json_encode($items);
         exit;
     }
 

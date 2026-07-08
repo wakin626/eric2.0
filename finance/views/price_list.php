@@ -1,11 +1,34 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
+    <div class="d-flex gap-2 align-items-center">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPriceModal">
             <i class="bi bi-plus-circle me-1"></i>Add Price
         </button>
-        <span class="text-muted ms-3">Showing <?= count($price_items) ?> of <?= $total ?> items</span>
+        <a href="?controller=finance&action=priceListExport&search=<?= urlencode($search ?? '') ?>&status=<?= urlencode($filterStatus ?? '') ?>&customer=<?= urlencode($filterCustomer ?? '') ?>" class="btn btn-success"><i class="bi bi-download me-1"></i>Export Excel</a>
+        <a href="?controller=finance&action=priceListPrint&search=<?= urlencode($search ?? '') ?>&status=<?= urlencode($filterStatus ?? '') ?>&customer=<?= urlencode($filterCustomer ?? '') ?>" class="btn btn-danger" target="_blank"><i class="bi bi-printer me-1"></i>Print PDF</a>
+        <span class="text-muted ms-2">Showing <?= empty($price_items) ? 0 : ((($page - 1) * $perPage) + 1) ?> to <?= (($page - 1) * $perPage) + count($price_items) ?> of <?= $total ?> items</span>
     </div>
-    <input type="text" id="searchItem" class="form-control w-25" placeholder="Search items...">
+    <form method="GET" class="d-flex align-items-center gap-2" style="width:60%">
+        <input type="hidden" name="controller" value="finance">
+        <input type="hidden" name="action" value="priceList">
+        <input type="text" name="search" id="searchItem" class="form-control" placeholder="Search items..." value="<?= htmlspecialchars($search ?? '') ?>" style="width:25%">
+        <select name="status" id="filterStatus" class="form-select" style="width:18%">
+            <option value="">All Status</option>
+            <option value="1" <?= ($filterStatus ?? '') === '1' ? 'selected' : '' ?>>Active</option>
+            <option value="0" <?= ($filterStatus ?? '') === '0' ? 'selected' : '' ?>>Inactive</option>
+        </select>
+        <select name="customer" id="filterCustomer" class="form-select" style="width:25%">
+            <option value="">All Customers</option>
+            <?php foreach ($customers as $cust): ?>
+            <option value="<?= htmlspecialchars($cust['customer_name']) ?>" <?= ($filterCustomer ?? '') === $cust['customer_name'] ? 'selected' : '' ?>>
+                <?= htmlspecialchars($cust['customer_name']) ?>
+            </option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+        <?php if (($search ?? '') || ($filterStatus ?? '') !== '' || ($filterCustomer ?? '')): ?>
+        <a href="?controller=finance&action=priceList" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-circle"></i> Clear</a>
+        <?php endif; ?>
+    </form>
 </div>
 
 <div class="card data-card">
@@ -15,6 +38,7 @@
                 <tr>
                     <th>#</th>
                     <th>Product Name</th>
+                    <th>Customer</th>
                     <th>Item Code</th>
                     <th>Net/Size</th>
                     <th class="text-end">Price per Piece</th>
@@ -29,14 +53,15 @@
             <tbody id="itemTableBody">
                 <?php if (empty($price_items)): ?>
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-4">No price list items found</td>
+                    <td colspan="11" class="text-center text-muted py-4">No price list items found</td>
                 </tr>
                 <?php else: ?>
-                <?php $i = ($page - 1) * 20 + 1; ?>
+                <?php $i = ($page - 1) * $perPage + 1; ?>
                 <?php foreach ($price_items as $item): ?>
                 <tr>
                     <td><?= $i++ ?></td>
                     <td><strong><?= htmlspecialchars($item['product_name']) ?></strong></td>
+                    <td><?= htmlspecialchars($item['customer_name'] ?? '—') ?></td>
                     <td><span class="badge bg-secondary"><?= htmlspecialchars($item['item_code'] ?? '—') ?></span></td>
                     <td><?= htmlspecialchars($item['net_size'] ?? '—') ?></td>
                     <td class="text-end">₱<?= number_format($item['price_per_piece'] ?? 0, 2) ?></td>
@@ -82,15 +107,27 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
-<nav>
-    <ul class="pagination justify-content-center mt-4">
-        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-            <a class="page-link" href="?controller=finance&action=priceList&page=<?= $i ?>"><?= $i ?></a>
-        </li>
-        <?php endfor; ?>
-    </ul>
-</nav>
+<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
+    <?php $filterParams = http_build_query(array_filter(['search' => $search ?? '', 'status' => $filterStatus ?? '', 'customer' => $filterCustomer ?? ''], function($v) { return $v !== ''; })); ?>
+    <nav>
+        <ul class="pagination justify-content-center mt-4">
+            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="?controller=finance&action=priceList&page=<?= $page - 1 ?>&<?= $filterParams ?>">&laquo; Prev</a>
+            </li>
+            <?php foreach ($pages as $p): ?>
+                <?php if ($p === '...'): ?>
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                <?php else: ?>
+                <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                    <a class="page-link" href="?controller=finance&action=priceList&page=<?= $p ?>&<?= $filterParams ?>"><?= $p ?></a>
+                </li>
+                <?php endif; ?>
+            <?php endforeach; ?>
+            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                <a class="page-link" href="?controller=finance&action=priceList&page=<?= $page + 1 ?>&<?= $filterParams ?>">Next &raquo;</a>
+            </li>
+        </ul>
+    </nav>
 <?php endif; ?>
 
 <!-- Add Price Modal -->
@@ -101,20 +138,30 @@
                 <h5 class="modal-title">Add Price List Item</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="?controller=finance&action=priceListCreate">
+            <form method="POST" action="?controller=finance&action=priceListCreate" id="addPriceForm">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Select Product *</label>
-                        <select name="item_id" id="add_item_id" class="form-select" required>
-                            <option value="">-- Select a product --</option>
-                            <?php foreach ($all_items as $itm): ?>
-                            <option value="<?= $itm['item_id'] ?>"
-                                data-name="<?= htmlspecialchars($itm['item_description']) ?>"
-                                data-size="<?= htmlspecialchars($itm['item_size'] ?? '') ?>">
-                                <?= htmlspecialchars($itm['item_code'] . ' - ' . $itm['item_description']) ?>
+                        <label class="form-label">Customer *</label>
+                        <select id="add_customer_id" class="form-select" required>
+                            <option value="">-- Select a customer --</option>
+                            <?php foreach ($customers as $cust): ?>
+                            <option value="<?= $cust['customer_id'] ?>">
+                                <?= htmlspecialchars($cust['customer_name']) ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Select Product *</label>
+                        <select name="item_id" id="add_item_id" class="form-select d-none" required>
+                            <option value="">-- Select a product --</option>
+                        </select>
+                        <div class="searchable-wrap" id="addProductSearchable" style="display:none;">
+                            <input type="text" class="form-control searchable-input" placeholder="Type to search product..." autocomplete="off">
+                            <i class="bi bi-chevron-down searchable-arrow"></i>
+                            <ul class="searchable-list"></ul>
+                        </div>
+                        <small class="text-muted d-none" id="addProductPlaceholder">Please select a customer first</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Product Name *</label>
@@ -219,19 +266,130 @@
 </div>
 
 <script>
-document.getElementById('searchItem').onkeyup = function() {
-    let q = this.value.toLowerCase();
-    document.querySelectorAll('#itemTableBody tr').forEach(function(r) {
-        r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
-    });
-};
-
-document.getElementById('add_item_id').addEventListener('change', function() {
-    var selected = this.options[this.selectedIndex];
-    document.getElementById('add_product_name').value = selected.dataset.name || '';
-    document.getElementById('add_net_size').value = selected.dataset.size || '';
+var _searchTimer;
+document.getElementById('searchItem').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    var form = this.closest('form');
+    _searchTimer = setTimeout(function() { form.submit(); }, 500);
 });
 
+document.getElementById('filterStatus').addEventListener('change', function() {
+    this.closest('form').submit();
+});
+
+document.getElementById('filterCustomer').addEventListener('change', function() {
+    this.closest('form').submit();
+});
+
+(function() {
+    var s = document.getElementById('searchItem');
+    if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+})();
+
+/* ---- Add Price: Customer → Items AJAX ---- */
+document.getElementById('add_customer_id').addEventListener('change', function() {
+    var customerId = this.value;
+    var itemSelect = document.getElementById('add_item_id');
+    var searchableWrap = document.getElementById('addProductSearchable');
+    var placeholder = document.getElementById('addProductPlaceholder');
+    var sInput = searchableWrap.querySelector('.searchable-input');
+    var sList = searchableWrap.querySelector('.searchable-list');
+
+    itemSelect.innerHTML = '<option value="">-- Select a product --</option>';
+    sInput.value = '';
+    sList.innerHTML = '';
+
+    if (!customerId) {
+        searchableWrap.style.display = 'none';
+        placeholder.classList.remove('d-none');
+        return;
+    }
+
+    fetch('?controller=finance&action=getUnpricedItemsByCustomer&customer_id=' + customerId)
+        .then(function(r) { return r.json(); })
+        .then(function(items) {
+            itemSelect.innerHTML = '<option value="">-- Select a product --</option>';
+            items.forEach(function(it) {
+                var opt = document.createElement('option');
+                opt.value = it.item_id;
+                opt.dataset.name = it.item_description || '';
+                opt.dataset.size = it.item_size || '';
+                opt.textContent = it.item_code + ' - ' + it.item_description;
+                itemSelect.appendChild(opt);
+            });
+            searchableWrap.style.display = '';
+            placeholder.classList.add('d-none');
+            rebuildSearchableList();
+        });
+});
+
+function rebuildSearchableList() {
+    var select = document.getElementById('add_item_id');
+    var wrap = document.getElementById('addProductSearchable');
+    var input = wrap.querySelector('.searchable-input');
+    var list = wrap.querySelector('.searchable-list');
+
+    list.innerHTML = '';
+    Array.from(select.options).forEach(function(opt) {
+        var li = document.createElement('li');
+        li.textContent = opt.textContent;
+        li.dataset.value = opt.value;
+        if (!opt.value) li.style.display = 'none';
+        list.appendChild(li);
+    });
+
+    input.addEventListener('focus', function() {
+        rebuildSearchableList();
+        list.classList.add('show');
+    });
+
+    input.addEventListener('input', function() {
+        var term = this.value.toLowerCase();
+        var found = false;
+        list.querySelectorAll('li').forEach(function(li) {
+            if (!li.dataset.value) { li.style.display = 'none'; return; }
+            var match = li.textContent.toLowerCase().indexOf(term) > -1;
+            li.style.display = match ? '' : 'none';
+            if (match) found = true;
+        });
+        if (!found && term) {
+            list.innerHTML = '<li class="no-results">No products found</li>';
+            list.classList.add('show');
+        } else if (!term) {
+            rebuildSearchableList();
+            list.classList.add('show');
+        }
+    });
+
+    list.addEventListener('mousedown', function(e) {
+        var li = e.target.closest('li');
+        if (!li || li.classList.contains('no-results')) return;
+        select.value = li.dataset.value;
+        input.value = li.textContent;
+        list.classList.remove('show');
+        var selected = select.options[select.selectedIndex];
+        document.getElementById('add_product_name').value = selected.dataset.name || '';
+        document.getElementById('add_net_size').value = selected.dataset.size || '';
+    });
+
+    input.addEventListener('blur', function() {
+        setTimeout(function() { list.classList.remove('show'); }, 150);
+    });
+}
+
+document.getElementById('addPriceModal').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('add_customer_id').value = '';
+    document.getElementById('add_item_id').innerHTML = '<option value="">-- Select a product --</option>';
+    document.getElementById('add_product_name').value = '';
+    document.getElementById('add_net_size').value = '';
+    var wrap = document.getElementById('addProductSearchable');
+    wrap.style.display = 'none';
+    wrap.querySelector('.searchable-input').value = '';
+    wrap.querySelector('.searchable-list').innerHTML = '';
+    document.getElementById('addProductPlaceholder').classList.remove('d-none');
+});
+
+/* ---- Edit Price ---- */
 document.querySelectorAll('.edit-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
         document.getElementById('edit_price_list_id').value = this.dataset.id;

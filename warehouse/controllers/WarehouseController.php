@@ -13,7 +13,7 @@ class WarehouseController {
             exit;
         }
         $action = $_GET['action'] ?? '';
-        if ($action !== 'getPODetails' && ($_SESSION['department'] ?? '') !== 'warehouse') {
+        if ($action !== 'getPODetails' && $action !== 'getItemsByCustomer' && $action !== 'getExcessByCustomer' && $action !== 'excessProduction' && $action !== 'updateExcessNotes' && ($_SESSION['department'] ?? '') !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
         }
@@ -33,46 +33,184 @@ class WarehouseController {
 
     public function purchaseOrders() {
         $allPOs = $this->warehouseModel->getPurchaseOrders();
+        $search = $_GET['search'] ?? '';
+        if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
         $pagination = Pagination::paginate($allPOs, 10);
         $poIds = array_column($pagination['items'], 'po_id');
         $data['purchase_orders'] = $pagination['items'];
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+
+        // Get advance consumption records for advance PO items on this page
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) {
+                $allPoiIds[] = $item['poi_id'];
+            }
+        }
+        $rawConsumption = $this->warehouseModel->getAdvanceConsumptionByPoiIds($allPoiIds);
+        $consumptionByPoi = [];
+        foreach ($rawConsumption as $cr) {
+            $consumptionByPoi[$cr['advance_poi_id']][] = $cr;
+        }
+        $data['consumption_records'] = $consumptionByPoi;
+
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['search'] = $search;
         $data['page_title'] = 'Customer PO';
         $this->render('purchase_orders/index', $data);
     }
 
     public function createPO() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $customer_id = $_POST['customer_id'];
+            $production_type = $_POST['production_type'] ?? 'normal';
+            $conn = \App\Core\BaseModel::getConnection();
+
             $po_id = $this->warehouseModel->createPurchaseOrder([
                 'customer_po_number' => $_POST['customer_po_number'],
                 'customer_po_date' => $_POST['customer_po_date'],
-                'customer_id' => $_POST['customer_id'],
+                'customer_id' => $customer_id,
                 'requested_by' => $_SESSION['user_id'],
                 'customer_terms' => $_POST['customer_terms'] ?? 0,
-                'production_type' => $_POST['production_type'] ?? 'normal'
+                'production_type' => $production_type
             ]);
 
             $items = json_decode($_POST['items_json'], true);
             foreach ($items as $item) {
-                $this->warehouseModel->createPurchaseOrderItem(
+                $poi_id = $this->warehouseModel->createPurchaseOrderItem(
                     $po_id,
                     $item['item_id'],
                     $item['quantity'],
-                    $item['unit_price']
+                    $item['unit_price'],
+                    $item['uom'] ?? 'PCS'
                 );
+
+                // 1. Consume from excess_production (existing logic)
+                $pendingExcess = $this->warehouseModel->getPendingExcessForItem($customer_id, $item['item_id']);
+                $totalExcessAvailable = 0;
+                foreach ($pendingExcess as $excess) {
+                    $totalExcessAvailable += $excess['remaining_quantity'];
+                }
+
+                $currentProduced = 0;
+                if ($totalExcessAvailable > 0) {
+                    $consumeQty = min($totalExcessAvailable, $item['quantity']);
+                    $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
+                        ->execute(['produced' => $consumeQty, 'poi_id' => $poi_id]);
+                    $currentProduced = $consumeQty;
+
+                    $remainingToConsume = $consumeQty;
+                    foreach ($pendingExcess as $excess) {
+                        if ($remainingToConsume <= 0) break;
+                        $available = $excess['remaining_quantity'];
+                        $take = min($available, $remainingToConsume);
+                        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity - :qty WHERE poi_id = :poi_id")
+                            ->execute(['qty' => $take, 'poi_id' => $excess['source_poi_id']]);
+                        $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                            SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+                        ) WHERE po_id = :po_id2")
+                            ->execute(['po_id' => $excess['source_po_id'], 'po_id2' => $excess['source_po_id']]);
+                        $this->warehouseModel->consumeExcess($excess['excess_id'], $take);
+                        $remainingToConsume -= $take;
+                    }
+                }
+
+                // 2. Consume from advance production (only for normal POs)
+                if ($production_type === 'normal' && $currentProduced < $item['quantity']) {
+                    $advanceItems = $this->warehouseModel->getAvailableAdvanceProduction($customer_id, $item['item_id']);
+                    $advanceTotal = 0;
+                    foreach ($advanceItems as $ai) {
+                        $advanceTotal += $ai['available_quantity'];
+                    }
+
+                    if ($advanceTotal > 0) {
+                        $advanceConsume = min($advanceTotal, $item['quantity'] - $currentProduced);
+
+                        // Create allocation records
+                        $remainingAdvance = $advanceConsume;
+                        foreach ($advanceItems as $ai) {
+                            if ($remainingAdvance <= 0) break;
+                            $take = min($ai['available_quantity'], $remainingAdvance);
+                            $this->warehouseModel->consumeAdvanceProduction(
+                                $ai['poi_id'], $ai['po_id'],
+                                $poi_id, $po_id,
+                                $take
+                            );
+                            $remainingAdvance -= $take;
+                        }
+
+                        // Update produced_quantity on new PO item
+                        $newProduced = $currentProduced + $advanceConsume;
+                        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
+                            ->execute(['produced' => $newProduced, 'poi_id' => $poi_id]);
+                        $currentProduced = $newProduced;
+                    }
+                }
+
+                // Recalculate PO-level produced_quantity
+                $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                    SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+                ) WHERE po_id = :po_id2")
+                    ->execute(['po_id' => $po_id, 'po_id2' => $po_id]);
             }
 
             $_SESSION['success'] = 'Purchase Order ' . $_POST['customer_po_number'] . ' created successfully';
-            header('Location: ?controller=warehouse&action=index');
+            header('Location: ?controller=warehouse&action=purchaseOrders');
             exit;
         }
         $data['page_title'] = 'Create PO';
         $data['customers'] = $this->warehouseModel->getCustomers();
         $data['items'] = $this->warehouseModel->getItems();
         $this->render('purchase_orders/create', $data);
+    }
+
+    public function editPO() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $po_id = $_POST['po_id'] ?? null;
+            if (!$po_id) {
+                $_SESSION['error'] = 'Invalid PO';
+                header('Location: ?controller=warehouse&action=purchaseOrders');
+                exit;
+            }
+
+            if (isset($_POST['customer_po_date'])) {
+                $conn = \App\Core\BaseModel::getConnection();
+                $stmt = $conn->prepare("UPDATE purchase_orders SET customer_po_date = :date, production_type = :type WHERE po_id = :po_id");
+                $stmt->execute([
+                    'date' => $_POST['customer_po_date'],
+                    'type' => $_POST['production_type'] ?? 'normal',
+                    'po_id' => $po_id
+                ]);
+            }
+
+            $items = json_decode($_POST['items_json'], true);
+            if (!empty($items)) {
+                foreach ($items as $item) {
+                    if (!empty($item['poi_id'])) {
+                        $this->warehouseModel->updatePurchaseOrderItem(
+                            $item['poi_id'],
+                            $item['quantity']
+                        );
+                    } else {
+                        $this->warehouseModel->createPurchaseOrderItem(
+                            $po_id,
+                            $item['item_id'],
+                            $item['quantity'],
+                            $item['unit_price'],
+                            $item['uom'] ?? 'PCS'
+                        );
+                    }
+                }
+            }
+
+            $this->warehouseModel->updatePOTotalQuantity($po_id);
+
+            $_SESSION['success'] = 'Purchase Order updated successfully';
+            header('Location: ?controller=warehouse&action=purchaseOrders');
+            exit;
+        }
     }
 
     public function viewPO() {
@@ -92,6 +230,85 @@ class WarehouseController {
         }
         $items = $this->warehouseModel->getItemsByCustomer($customer_id);
         echo json_encode($items);
+        exit;
+    }
+
+    public function getExcessByCustomer() {
+        header('Content-Type: application/json');
+        $customer_id = $_GET['customer_id'] ?? null;
+        if (!$customer_id) {
+            echo json_encode([]);
+            exit;
+        }
+
+        // Get excess production data
+        $excess = $this->warehouseModel->getPendingExcessByCustomer($customer_id);
+        $grouped = [];
+        foreach ($excess as $e) {
+            $itemId = $e['item_id'];
+            if (!isset($grouped[$itemId])) {
+                $grouped[$itemId] = [
+                    'item_id' => $itemId,
+                    'item_code' => $e['item_code'],
+                    'item_description' => $e['item_description'],
+                    'total_remaining' => 0,
+                    'excess_remaining' => 0,
+                    'advance_remaining' => 0,
+                    'records' => []
+                ];
+            }
+            $grouped[$itemId]['total_remaining'] += $e['remaining_quantity'];
+            $grouped[$itemId]['excess_remaining'] += $e['remaining_quantity'];
+            $grouped[$itemId]['records'][] = $e;
+        }
+
+        // Get advance production data and merge into totals
+        $advanceItems = $this->warehouseModel->getAdvanceProductionByCustomer($customer_id);
+        foreach ($advanceItems as $ai) {
+            $itemId = $ai['item_id'];
+            if (!isset($grouped[$itemId])) {
+                $grouped[$itemId] = [
+                    'item_id' => $itemId,
+                    'item_code' => '',
+                    'item_description' => '',
+                    'total_remaining' => 0,
+                    'excess_remaining' => 0,
+                    'advance_remaining' => 0,
+                    'records' => []
+                ];
+            }
+            $grouped[$itemId]['total_remaining'] += $ai['available_quantity'];
+            $grouped[$itemId]['advance_remaining'] += $ai['available_quantity'];
+        }
+
+        echo json_encode(array_values($grouped));
+        exit;
+    }
+
+    public function excessProduction() {
+        $filters = [];
+        if (!empty($_GET['customer_id'])) $filters['customer_id'] = $_GET['customer_id'];
+        if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
+        $data['excess'] = $this->warehouseModel->getAllExcess($filters);
+        $data['customers'] = $this->warehouseModel->getCustomers();
+        $data['page_title'] = 'Excess Production';
+        $this->render('excess_production/index', $data);
+    }
+
+    public function updateExcessNotes() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false]);
+            exit;
+        }
+        $excess_id = $_POST['excess_id'] ?? null;
+        $notes = $_POST['notes'] ?? '';
+        if (!$excess_id) {
+            echo json_encode(['success' => false, 'message' => 'Missing excess_id']);
+            exit;
+        }
+        $this->warehouseModel->updateExcessNotes($excess_id, $notes);
+        echo json_encode(['success' => true]);
         exit;
     }
 
@@ -179,6 +396,8 @@ class WarehouseController {
 
     public function deliveries() {
         $allDeliveries = $this->warehouseModel->getDeliveries();
+        $search = $_GET['search'] ?? '';
+        if ($search) $allDeliveries = Pagination::filterBySearch($allDeliveries, $search);
         $pagination = Pagination::paginate($allDeliveries, 10);
         $data['deliveries'] = $pagination['items'];
         $deliveryIds = array_column($pagination['items'], 'delivery_id');
@@ -198,6 +417,7 @@ class WarehouseController {
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['search'] = $search;
         $data['purchase_orders'] = $this->warehouseModel->getPurchaseOrders();
         $data['page_title'] = 'Deliveries';
         $this->render('deliveries/index', $data);
@@ -205,6 +425,8 @@ class WarehouseController {
 
     public function readyToDeliver() {
         $allPOs = $this->warehouseModel->getPOsReadyToDeliver();
+        $search = $_GET['search'] ?? '';
+        if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
         $pagination = Pagination::paginate($allPOs, 10);
         $data['purchase_orders'] = $pagination['items'];
         $poIds = array_column($pagination['items'], 'po_id');
@@ -212,6 +434,7 @@ class WarehouseController {
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
+        $data['search'] = $search;
         $data['page_title'] = 'Ready to Deliver';
         $this->render('purchase_orders/ready_to_deliver', $data);
     }

@@ -9,89 +9,105 @@
     <link href="public/css/style.css" rel="stylesheet">
     <style>
         :root {
-            --sidebar-bg: #2c3e50;
-            --sidebar-hover: #34495e;
-            --accent: #3498db;
-            /* Fixed sidebar width - matches col-md-2 (16.666667%) */
+            --sidebar-bg: #1a2332;
+            --sidebar-hover: #2d3a4f;
+            --accent: #4a90d9;
+            --accent-hover: #3a7bc8;
             --sidebar-width: 250px;
         }
-        body { background: #f4f6f9; }
-        
-        /* SIDEBAR - Fixed positioning creates an overlay that slides in/out */
-        .sidebar { 
-            min-height: 100vh; 
+        body { background: #f1f5f9; font-family: 'Inter', sans-serif; }
+
+        .sidebar {
+            min-height: 100vh;
             background: var(--sidebar-bg);
             display: flex;
             flex-direction: column;
-            /* transition: Enables smooth sliding animation when class changes */
-            /* transform: Allows us to slide the sidebar horizontally */
             transition: transform 0.3s ease;
-            /* position: fixed removes from document flow - sits on top of content */
             position: fixed;
             top: 0;
             left: 0;
             z-index: 1000;
             width: var(--sidebar-width);
         }
-        
-        /* COLLAPSED STATE - translateX(-100%) moves sidebar completely off-screen left */
-        /* Negative 100% means shift left by its own full width */
-        .sidebar.collapsed {
-            transform: translateX(-100%);
-        }
-        
-        /* MAIN CONTENT - Always full width, never affected by sidebar state */
-        /* We don't use margin-left because we want content to always fill the screen */
+        .sidebar.collapsed { transform: translateX(-100%); }
+
         .main-wrapper {
             width: 100%;
-            /* transition: Smoothly adjusts padding when toggle button appears/disappears */
             transition: padding-left 0.3s ease;
             padding-left: var(--sidebar-width);
         }
-        
-        /* When sidebar is collapsed, remove left padding so content starts at edge */
-        .main-wrapper.sidebar-closed {
-            padding-left: 0;
-        }
-        
-        /* Toggle button styling - always visible */
-        #sidebarToggle {
-            /* Ensures button is always on top of other elements */
-            z-index: 1001;
-        }
+        .main-wrapper.sidebar-closed { padding-left: 0; }
 
-        .sidebar .sidebar-menu { flex: 1; }
-        .sidebar .nav-link { 
-            color: #ecf0f1; 
-            padding: 10px 15px;
-            margin: 2px 8px;
-            border-radius: 5px;
+        #sidebarToggle { z-index: 1001; }
+
+        .sidebar .sidebar-menu { flex: 1; padding-top: 0.5rem; }
+        .sidebar .nav-link {
+            color: #94a3b8;
+            padding: 0.65rem 1.25rem;
+            margin: 2px 10px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
         }
-        .sidebar .nav-link:hover { background: var(--sidebar-hover); }
-        .sidebar .nav-link.active { background: var(--accent); }
+        .sidebar .nav-link i { margin-right: 10px; width: 20px; text-align: center; }
+        .sidebar .nav-link:hover { background: var(--sidebar-hover); color: #e2e8f0; }
+        .sidebar .nav-link.active {
+            background: rgba(74,144,217,0.15);
+            color: #fff;
+            font-weight: 600;
+            border-left: 3px solid var(--accent);
+            margin-left: 7px;
+            padding-left: 10px;
+        }
+        .sidebar .nav-link .badge { font-size: 0.65rem; padding: 0.25em 0.55em; }
+
         .stat-card {
             background: #fff;
             border: none;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            overflow: hidden;
+            border-left: 4px solid #e2e8f0;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
         .data-card {
             background: #fff;
             border: none;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            overflow: hidden;
         }
-        .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 0.2rem rgba(52,152,219,.25); }
+        .data-card .card-header {
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0.85rem 1.25rem;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.9rem;
+        }
+        .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74,144,217,0.12); }
         .btn-primary { background: var(--accent); border-color: var(--accent); }
-        .btn-primary:hover { background: #2980b9; }
+        .btn-primary:hover { background: var(--accent-hover); }
         .quick-add { border-left: 4px solid var(--accent); }
         .search-box { position: relative; }
-        .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #adb5bd; z-index: 2; }
+        .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; z-index: 2; }
         .search-box input { padding-left: 38px; }
         th.sortable { cursor: pointer; user-select: none; }
-        th.sortable:hover { background-color: #f8f9fa; }
+        th.sortable:hover { background-color: #f1f5f9; }
         th.sortable i { font-size: 10px; margin-left: 4px; }
+        .table tbody tr:hover > td { background: #e8f2fc !important; }
+        .table tbody tr:nth-child(even) > td { background: #f1f5f9 !important; }
+        .table tbody tr:nth-child(odd) > td { background: #ffffff !important; }
+        .alert { animation: slideInDown 0.3s ease; }
+        @keyframes slideInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .alert-success { border-left: 4px solid #22c55e; background: #f0fdf4; color: #166534; }
+        .alert-danger { border-left: 4px solid #ef4444; background: #fef2f2; color: #991b1b; }
+        .alert-warning { border-left: 4px solid #f97316; background: #fff7ed; color: #9a3412; }
     </style>
 </head>
 <body>
@@ -99,11 +115,11 @@
         <div class="row g-0">
             <!-- SIDEBAR NAV - Fixed position, slides in/out via CSS transform -->
             <nav class="sidebar" id="sidebar">
-                <div class="text-center text-white py-4 border-bottom border-secondary">
-                    <h5><?= ucfirst($_SESSION['department'] ?? 'User') ?></h5>
-                    <small><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
+                <div class="text-center py-3 border-bottom" style="border-color: rgba(255,255,255,0.08) !important">
+                    <h5 class="mb-0" style="color: #fff; font-weight: 700; letter-spacing: 0.5px; font-size: 1rem;"><?= ucfirst($_SESSION['department'] ?? 'User') ?></h5>
+                    <small style="color: #64748b; font-size: 0.7rem;"><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
-<ul class="nav flex-column mt-2 sidebar-menu">
+<ul class="nav flex-column sidebar-menu">
 <?php $currentAction = $_GET['action'] ?? ''; ?>
 <li class="nav-item">
 <a class="nav-link <?= $currentAction === '' ? 'active' : '' ?>" href="?controller=admin">
@@ -141,9 +157,14 @@
 <i class="bi bi-box-seam me-2"></i>Items
 </a>
 </li>
+<li class="nav-item">
+<a class="nav-link <?= $currentAction === 'excessProduction' ? 'active' : '' ?>" href="?controller=warehouse&action=excessProduction">
+<i class="bi bi-exclamation-triangle me-2"></i>Excess Production
+</a>
+</li>
 </ul>
-            <div class="mt-auto p-3 border-top border-secondary">
-                    <a href="?controller=auth&action=logout" class="nav-link text-white-50 text-center">
+            <div class="mt-auto p-3 border-top" style="border-color: rgba(255,255,255,0.08) !important">
+                    <a href="?controller=auth&action=logout" class="nav-link text-center" style="color: #64748b; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
                         <i class="bi bi-box-arrow-left me-2"></i>Logout
                     </a>
                 </div>
@@ -236,6 +257,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
+    });
+
+    // Auto-dismiss flash alerts after 4 seconds
+    const flashAlerts = document.querySelectorAll('.alert.alert-dismissible.fade.show');
+    flashAlerts.forEach(function(alertElement) {
+        setTimeout(function() {
+            const alert = bootstrap.Alert.getOrCreateInstance(alertElement);
+            alert.close();
+        }, 4000);
     });
 });
 </script>

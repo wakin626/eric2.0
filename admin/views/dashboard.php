@@ -1,20 +1,35 @@
 <div class="row g-3 mb-4">
         <div class="col-md-4">
-            <div class="card stat-card p-3 h-100">
-                <h6 class="text-muted">Total Customers</h6>
-                <h3><?= count($customers ?? []) ?></h3>
+            <div class="card stat-card stat-card-blue h-100">
+                <div class="card-body">
+                    <div class="stat-icon"><i class="bi bi-people"></i></div>
+                    <div>
+                        <h6>Total Customers</h6>
+                        <h3><?= count($customers ?? []) ?></h3>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card stat-card p-3 h-100">
-                <h6 class="text-muted">Total Items</h6>
-                <h3><?= count($items ?? []) ?></h3>
+            <div class="card stat-card stat-card-green h-100">
+                <div class="card-body">
+                    <div class="stat-icon"><i class="bi bi-box-seam"></i></div>
+                    <div>
+                        <h6>Total Items</h6>
+                        <h3><?= count($items ?? []) ?></h3>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card stat-card p-3 h-100">
-                <h6 class="text-muted">Total Customer PO</h6>
-                <h3><?= $allPOCount ?? 0 ?></h3>
+            <div class="card stat-card stat-card-orange h-100">
+                <div class="card-body">
+                    <div class="stat-icon"><i class="bi bi-cart3"></i></div>
+                    <div>
+                        <h6>Total Customer PO</h6>
+                        <h3><?= $allPOCount ?? 0 ?></h3>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -88,7 +103,7 @@
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($deliveries)): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                    <tr><td colspan="7" class="text-center py-4"><div class="empty-state"><i class="bi bi-truck"></i><p>No deliveries yet</p></div></td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -125,7 +140,9 @@
                             <?php if (!empty($items)): ?>
                                 <?php foreach ($items as $idx => $item): ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                    <div class="d-flex align-items-center" style="min-height: 20px;">
+                                        <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                    </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>
@@ -139,7 +156,7 @@
                                     $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <div class="d-flex align-items-center">
+                                    <div class="d-flex align-items-center" style="min-height: 20px;">
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                             <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                         </div>
@@ -175,7 +192,7 @@
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
                     <tr>
-                        <td colspan="7" class="text-center text-muted py-3">No customer PO yet</td>
+                        <td colspan="7" class="text-center py-4"><div class="empty-state"><i class="bi bi-cart3"></i><p>No customer PO yet</p></div></td>
                     </tr>
                     <?php endif; ?>
                 </tbody>
