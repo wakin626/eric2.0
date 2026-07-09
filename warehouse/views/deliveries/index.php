@@ -93,7 +93,13 @@
                 ?>
                 <?php $isActive = ($d['active_status'] ?? 1) == 1; ?>
                 <tr class="<?= $isActive ? '' : 'text-decoration-line-through opacity-50' ?>">
-                    <td><strong class="text-primary"><?= $d['customer_po_number'] ?></strong></td>
+                    <td><strong class="text-primary">
+                    <?php
+                    $dPoiId = $d['poi_id'] ?? null;
+                    $dNormalCr = $dPoiId ? (($normal_consumption_records ?? [])[$dPoiId] ?? []) : [];
+                    if (!empty($dNormalCr)):
+                    ?><span style="opacity:0.75"><?= htmlspecialchars($dNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= $d['customer_po_number'] ?>
+                    </strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><small><?= $itemSummary ?></small></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
@@ -261,9 +267,8 @@
                                 <select name="po_id" id="poSelect" class="form-select" required>
                                     <option value="">Select PO</option>
                                     <?php foreach ($purchase_orders as $po): ?>
-                                        <option value="<?= $po['po_id'] ?>" data-type="<?= $po['production_type'] ?? 'normal' ?>">
+                                        <option value="<?= $po['po_id'] ?>">
                                             <?= $po['customer_po_number'] ?> - <?= $po['customer_name'] ?>
-                                            [<?= ($po['production_type'] ?? 'normal') === 'advance' ? 'Advance' : 'Normal' ?>]
                                         </option>
                                     <?php endforeach; ?>
                                 </select>

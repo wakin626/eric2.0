@@ -31,6 +31,16 @@ class ProductionController {
         $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
         $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) { $allPoiIds[] = $item['poi_id']; }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $this->render('dashboard', $data);
     }
 
@@ -42,6 +52,16 @@ class ProductionController {
         $poIds = array_column($pagination['items'], 'po_id');
         $data['purchase_orders'] = $pagination['items'];
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) { $allPoiIds[] = $item['poi_id']; }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
@@ -138,6 +158,14 @@ class ProductionController {
         if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
         $pagination = Pagination::paginate($allHistory, 10);
         $data['history'] = $pagination['items'];
+
+        $poiIds = array_column($data['history'], 'poi_id');
+        $poiIds = array_filter($poiIds);
+        $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
@@ -204,6 +232,11 @@ class ProductionController {
             $consumptionByPoi[$cr['advance_poi_id']][] = $cr;
         }
         $data['consumption_records'] = $consumptionByPoi;
+
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
 
         $data['excess_records'] = $this->warehouseModel->getAllExcessForProduction();
         $data['page'] = $pagination['page'];

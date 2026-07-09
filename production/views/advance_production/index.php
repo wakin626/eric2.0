@@ -31,7 +31,6 @@
                     <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                     <th>Item</th>
                     <th class="sortable" data-sort="progress">Produced PO QTY <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="delivered">Delivered PO QTY <i class="bi bi-chevron-expand"></i></th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -40,15 +39,43 @@
                     $items = $po_items_map[$po['po_id']] ?? [];
                 ?>
                 <tr>
-                    <td><strong><?= htmlspecialchars($po['customer_po_number']) ?></strong></td>
+                    <td><strong>
+                    <?php
+                    $allNormalCr = [];
+                    if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
+                        foreach ($items as $item) {
+                            $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
+                            foreach ($ncrRecords as $ncr) { $allNormalCr[] = $ncr; }
+                        }
+                    }
+                    if (!empty($allNormalCr)):
+                    ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($po['customer_po_number']) ?>
+                    </strong></td>
                     <td><?= date('Y-m-d', strtotime($po['customer_po_date'])) ?></td>
                     <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
                     <td>
                         <?php if (!empty($items)): ?>
+                            <?php
+                            $allConsumed = true;
+                            $consumedPoiIds = [];
+                            foreach ($items as $item) {
+                                $crRecords = ($consumption_records ?? [])[$item['poi_id']] ?? [];
+                                $ct = 0;
+                                foreach ($crRecords as $cr) { $ct += $cr['quantity']; }
+                                if ($ct <= 0 || $ct < ($item['produced_quantity'] ?? 0)) {
+                                    $allConsumed = false;
+                                } else {
+                                    $consumedPoiIds[] = $item['poi_id'];
+                                }
+                            }
+                            ?>
                             <?php foreach ($items as $idx => $item): ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                 <div class="d-flex align-items-center" style="min-height: 20px;">
                                     <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
+                                    <?php if (in_array($item['poi_id'], $consumedPoiIds)): ?>
+                                        <span class="badge bg-info ms-1" style="font-size:0.65em;">Consumed</span>
+                                    <?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
                         <?php else: ?>
@@ -99,28 +126,17 @@
                             <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
-                    <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item):
-                                $itemQty = $item['quantity'] ?? 0;
-                                $itemDelivered = $item['delivered_quantity'] ?? 0;
-                                $itemRemaining = max(0, $itemQty - $itemDelivered);
-                            ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <?php $conv = $item['uom_conversion'] ?? null; ?>
-                                <small class="text-nowrap"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small class="text-muted">-</small>
-                        <?php endif; ?>
-                    </td>
                     <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-success update-po-btn" data-po-id="<?= $po['po_id'] ?>" data-produced="<?= $po['produced_quantity'] ?? 0 ?>">
-                            <i class="bi bi-pencil"></i>
-                        </button>
+                        <?php if (!empty($allConsumed) && !empty($items)): ?>
+                            <small class="text-muted"><i class="bi bi-check-circle"></i> All Consumed</small>
+                        <?php else: ?>
+                            <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-success update-po-btn" data-po-id="<?= $po['po_id'] ?>" data-produced="<?= $po['produced_quantity'] ?? 0 ?>" data-consumed-pois="<?= htmlspecialchars(json_encode($consumedPoiIds ?? [])) ?>">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -142,13 +158,12 @@
                                 <small class="text-muted text-nowrap"><?= $excess['remaining_quantity'] ?> excess pcs</small>
                             </div>
                         </td>
-                        <td><small class="text-muted">—</small></td>
                         <td class="text-center"><small class="text-muted">Pending</small></td>
                     </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
                 <?php if (empty($purchase_orders) && empty($excess_records)): ?>
-                <tr><td colspan="7" class="text-center text-muted py-4">No advance production orders found</td></tr>
+                <tr><td colspan="6" class="text-center text-muted py-4">No advance production orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -501,6 +516,8 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             e.stopPropagation();
             const poId = this.getAttribute('data-po-id');
+            let consumedPois = [];
+            try { consumedPois = JSON.parse(this.getAttribute('data-consumed-pois') || '[]'); } catch(ex) {}
 
             fetch('?controller=production&action=getPODetails&id=' + poId, { credentials: 'same-origin' })
                 .then(response => {
@@ -516,7 +533,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         throw new Error(data.error);
                     }
                     const po = data.po;
-                    const items = data.po_items || [];
+                    const items = (data.po_items || []).filter(function(item) {
+                        return consumedPois.indexOf(item.poi_id) === -1;
+                    });
+                    if (items.length === 0) { alert('All items on this PO have been consumed.'); return; }
                     window._currentPOItems = items;
 
                     document.getElementById('updatePONumber').textContent = po.customer_po_number || '-';
@@ -563,9 +583,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.getElementById('updateItemNameRow').style.display = '';
 
                         singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
-                            '<div class="col-md-4"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="' + (item.item_description || '-') + '"></div>' +
+                            '<div class="col-md-3"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="' + (item.item_description || '-') + '"></div>' +
                             '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="' + (item.quantity || 0) + ' / ' + (item.produced_quantity || 0) + '"></div>' +
-                            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
                             '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
                             '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';
@@ -577,9 +598,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         window._currentBulkItems = [];
                         document.getElementById('updatePoiIdInput').disabled = false;
                         singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
-                            '<div class="col-md-4"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="-"></div>' +
+                            '<div class="col-md-3"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="-"></div>' +
                             '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="-"></div>' +
-                            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
                             '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
                             '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';

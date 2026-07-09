@@ -334,7 +334,7 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getProductionHistory() {
-        $sql = "SELECT ph.*, po.customer_po_number, c.customer_name, u.full_name,
+        $sql = "SELECT ph.*, po.customer_po_number, po.production_type, c.customer_name, u.full_name,
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
                     pr.report_type as report_type, pr.new_lot_number as resolved_lot,
@@ -475,21 +475,56 @@ class WarehouseModel extends BaseModel {
                 }
             }
         }
+
+        // Get normal PO items
+        $stmtPoi = $conn->prepare("SELECT poi_id, item_id FROM purchase_order_items WHERE po_id = :po_id");
+        $stmtPoi->execute(['po_id' => $po_id]);
+        $normalItems = $stmtPoi->fetchAll();
+        $normalPoiIds = array_column($normalItems, 'poi_id');
+
+        // Get advance items consumed by this PO, mapped to normal poi_id
+        $stmtAdv = $conn->prepare("SELECT advance_poi_id, normal_poi_id FROM advance_production_consumption WHERE normal_po_id = :po_id");
+        $stmtAdv->execute(['po_id' => $po_id]);
+        $advanceMap = [];
+        foreach ($stmtAdv->fetchAll() as $row) {
+            $advanceMap[$row['advance_poi_id']] = $row['normal_poi_id'];
+        }
+
+        // All poi_ids to fetch lots from
+        $allPoiIds = array_merge($normalPoiIds, array_keys($advanceMap));
+        $allPoiIds = array_unique($allPoiIds);
+
+        if (empty($allPoiIds)) return [];
+
+        $placeholders = implode(',', array_fill(0, count($allPoiIds), '?'));
         $stmt2 = $conn->prepare("SELECT l.*, 
                     COALESCE(
                         (SELECT SUM(d.delivery_quantity) FROM deliveries d 
                          WHERE d.lot_id = l.lot_id AND d.`remove` = 0), 0
                     ) AS delivered_legacy
                 FROM production_lots l 
-                JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
-                WHERE poi.po_id = :po_id AND l.`is_removed` = 0");
-        $stmt2->execute(['po_id' => $po_id]);
+                WHERE l.poi_id IN ($placeholders) AND l.`is_removed` = 0");
+        $stmt2->execute(array_values($allPoiIds));
         $lots = $stmt2->fetchAll();
         $result = [];
+        $merged = [];
         foreach ($lots as $lot) {
+            // Remap advance lots to normal PO's poi_id so JS groups them correctly
+            if (isset($advanceMap[$lot['poi_id']])) {
+                $lot['poi_id'] = $advanceMap[$lot['poi_id']];
+            }
             $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($lot['delivered_legacy'] ?? 0) - ($jsonDelivered[$lot['lot_id']] ?? 0));
-            if ($lot['available_quantity'] > 0) $result[] = $lot;
+            if ($lot['available_quantity'] <= 0) continue;
+
+            $key = $lot['lot_number'] . '_' . $lot['poi_id'];
+            if (isset($merged[$key])) {
+                $merged[$key]['available_quantity'] += $lot['available_quantity'];
+                $merged[$key]['quantity_produced'] += $lot['quantity_produced'];
+            } else {
+                $merged[$key] = $lot;
+            }
         }
+        $result = array_values($merged);
         usort($result, function($a, $b) { return strcmp($a['lot_number'], $b['lot_number']); });
         return $result;
     }
@@ -1394,6 +1429,19 @@ class WarehouseModel extends BaseModel {
                 FROM advance_production_consumption apc
                 INNER JOIN purchase_orders po ON apc.normal_po_id = po.po_id
                 WHERE apc.advance_poi_id IN ($placeholders)";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($poi_ids);
+        return $stmt->fetchAll();
+    }
+
+    public function getAdvanceConsumptionByNormalPoiIds($poi_ids) {
+        if (empty($poi_ids)) return [];
+        $placeholders = implode(',', array_fill(0, count($poi_ids), '?'));
+        $sql = "SELECT apc.*, apo.customer_po_number as advance_po_number, npo.customer_po_number as normal_po_number
+                FROM advance_production_consumption apc
+                INNER JOIN purchase_orders apo ON apc.advance_po_id = apo.po_id
+                INNER JOIN purchase_orders npo ON apc.normal_po_id = npo.po_id
+                WHERE apc.normal_poi_id IN ($placeholders)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute($poi_ids);
         return $stmt->fetchAll();

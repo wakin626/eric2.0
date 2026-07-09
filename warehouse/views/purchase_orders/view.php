@@ -28,6 +28,8 @@
                         <th>UOM</th>
                         <th>Quantity</th>
                         <th>Cases</th>
+                        <th>Produced</th>
+                        <th>Source</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -43,6 +45,19 @@
                                 <?= round($item['quantity'] / $conv) ?> CS
                             <?php else: ?>
                                 —
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $item['produced_quantity'] ?? 0 ?></td>
+                        <td>
+                            <?php
+                            $itemConsumption = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
+                            if (!empty($itemConsumption)):
+                            ?>
+                                <?php foreach ($itemConsumption as $i => $ncr): ?>
+                                    <?= $i > 0 ? ', ' : '' ?><span style="opacity:0.75"><?= htmlspecialchars($ncr['advance_po_number']) ?></span>/<?= htmlspecialchars($ncr['normal_po_number']) ?>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <span class="text-muted">—</span>
                             <?php endif; ?>
                         </td>
                     </tr>

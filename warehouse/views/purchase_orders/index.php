@@ -44,7 +44,20 @@
                         $items = $po_items_map[$po['po_id']] ?? [];
                     ?>
                     <tr>
-                        <td><strong class="text-primary"><?= $po['customer_po_number'] ?></strong></td>
+                        <td><strong class="text-primary">
+                        <?php
+                        $allNormalCr = [];
+                        if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
+                            foreach ($items as $item) {
+                                $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
+                                foreach ($ncrRecords as $ncr) {
+                                    $allNormalCr[] = $ncr;
+                                }
+                            }
+                        }
+                        if (!empty($allNormalCr)):
+                        ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= $po['customer_po_number'] ?>
+                        </strong></td>
                         <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
                         <td>
                             <?php if (!empty($items)): ?>
@@ -91,7 +104,7 @@
                                                 <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
                                             </div>
                                             <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
-                                            <?php if ($isExcess): ?>
+                                             <?php if ($isExcess): ?>
                                                 <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
                                             <?php endif; ?>
                                             <?php if ($consumedTotal > 0): ?>
@@ -378,7 +391,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">PO Number</label>
-                            <input type="text" id="editPONumDisplay" class="form-control" readonly>
+                            <input type="text" name="customer_po_number" id="editPONumDisplay" class="form-control">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Customer TIN</label>

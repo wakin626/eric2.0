@@ -9,6 +9,7 @@ use App\Helpers\CsvExport;
 class FinanceController {
     private $financeModel;
     private $priceListModel;
+    private $warehouseModel;
 
     public function __construct() {
         if (!isset($_SESSION['user_id'])) {
@@ -23,6 +24,7 @@ class FinanceController {
         }
         $this->financeModel = new FinanceModel();
         $this->priceListModel = new PriceListModel();
+        $this->warehouseModel = new \App\Models\WarehouseModel();
     }
 
     public function index() {
@@ -31,6 +33,16 @@ class FinanceController {
         $data['ready_to_deliver'] = $this->financeModel->getPOsReadyToDeliver();
         $data['recent_deliveries'] = array_slice($this->financeModel->getAllDeliveries(), 0, 5);
         $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) { $allPoiIds[] = $item['poi_id'] ?? $item['poi_id']; }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $this->render('dashboard', $data);
     }
 
@@ -45,6 +57,16 @@ class FinanceController {
         $data['total'] = $pagination['total'];
         $data['search'] = $search;
         $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) { $allPoiIds[] = $item['poi_id'] ?? $item['poi_id']; }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['page_title'] = 'Customer PO';
         $this->render('purchase_orders/index', $data);
     }
@@ -60,6 +82,16 @@ class FinanceController {
         $data['total'] = $pagination['total'];
         $data['search'] = $search;
         $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) { $allPoiIds[] = $item['poi_id'] ?? $item['poi_id']; }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['page_title'] = 'Ready to Deliver';
         $this->render('purchase_orders/ready_to_deliver', $data);
     }
@@ -74,6 +106,14 @@ class FinanceController {
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
         $data['search'] = $search;
+
+        $poiIds = array_column($data['deliveries'], 'poi_id');
+        $poiIds = array_filter($poiIds);
+        $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['page_title'] = 'Deliveries';
         $this->render('deliveries/index', $data);
     }

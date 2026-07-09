@@ -63,7 +63,13 @@
                     }
                 ?>
                 <tr data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>">
-                    <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
+                    <td><strong class="text-primary">
+                    <?php
+                    $dPoiId = $d['poi_id'] ?? null;
+                    $dNormalCr = $dPoiId ? (($normal_consumption_records ?? [])[$dPoiId] ?? []) : [];
+                    if (!empty($dNormalCr)):
+                    ?><span style="opacity:0.75"><?= htmlspecialchars($dNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?>
+                    </strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><?= implode('', $itemLines) ?></td>
                     <td><?= implode('', $lotLines) ?></td>

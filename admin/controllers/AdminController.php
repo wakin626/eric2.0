@@ -30,6 +30,20 @@ class AdminController {
         $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
         $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) {
+                $allPoiIds[] = $item['poi_id'];
+            }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) {
+            $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr;
+        }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['deliveries'] = $this->warehouseModel->getDeliveries();
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
@@ -348,6 +362,14 @@ public function purchaseOrders() {
     }
     $data['consumption_records'] = $consumptionByPoi;
 
+    // Get advance consumption records for normal PO items (reverse lookup)
+    $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+    $normalConsumptionByPoi = [];
+    foreach ($rawNormalConsumption as $cr) {
+        $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr;
+    }
+    $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
@@ -470,6 +492,14 @@ public function productionHistory() {
     if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
     $pagination = Pagination::paginate($allHistory, 10);
     $data['history'] = $pagination['items'];
+
+    $poiIds = array_column($data['history'], 'poi_id');
+    $poiIds = array_filter($poiIds);
+    $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
+    $normalConsumptionByPoi = [];
+    foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+    $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
@@ -497,6 +527,33 @@ public function editHistoryRecord() {
     echo json_encode(['success' => $result]);
     exit;
 }
+
+    public function excessProduction() {
+        $filters = [];
+        if (!empty($_GET['customer_id'])) $filters['customer_id'] = $_GET['customer_id'];
+        if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
+        $data['excess'] = $this->warehouseModel->getAllExcess($filters);
+        $data['customers'] = $this->warehouseModel->getCustomers();
+        $data['page_title'] = 'Excess Production';
+        $this->render('excess_production/index', $data);
+    }
+
+    public function updateExcessNotes() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false]);
+            exit;
+        }
+        $excess_id = $_POST['excess_id'] ?? null;
+        $notes = $_POST['notes'] ?? '';
+        if (!$excess_id) {
+            echo json_encode(['success' => false, 'message' => 'Missing excess_id']);
+            exit;
+        }
+        $this->warehouseModel->updateExcessNotes($excess_id, $notes);
+        echo json_encode(['success' => true]);
+        exit;
+    }
 
     private function render($view, $data = []) {
         $data['reportedCount'] = $this->warehouseModel->getReportedRemarksCount();

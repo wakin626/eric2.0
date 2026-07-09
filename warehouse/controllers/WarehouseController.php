@@ -27,6 +27,20 @@ class WarehouseController {
         $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
         $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) {
+                $allPoiIds[] = $item['poi_id'];
+            }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) {
+            $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr;
+        }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['deliveries'] = $this->warehouseModel->getDeliveries();
         $this->render('dashboard', $data);
     }
@@ -53,6 +67,14 @@ class WarehouseController {
             $consumptionByPoi[$cr['advance_poi_id']][] = $cr;
         }
         $data['consumption_records'] = $consumptionByPoi;
+
+        // Get advance consumption records for normal PO items (reverse lookup)
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) {
+            $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr;
+        }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
 
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
@@ -177,8 +199,9 @@ class WarehouseController {
 
             if (isset($_POST['customer_po_date'])) {
                 $conn = \App\Core\BaseModel::getConnection();
-                $stmt = $conn->prepare("UPDATE purchase_orders SET customer_po_date = :date, production_type = :type WHERE po_id = :po_id");
+                $stmt = $conn->prepare("UPDATE purchase_orders SET customer_po_number = :po_number, customer_po_date = :date, production_type = :type WHERE po_id = :po_id");
                 $stmt->execute([
+                    'po_number' => $_POST['customer_po_number'] ?? '',
                     'date' => $_POST['customer_po_date'],
                     'type' => $_POST['production_type'] ?? 'normal',
                     'po_id' => $po_id
@@ -218,6 +241,15 @@ class WarehouseController {
         $data['page_title'] = 'PO Details';
         $data['po'] = $this->warehouseModel->getPurchaseOrderById($id);
         $data['po_items'] = $this->warehouseModel->getPurchaseOrderItems($id);
+
+        $poiIds = array_column($data['po_items'], 'poi_id');
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($poiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) {
+            $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr;
+        }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $this->render('purchase_orders/view', $data);
     }
 
@@ -414,11 +446,21 @@ class WarehouseController {
             }
         }
         $data['receipts_map'] = $receiptsMap;
+
+        $poiIds = array_column($data['deliveries'], 'poi_id');
+        $poiIds = array_filter($poiIds);
+        $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
         $data['search'] = $search;
-        $data['purchase_orders'] = $this->warehouseModel->getPurchaseOrders();
+        $data['purchase_orders'] = array_values(array_filter($this->warehouseModel->getPurchaseOrders(), function($po) {
+            return ($po['production_type'] ?? 'normal') === 'normal';
+        }));
         $data['page_title'] = 'Deliveries';
         $this->render('deliveries/index', $data);
     }
@@ -431,6 +473,16 @@ class WarehouseController {
         $data['purchase_orders'] = $pagination['items'];
         $poIds = array_column($pagination['items'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+
+        $allPoiIds = [];
+        foreach ($data['po_items_map'] as $items) {
+            foreach ($items as $item) { $allPoiIds[] = $item['poi_id']; }
+        }
+        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
+        $normalConsumptionByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
+        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];

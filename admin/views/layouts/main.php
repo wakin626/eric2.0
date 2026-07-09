@@ -158,7 +158,7 @@
 </a>
 </li>
 <li class="nav-item">
-<a class="nav-link <?= $currentAction === 'excessProduction' ? 'active' : '' ?>" href="?controller=warehouse&action=excessProduction">
+<a class="nav-link <?= $currentAction === 'excessProduction' ? 'active' : '' ?>" href="?controller=admin&action=excessProduction">
 <i class="bi bi-exclamation-triangle me-2"></i>Excess Production
 </a>
 </li>

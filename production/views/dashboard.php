@@ -42,7 +42,18 @@
                         $items = $po_items_map[$po['po_id']] ?? [];
                     ?>
                     <tr>
-                        <td><strong><?= $po['customer_po_number'] ?></strong></td>
+                        <td><strong>
+                        <?php
+                        $allNormalCr = [];
+                        if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
+                            foreach ($items as $item) {
+                                $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
+                                foreach ($ncrRecords as $ncr) { $allNormalCr[] = $ncr; }
+                            }
+                        }
+                        if (!empty($allNormalCr)):
+                        ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= $po['customer_po_number'] ?>
+                        </strong></td>
                         <td><?= date('Y-m-d', strtotime($po['customer_po_date'])) ?></td>
                         <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
                         <td>

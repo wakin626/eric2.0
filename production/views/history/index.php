@@ -53,7 +53,13 @@
                             </small>
                         <?php endif; ?>
                     </td>
-                    <td><strong><?= htmlspecialchars($h['customer_po_number'] ?? '-') ?></strong></td>
+                    <td><strong>
+                    <?php
+                    $hPoiId = $h['poi_id'] ?? null;
+                    $hNormalCr = $hPoiId ? (($normal_consumption_records ?? [])[$hPoiId] ?? []) : [];
+                    if (!empty($hNormalCr) && ($h['production_type'] ?? 'normal') !== 'advance'):
+                    ?><span style="opacity:0.75"><?= htmlspecialchars($hNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($h['customer_po_number'] ?? '-') ?>
+                    </strong></td>
                     <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($h['sts_ref'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>

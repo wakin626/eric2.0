@@ -40,7 +40,18 @@
                     $items = $po_items_map[$po['po_id']] ?? [];
                 ?>
                 <tr>
-                    <td><strong><?= htmlspecialchars($po['customer_po_number']) ?></strong></td>
+                    <td><strong>
+                    <?php
+                    $allNormalCr = [];
+                    if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
+                        foreach ($items as $item) {
+                            $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
+                            foreach ($ncrRecords as $ncr) { $allNormalCr[] = $ncr; }
+                        }
+                    }
+                    if (!empty($allNormalCr)):
+                    ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($po['customer_po_number']) ?>
+                    </strong></td>
                     <td><?= date('Y-m-d', strtotime($po['customer_po_date'])) ?></td>
                     <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
                     <td>
@@ -526,9 +537,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         document.getElementById('updateItemNameRow').style.display = '';
 
                         singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
-                            '<div class="col-md-4"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="' + (item.item_description || '-') + '"></div>' +
+                            '<div class="col-md-3"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="' + (item.item_description || '-') + '"></div>' +
                             '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="' + (item.quantity || 0) + ' / ' + (item.produced_quantity || 0) + '"></div>' +
-                            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
                             '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
                             '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';
@@ -540,9 +552,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         window._currentBulkItems = [];
                         document.getElementById('updatePoiIdInput').disabled = false;
                         singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
-                            '<div class="col-md-4"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="-"></div>' +
+                            '<div class="col-md-3"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="-"></div>' +
                             '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="-"></div>' +
-                            '<div class="col-md-3"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
                             '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
                             '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
                             '</div>';
