@@ -10,20 +10,22 @@
     <div class="d-flex gap-2 flex-wrap">
         <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Customers</option>
+            <?php foreach (($allCustomers ?? []) as $c): ?>
+                <option value="<?= htmlspecialchars($c) ?>" <?= ($filterCustomer ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+            <?php endforeach; ?>
         </select>
         <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Items</option>
         </select>
-        <select id="filterDR" class="form-select form-select-sm filter-select" style="width:160px">
-            <option value="">All DR Numbers</option>
-        </select>
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Delivery Date">
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
+        <a href="?controller=warehouse&action=deliveries" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
     </div>
     <div class="search-box" style="width: 300px;">
         <form method="GET" class="d-flex align-items-center">
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="deliveries">
+            <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
+            <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
             <i class="bi bi-search"></i>
             <input type="text" name="search" id="searchDelivery" class="form-control" placeholder="Search PO number..." value="<?= htmlspecialchars($search ?? '') ?>">
         </form>
@@ -186,22 +188,24 @@
 
 <?php if ($totalPages > 1): ?>
 <?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
+<?php $paginationParams = http_build_query(array_filter(['controller'=>'warehouse','action'=>'deliveries','search'=>$search??'','filter_customer'=>$filterCustomer??'','filter_item'=>$filterItem??''])); ?>
+<?php $paginationBase = '?' . $paginationParams . (strpos($paginationParams, '&') !== false ? '&' : '') . 'page='; ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
         <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-            <a class="page-link" href="?controller=warehouse&action=deliveries&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
+            <a class="page-link" href="<?= $paginationBase ?><?= $page - 1 ?>">&laquo; Prev</a>
         </li>
         <?php foreach ($pages as $p): ?>
             <?php if ($p === '...'): ?>
             <li class="page-item disabled"><span class="page-link">...</span></li>
             <?php else: ?>
             <li class="page-item <?= $p == $page ? 'active' : '' ?>">
-                <a class="page-link" href="?controller=warehouse&action=deliveries&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+                <a class="page-link" href="<?= $paginationBase ?><?= $p ?>"><?= $p ?></a>
             </li>
             <?php endif; ?>
         <?php endforeach; ?>
         <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-            <a class="page-link" href="?controller=warehouse&action=deliveries&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+            <a class="page-link" href="<?= $paginationBase ?><?= $page + 1 ?>">Next &raquo;</a>
         </li>
     </ul>
 </nav>
@@ -507,74 +511,37 @@ document.getElementById('searchDelivery').addEventListener('input', function() {
     if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
 })();
 
-function populateDeliveryFilters() {
-    const customers = new Set();
-    const items = new Set();
-    const drNumbers = new Set();
-    document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
-        if (row.querySelector('td[colspan]')) return;
-        const cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
-        if (cust) customers.add(cust);
-        const itemCell = row.cells[2];
-        if (itemCell) {
-            const divs = itemCell.querySelectorAll('div');
-            if (divs.length > 0) {
-                divs.forEach(d => {
-                    const t = d.textContent.trim().split('(')[0].trim();
-                    if (t && t !== '-') items.add(t);
-                });
-            } else {
-                itemCell.querySelectorAll('small').forEach(s => {
-                    const t = s.textContent.trim().split('(')[0].trim();
-                    if (t && t !== '-') items.add(t);
-                });
-            }
-        }
-        const dr = row.cells[3] ? row.cells[3].textContent.trim() : '';
-        if (dr && dr !== '-') drNumbers.add(dr);
-    });
-    const custSel = document.getElementById('filterCustomer');
-    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
-    const itemSel = document.getElementById('filterItem');
-    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
-    const drSel = document.getElementById('filterDR');
-    drNumbers.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; drSel.appendChild(o); });
+function applyDeliveryFilters() {
+    var params = new URLSearchParams();
+    params.set('controller', 'warehouse');
+    params.set('action', 'deliveries');
+    var s = document.getElementById('searchDelivery');
+    if (s && s.value) params.set('search', s.value);
+    var c = document.getElementById('filterCustomer');
+    if (c && c.value) params.set('filter_customer', c.value);
+    var i = document.getElementById('filterItem');
+    if (i && i.value) params.set('filter_item', i.value);
+    window.location.href = '?' + params.toString();
 }
 
-function applyDeliveryFilters() {
-    const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
-    const itemFilter = document.getElementById('filterItem').value.toLowerCase();
-    const drFilter = document.getElementById('filterDR').value.toLowerCase();
-    const dateFilter = document.getElementById('filterDate').value;
+function populateDeliveryFilters() {
+    const items = new Set();
     document.querySelectorAll('#deliveryTableBody tr').forEach(row => {
-        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
-        const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
-        const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
-        const drText = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
-        const deliveryDate = row.cells[7] ? row.cells[7].textContent.trim() : '';
-        let show = true;
-        if (custFilter && !cust.includes(custFilter)) show = false;
-        if (itemFilter && !itemText.includes(itemFilter)) show = false;
-        if (drFilter && !drText.includes(drFilter)) show = false;
-        if (dateFilter && deliveryDate !== dateFilter) show = false;
-        row.style.display = show ? '' : 'none';
+        if (row.querySelector('td[colspan]')) return;
+        const itemCell = row.cells[2];
+        if (itemCell) {
+            itemCell.querySelectorAll('small').forEach(s => {
+                const t = s.textContent.trim().split('(')[0].trim();
+                if (t && t !== '-') items.add(t);
+            });
+        }
     });
+    const itemSel = document.getElementById('filterItem');
+    items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
 }
 
 document.getElementById('filterCustomer').addEventListener('change', applyDeliveryFilters);
 document.getElementById('filterItem').addEventListener('change', applyDeliveryFilters);
-document.getElementById('filterDR').addEventListener('change', applyDeliveryFilters);
-document.getElementById('filterDate').addEventListener('change', applyDeliveryFilters);
-document.getElementById('clearFilters').addEventListener('click', function() {
-    document.getElementById('filterCustomer').value = '';
-    document.getElementById('filterItem').value = '';
-    document.getElementById('filterDR').value = '';
-    document.getElementById('filterDate').value = '';
-    document.getElementById('searchDelivery').value = '';
-    var form = document.querySelector('#searchDelivery').closest('form');
-    if (form) form.submit();
-    else applyDeliveryFilters();
-});
 
 document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
 

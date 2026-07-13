@@ -204,6 +204,11 @@
                 <div class="dr-col-desc"><?= htmlspecialchars($fullDesc) ?></div>
             </div>
             <?php endforeach; ?>
+            <div class="dr-row" style="margin-top: 4px;">
+                <div class="dr-col-qty"></div>
+                <div class="dr-col-unit"></div>
+                <div class="dr-col-desc" style="font-style: italic; font-weight: bold;">Nothing follows.</div>
+            </div>
         <?php endif; ?>
     </div>
 

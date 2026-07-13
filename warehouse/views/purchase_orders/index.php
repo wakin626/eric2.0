@@ -7,17 +7,23 @@
     <div class="d-flex gap-2 flex-wrap">
         <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Customers</option>
+            <?php foreach (($allCustomers ?? []) as $c): ?>
+                <option value="<?= htmlspecialchars($c) ?>" <?= ($filterCustomer ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+            <?php endforeach; ?>
         </select>
         <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Items</option>
         </select>
-        <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Date Created">
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
+        <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Date Created" value="<?= htmlspecialchars($filterDate ?? '') ?>">
+        <a href="?controller=warehouse&action=purchaseOrders" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
     </div>
     <div class="search-box" style="width: 300px;">
         <form method="GET" class="d-flex align-items-center">
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="purchaseOrders">
+            <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
+            <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
+            <input type="hidden" name="filter_date" value="<?= htmlspecialchars($filterDate ?? '') ?>">
             <i class="bi bi-search"></i>
             <input type="text" name="search" id="searchPO" class="form-control" placeholder="Search PO..." value="<?= htmlspecialchars($search ?? '') ?>">
         </form>
@@ -147,22 +153,24 @@
 
 <?php if ($totalPages > 1): ?>
 <?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
+<?php $paginationParams = http_build_query(array_filter(['controller'=>'warehouse','action'=>'purchaseOrders','search'=>$search??'','filter_customer'=>$filterCustomer??'','filter_item'=>$filterItem??'','filter_date'=>$filterDate??''])); ?>
+<?php $paginationBase = '?' . $paginationParams . (strpos($paginationParams, '&') !== false ? '&' : '') . 'page='; ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
         <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-            <a class="page-link" href="?controller=warehouse&action=purchaseOrders&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
+            <a class="page-link" href="<?= $paginationBase ?><?= $page - 1 ?>">&laquo; Prev</a>
         </li>
         <?php foreach ($pages as $p): ?>
             <?php if ($p === '...'): ?>
             <li class="page-item disabled"><span class="page-link">...</span></li>
             <?php else: ?>
             <li class="page-item <?= $p == $page ? 'active' : '' ?>">
-                <a class="page-link" href="?controller=warehouse&action=purchaseOrders&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+                <a class="page-link" href="<?= $paginationBase ?><?= $p ?>"><?= $p ?></a>
             </li>
             <?php endif; ?>
         <?php endforeach; ?>
         <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-            <a class="page-link" href="?controller=warehouse&action=purchaseOrders&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+            <a class="page-link" href="<?= $paginationBase ?><?= $page + 1 ?>">Next &raquo;</a>
         </li>
     </ul>
 </nav>
@@ -590,66 +598,44 @@ document.getElementById('searchPO').addEventListener('input', function() {
     if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
 })();
 
-function populateFilters() {
-    const customers = new Set();
+function applyServerFilters() {
+    var params = new URLSearchParams();
+    params.set('controller', 'warehouse');
+    params.set('action', 'purchaseOrders');
+    var s = document.getElementById('searchPO');
+    if (s && s.value) params.set('search', s.value);
+    var c = document.getElementById('filterCustomer');
+    if (c && c.value) params.set('filter_customer', c.value);
+    var i = document.getElementById('filterItem');
+    if (i && i.value) params.set('filter_item', i.value);
+    var d = document.getElementById('filterDate');
+    if (d && d.value) params.set('filter_date', d.value);
+    window.location.href = '?' + params.toString();
+}
+
+function populateItemFilter() {
     const items = new Set();
     document.querySelectorAll('#poTableBody tr').forEach(row => {
         if (row.querySelector('td[colspan]')) return;
-        const cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
-        if (cust) customers.add(cust);
         const itemCell = row.cells[2];
         if (itemCell) {
-            const divs = itemCell.querySelectorAll('div');
-            if (divs.length > 0) {
-                divs.forEach(d => {
-                    const t = d.textContent.trim();
-                    if (t && t !== '-') items.add(t);
-                });
-            } else {
-                itemCell.querySelectorAll('small').forEach(s => {
-                    const t = s.textContent.trim();
-                    if (t && t !== '-') items.add(t);
-                });
-            }
+            itemCell.querySelectorAll('small').forEach(s => {
+                const t = s.textContent.trim();
+                if (t && t !== '-') items.add(t);
+            });
         }
     });
-    const custSel = document.getElementById('filterCustomer');
-    customers.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
     const itemSel = document.getElementById('filterItem');
     items.forEach(i => { const o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
+    var currentFilterItem = '<?= addslashes($filterItem ?? '') ?>';
+    if (currentFilterItem && itemSel) { for (var j = 0; j < itemSel.options.length; j++) { if (itemSel.options[j].value === currentFilterItem) { itemSel.selectedIndex = j; break; } } }
 }
 
-function applyFilters() {
-    const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
-    const itemFilter = document.getElementById('filterItem').value.toLowerCase();
-    const dateFilter = document.getElementById('filterDate').value;
-    document.querySelectorAll('#poTableBody tr').forEach(row => {
-        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
-        const cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
-        const itemText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
-        const poDate = row.cells[6] ? row.cells[6].textContent.trim() : '';
-        let show = true;
-        if (custFilter && !cust.includes(custFilter)) show = false;
-        if (itemFilter && !itemText.includes(itemFilter)) show = false;
-        if (dateFilter && poDate !== dateFilter) show = false;
-        row.style.display = show ? '' : 'none';
-    });
-}
+document.getElementById('filterCustomer').addEventListener('change', applyServerFilters);
+document.getElementById('filterItem').addEventListener('change', applyServerFilters);
+document.getElementById('filterDate').addEventListener('change', applyServerFilters);
 
-document.getElementById('filterCustomer').addEventListener('change', applyFilters);
-document.getElementById('filterItem').addEventListener('change', applyFilters);
-document.getElementById('filterDate').addEventListener('change', applyFilters);
-document.getElementById('clearFilters').addEventListener('click', function() {
-    document.getElementById('filterCustomer').value = '';
-    document.getElementById('filterItem').value = '';
-    document.getElementById('filterDate').value = '';
-    document.getElementById('searchPO').value = '';
-    var form = document.querySelector('#searchPO').closest('form');
-    if (form) form.submit();
-    else applyFilters();
-});
-
-document.addEventListener('DOMContentLoaded', populateFilters);
+document.addEventListener('DOMContentLoaded', populateItemFilter);
 
 const customerSelect = document.getElementById('customerSelect');
 const customerDetails = document.getElementById('customerDetails');

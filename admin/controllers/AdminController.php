@@ -6,6 +6,7 @@ use App\Models\ItemModel;
 use App\Models\WarehouseModel;
 use App\Helpers\Pagination;
 use App\Helpers\CsvExport;
+use App\Models\AuditModel;
 
 class AdminController {
     private $customerModel;
@@ -116,6 +117,7 @@ class AdminController {
             try {
                 $result = $this->customerModel->create($_POST);
                 if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created customer: ' . ($_POST['customer_name'] ?? ''), null, ['customer_name' => $_POST['customer_name'] ?? '', 'customer_code' => $_POST['customer_code'] ?? ''], 'customer', $result);
                     $_SESSION['success'] = 'Customer created successfully';
                     header('Location: ?controller=admin&action=customers');
                     exit;
@@ -139,8 +141,10 @@ class AdminController {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $oldCustomer = $this->customerModel->getById($id);
             $result = $this->customerModel->update($id, $_POST);
             if ($result) {
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated customer: ' . ($oldCustomer['customer_name'] ?? ''), $oldCustomer, ['customer_name' => $_POST['customer_name'] ?? '', 'customer_code' => $_POST['customer_code'] ?? ''], 'customer', $id);
                 $_SESSION['success'] = 'Customer updated successfully';
                 header('Location: ?controller=admin&action=customers');
                 exit;
@@ -152,7 +156,9 @@ class AdminController {
 
     public function customerDelete() {
         $id = $_GET['id'] ?? null;
+        $oldCustomer = $this->customerModel->getById($id);
         $this->customerModel->softDelete($id);
+        AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted customer: ' . ($oldCustomer['customer_name'] ?? $id), $oldCustomer, null, 'customer', $id);
         $_SESSION['success'] = 'Customer deleted successfully';
         header('Location: ?controller=admin&action=customers');
         exit;
@@ -244,6 +250,7 @@ class AdminController {
             try {
                 $result = $this->itemModel->create($_POST);
                 if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created item: ' . ($_POST['item_name'] ?? ''), null, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? ''], 'item', $result);
                     $_SESSION['success'] = 'Item created successfully';
                     header('Location: ?controller=admin&action=items');
                     exit;
@@ -268,8 +275,10 @@ class AdminController {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $oldItem = $this->itemModel->getById($id);
             $result = $this->itemModel->update($id, $_POST);
             if ($result) {
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item: ' . ($oldItem['item_name'] ?? ''), $oldItem, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? ''], 'item', $id);
                 $_SESSION['success'] = 'Item updated successfully';
                 header('Location: ?controller=admin&action=items');
                 exit;
@@ -282,7 +291,9 @@ class AdminController {
 
     public function itemDelete() {
         $id = $_GET['id'] ?? null;
+        $oldItem = $this->itemModel->getById($id);
         $this->itemModel->softDelete($id);
+        AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted item: ' . ($oldItem['item_name'] ?? $id), $oldItem, null, 'item', $id);
         $_SESSION['success'] = 'Item deleted successfully';
         header('Location: ?controller=admin&action=items');
         exit;
@@ -290,14 +301,18 @@ class AdminController {
 
     public function itemToggleStatus() {
         $id = $_GET['id'] ?? null;
+        $oldItem = $this->itemModel->getById($id);
         $this->itemModel->toggleStatus($id);
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled item status: ' . ($oldItem['item_name'] ?? $id), $oldItem, null, 'item', $id);
         header('Location: ?controller=admin&action=items');
         exit;
     }
 
     public function customerToggleStatus() {
         $id = $_GET['id'] ?? null;
+        $oldCustomer = $this->customerModel->getById($id);
         $this->customerModel->toggleStatus($id);
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled customer status: ' . ($oldCustomer['customer_name'] ?? $id), $oldCustomer, null, 'customer', $id);
         header('Location: ?controller=admin&action=customers');
         exit;
     }
@@ -314,8 +329,10 @@ class AdminController {
     public function customerUpdate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = $_POST['customer_id'] ?? null;
+            $oldCustomer = $this->customerModel->getById($id);
             $result = $this->customerModel->update($id, $_POST);
             if ($result) {
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated customer (inline): ' . ($oldCustomer['customer_name'] ?? ''), $oldCustomer, ['customer_name' => $_POST['customer_name'] ?? '', 'customer_code' => $_POST['customer_code'] ?? ''], 'customer', $id);
                 $_SESSION['success'] = 'Customer updated successfully';
             }
         }
@@ -327,8 +344,10 @@ class AdminController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $id = $_POST['item_id'] ?? null;
+                $oldItem = $this->itemModel->getById($id);
                 $result = $this->itemModel->update($id, $_POST);
                 if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item (inline): ' . ($oldItem['item_name'] ?? ''), $oldItem, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['description'] ?? ''], 'item', $id);
                     $_SESSION['success'] = 'Item updated successfully';
                 }
             } catch (\Exception $e) {
@@ -342,8 +361,37 @@ class AdminController {
 public function purchaseOrders() {
     $allPOs = $this->warehouseModel->getPurchaseOrders();
     $search = $_GET['search'] ?? '';
+    $filterCustomer = $_GET['filter_customer'] ?? '';
+    $filterItem = $_GET['filter_item'] ?? '';
+    $filterDate = $_GET['filter_date'] ?? '';
+
     if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
-    $pagination = Pagination::paginate($allPOs, 10);
+
+    $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
+
+    if ($filterCustomer) {
+        $allPOs = array_values(array_filter($allPOs, fn($po) => stripos($po['customer_name'] ?? '', $filterCustomer) !== false));
+    }
+    if ($filterItem) {
+        $allPOs = array_values(array_filter($allPOs, function($po) use ($filterItem) {
+            $items = $this->warehouseModel->getPurchaseOrderItemsByPOIds([$po['po_id']]);
+            foreach (($items[$po['po_id']] ?? []) as $item) {
+                if (stripos($item['item_description'] ?? '', $filterItem) !== false) return true;
+            }
+            return false;
+        }));
+    }
+    if ($filterDate) {
+        $allPOs = array_values(array_filter($allPOs, fn($po) => substr($po['date_created'] ?? '', 0, 10) === $filterDate));
+    }
+
+    $hasFilter = $search || $filterCustomer || $filterItem || $filterDate;
+    if ($hasFilter) {
+        $pagination = ['items' => $allPOs, 'page' => 1, 'perPage' => count($allPOs), 'total' => count($allPOs), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
+    } else {
+        $pagination = Pagination::paginate($allPOs, 10);
+    }
+
     $poIds = array_column($pagination['items'], 'po_id');
     $data['allPOs'] = $pagination['items'];
     $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
@@ -374,6 +422,10 @@ public function purchaseOrders() {
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
     $data['search'] = $search;
+    $data['filterCustomer'] = $filterCustomer;
+    $data['filterItem'] = $filterItem;
+    $data['filterDate'] = $filterDate;
+    $data['allCustomers'] = $allCustomers;
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
     $data['page_title'] = 'Customer PO';
@@ -402,11 +454,36 @@ public function toggleDeliveryStatus() {
             exit;
         }
         $newStatus = $this->warehouseModel->toggleDeliveryStatus($deliveryId);
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled delivery status #' . $deliveryId, null, ['active_status' => (int)$newStatus], 'delivery', $deliveryId);
         echo json_encode(['success' => true, 'active_status' => (int)$newStatus]);
     } catch (\Exception $e) {
         http_response_code(500);
         echo json_encode(['error' => $e->getMessage()]);
     }
+    exit;
+}
+
+public function deleteDelivery() {
+    $deliveryId = $_GET['id'] ?? null;
+    if (!$deliveryId) {
+        $_SESSION['error'] = 'Missing delivery id';
+        header('Location: ?controller=admin&action=delivered');
+        exit;
+    }
+
+    try {
+        $deleted = $this->warehouseModel->deleteDelivery($deliveryId);
+        if ($deleted) {
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted delivery #' . $deliveryId, null, ['delivery_id' => $deliveryId], 'delivery', $deliveryId);
+            $_SESSION['success'] = 'Delivery deleted and quantities were rolled back.';
+        } else {
+            $_SESSION['error'] = 'Delivery not found';
+        }
+    } catch (\Exception $e) {
+        $_SESSION['error'] = 'Failed to delete delivery: ' . $e->getMessage();
+    }
+
+    header('Location: ?controller=admin&action=delivered');
     exit;
 }
 
@@ -439,6 +516,7 @@ public function updateDelivery() {
     if (is_array($result) && isset($result['success']) && !$result['success']) {
         echo json_encode(['error' => $result['error']]);
     } else {
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated delivery #' . $deliveryId, null, ['dr_number' => $drNumber, 'delivery_date' => $deliveryDate], 'delivery', $deliveryId);
         echo json_encode(['success' => true]);
     }
     exit;
@@ -467,6 +545,7 @@ public function resolveDeliveryReport() {
         $newDrNumber ?: null
     );
     if ($result) {
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Resolved delivery report #' . $reportId, null, ['new_quantity' => $newQuantity, 'new_dr_number' => $newDrNumber], 'delivery_report', $reportId);
         echo json_encode(['success' => true]);
     } else {
         echo json_encode(['error' => 'Failed to resolve report']);
@@ -489,8 +568,31 @@ public function getDeliveryReports() {
 public function productionHistory() {
     $allHistory = $this->warehouseModel->getProductionHistory();
     $search = $_GET['search'] ?? '';
+    $filterCustomer = $_GET['filter_customer'] ?? '';
+    $filterItem = $_GET['filter_item'] ?? '';
+    $filterLot = $_GET['filter_lot'] ?? '';
+
     if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
-    $pagination = Pagination::paginate($allHistory, 10);
+    if ($filterCustomer) {
+        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['customer_name'] ?? '', $filterCustomer) !== false));
+    }
+    if ($filterItem) {
+        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['item_description'] ?? '', $filterItem) !== false));
+    }
+    if ($filterLot) {
+        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['lot_number'] ?? '', $filterLot) !== false));
+    }
+
+    $allCustomers = array_values(array_unique(array_filter(array_column($allHistory, 'customer_name'))));
+    $allItems = array_values(array_unique(array_filter(array_column($allHistory, 'item_description'))));
+    $allLots = array_values(array_unique(array_filter(array_column($allHistory, 'lot_number'))));
+
+    $hasFilter = $filterCustomer || $filterItem || $filterLot;
+    if ($hasFilter) {
+        $pagination = ['items' => $allHistory, 'page' => 1, 'perPage' => count($allHistory), 'total' => count($allHistory), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
+    } else {
+        $pagination = Pagination::paginate($allHistory, 10);
+    }
     $data['history'] = $pagination['items'];
 
     $poiIds = array_column($data['history'], 'poi_id');
@@ -504,6 +606,12 @@ public function productionHistory() {
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
     $data['search'] = $search;
+    $data['filterCustomer'] = $filterCustomer;
+    $data['filterItem'] = $filterItem;
+    $data['filterLot'] = $filterLot;
+    $data['allCustomers'] = $allCustomers;
+    $data['allItems'] = $allItems;
+    $data['allLots'] = $allLots;
     $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['page_title'] = 'Production History';
@@ -523,8 +631,53 @@ public function editHistoryRecord() {
         echo json_encode(['success' => false, 'message' => 'Missing required fields']);
         exit;
     }
+    $before = $this->warehouseModel->getProductionHistoryById($history_id);
     $result = $this->warehouseModel->editHistoryRecord($history_id, $new_added_quantity, $new_lot, $_SESSION['user_id']);
+    if ($result) {
+        $after = $this->warehouseModel->getProductionHistoryById($history_id);
+        $oldValues = $before ? [
+            'previous_quantity' => $before['previous_quantity'] ?? null,
+            'added_quantity' => $before['added_quantity'] ?? null,
+            'new_quantity' => $before['new_quantity'] ?? null,
+            'lot_number' => $before['lot_number'] ?? null,
+            'old_added_quantity' => $before['old_added_quantity'] ?? null,
+            'old_lot_number' => $before['old_lot_number'] ?? null,
+        ] : null;
+        $newValues = $after ? [
+            'previous_quantity' => $after['previous_quantity'] ?? null,
+            'added_quantity' => $after['added_quantity'] ?? null,
+            'new_quantity' => $after['new_quantity'] ?? null,
+            'lot_number' => $after['lot_number'] ?? null,
+            'old_added_quantity' => $after['old_added_quantity'] ?? null,
+            'old_lot_number' => $after['old_lot_number'] ?? null,
+        ] : null;
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated production quantity and lot for history #' . $history_id, $oldValues, $newValues, 'production_history', $history_id);
+    }
     echo json_encode(['success' => $result]);
+    exit;
+}
+
+public function deleteProductionHistory() {
+    $historyId = $_GET['id'] ?? null;
+    if (!$historyId) {
+        $_SESSION['error'] = 'Missing history id';
+        header('Location: ?controller=admin&action=productionHistory');
+        exit;
+    }
+
+    try {
+        $deleted = $this->warehouseModel->deleteProductionHistory($historyId);
+        if ($deleted) {
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted production history #' . $historyId, null, ['history_id' => $historyId], 'production_history', $historyId);
+            $_SESSION['success'] = 'Production history deleted and quantities were rolled back.';
+        } else {
+            $_SESSION['error'] = 'Production history not found';
+        }
+    } catch (\Exception $e) {
+        $_SESSION['error'] = 'Failed to delete production history: ' . $e->getMessage();
+    }
+
+    header('Location: ?controller=admin&action=productionHistory');
     exit;
 }
 
@@ -551,8 +704,36 @@ public function editHistoryRecord() {
             exit;
         }
         $this->warehouseModel->updateExcessNotes($excess_id, $notes);
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated excess notes for #' . $excess_id, null, ['notes' => $notes], 'excess_production', $excess_id);
         echo json_encode(['success' => true]);
         exit;
+    }
+
+    public function activityLogs() {
+        $auditModel = new AuditModel();
+        $filters = [
+            'user_id'    => $_GET['user_id'] ?? '',
+            'department' => $_GET['department'] ?? '',
+            'module'     => $_GET['module'] ?? '',
+            'log_action' => $_GET['log_action'] ?? '',
+            'date_from'  => $_GET['date_from'] ?? '',
+            'date_to'    => $_GET['date_to'] ?? '',
+            'search'     => $_GET['search'] ?? '',
+        ];
+        foreach ($filters as $k => $v) { if ($v === '') unset($filters[$k]); }
+        $logs = $auditModel->getLogs($filters, $_GET['page'] ?? 1, 20);
+        $data['logs'] = $logs;
+        $data['users'] = $auditModel->getAllUsers();
+        $data['filters'] = $_GET;
+        $data['logController'] = 'admin';
+        $data['departmentLocked'] = false;
+        $data['hideDeptColumn'] = false;
+        $data['stats'] = [
+            'today_count' => AuditModel::getLogStats()['today_count'] ?? 0,
+            'by_department' => [],
+        ];
+        $data['page_title'] = 'Activity Logs';
+        $this->render('activity_logs/index', $data);
     }
 
     private function render($view, $data = []) {

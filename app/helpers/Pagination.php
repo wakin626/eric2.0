@@ -8,9 +8,11 @@ class Pagination {
         return array_filter($items, function($item) use ($q) {
             foreach ($item as $value) {
                 if (is_string($value) && stripos($value, $q) !== false) return true;
+                if (is_numeric($value) && stripos((string)$value, $q) !== false) return true;
                 if (is_array($value)) {
                     foreach ($value as $v) {
                         if (is_string($v) && stripos($v, $q) !== false) return true;
+                        if (is_numeric($v) && stripos((string)$v, $q) !== false) return true;
                     }
                 }
             }

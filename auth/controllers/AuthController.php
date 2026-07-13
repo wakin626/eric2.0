@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Models\UserModel;
+use App\Models\AuditModel;
 
 class AuthController {
     private $userModel;
@@ -34,6 +35,8 @@ class AuthController {
                 $_SESSION['username'] = $user['username'];
                 $_SESSION['full_name'] = $user['full_name'];
                 $_SESSION['department'] = $user['department'];
+
+                AuditModel::log($user['user_id'], 'LOGIN', 'auth', 'User logged in: ' . $user['username'], null, ['username' => $username], 'user', $user['user_id']);
 
                 $redirectMap = [
                     'admin' => 'admin',
@@ -112,13 +115,15 @@ class AuthController {
                 return;
             }
 
-            $this->userModel->create([
+            $userId = $this->userModel->create([
                 'username' => $username,
                 'email' => $email,
                 'password' => $password,
                 'full_name' => $full_name,
                 'department' => $department
             ]);
+
+            AuditModel::log($userId, 'CREATE', 'auth', 'New user registered: ' . $_POST['username'], null, ['username' => $_POST['username'], 'department' => $_POST['department']], 'user', $userId);
 
             $_SESSION['success'] = 'Account created successfully. Please login.';
             header('Location: ?controller=auth&action=login');
@@ -129,6 +134,7 @@ class AuthController {
     }
 
     public function logout() {
+        AuditModel::log($_SESSION['user_id'], 'LOGOUT', 'auth', 'User logged out: ' . ($_SESSION['username'] ?? ''), null, null, 'user', $_SESSION['user_id'] ?? null);
         session_destroy();
         header('Location: ?controller=auth&action=login');
         exit;

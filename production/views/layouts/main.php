@@ -99,6 +99,11 @@
                             <?php endif; ?>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= ($currentAction ?? '') === 'activityLogs' ? 'active' : '' ?>" href="?controller=production&action=activityLogs">
+                            <i class="bi bi-clock-history me-2"></i>Activity Logs
+                        </a>
+                    </li>
                     <li class="nav-item mt-auto">
                         <a class="nav-link" href="?controller=auth&action=logout" style="color: #64748b; transition: all 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
                             <i class="bi bi-box-arrow-left me-2"></i>Logout

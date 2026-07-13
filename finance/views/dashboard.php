@@ -77,11 +77,12 @@
                                 $qty = $item['quantity'] ?? 0;
                                 $itemProduced = $item['produced_quantity'] ?? 0;
                                 $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                                $isExcess = $itemProduced > $qty;
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                 <div class="d-flex align-items-center">
                                     <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                        <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                        <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
                                     </div>
                                     <small class="text-muted text-nowrap"><?= $itemProduced ?> pcs</small>
                                 </div>
@@ -267,7 +268,9 @@ function viewPODetails(poId) {
                     const itemDelivered = item.delivered_quantity || 0;
                     const remaining = Math.max(0, qty - itemDelivered);
                     const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                    const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                    const isExcess = itemProduced > qty;
+                    const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                    const barWidth = Math.min(itemPercent, 100);
                     var conv = item.uom_conversion || null;
                     var deliveredText = itemDelivered + ' PCS' + (conv ? ' / ' + Math.floor(itemDelivered / conv) + ' CS' : '');
                     html += `<tr>
@@ -278,7 +281,7 @@ function viewPODetails(poId) {
                         <td>
                             <div class="d-flex align-items-center">
                                 <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
-                                    <div class="progress-bar ${barClass}" style="width: ${itemPercent}%"></div>
+                                    <div class="progress-bar ${barClass}" style="width: ${barWidth}%"></div>
                                 </div>
                                 <small class="text-muted">${itemProduced} pcs</small>
                             </div>

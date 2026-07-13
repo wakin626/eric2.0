@@ -2,21 +2,38 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div class="d-flex gap-2 flex-wrap">
-        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:180px">
-            <option value="">All Customers</option>
-        </select>
-        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:180px">
-            <option value="">All Items</option>
-        </select>
-        <select id="filterLot" class="form-select form-select-sm filter-select" style="width:160px">
-            <option value="">All Lots</option>
-        </select>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearHistoryFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
+        <form method="GET" id="historyFilterForm" class="d-flex gap-2 flex-wrap">
+            <input type="hidden" name="controller" value="admin">
+            <input type="hidden" name="action" value="productionHistory">
+            <input type="hidden" name="search" value="<?= htmlspecialchars($search ?? '') ?>">
+            <select name="filter_customer" class="form-select form-select-sm filter-select" style="width:180px" onchange="this.form.submit()">
+                <option value="">All Customers</option>
+                <?php foreach (($allCustomers ?? []) as $c): ?>
+                    <option value="<?= htmlspecialchars($c) ?>" <?= ($filterCustomer ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="filter_item" class="form-select form-select-sm filter-select" style="width:180px" onchange="this.form.submit()">
+                <option value="">All Items</option>
+                <?php foreach (($allItems ?? []) as $i): ?>
+                    <option value="<?= htmlspecialchars($i) ?>" <?= ($filterItem ?? '') === $i ? 'selected' : '' ?>><?= htmlspecialchars($i) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="filter_lot" class="form-select form-select-sm filter-select" style="width:160px" onchange="this.form.submit()">
+                <option value="">All Lots</option>
+                <?php foreach (($allLots ?? []) as $l): ?>
+                    <option value="<?= htmlspecialchars($l) ?>" <?= ($filterLot ?? '') === $l ? 'selected' : '' ?>><?= htmlspecialchars($l) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </form>
+        <a href="?controller=admin&action=productionHistory" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
     </div>
     <div class="search-box" style="width: 300px;">
         <form method="GET" class="d-flex align-items-center">
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="productionHistory">
+            <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
+            <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
+            <input type="hidden" name="filter_lot" value="<?= htmlspecialchars($filterLot ?? '') ?>">
             <i class="bi bi-search"></i>
             <input type="text" name="search" id="searchHistory" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($search ?? '') ?>">
         </form>
@@ -41,9 +58,10 @@
                     <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="sts_ref">STS Ref <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="lot">Lot No. <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="prev">Previous Qty <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="added">Added Qty <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="new">New Qty <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="prev">Previous Lot Qty <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="added">Added Lot Qty <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="new">New Lot Qty <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="totalpo">Total PO Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="excess">Excess <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
                     <th>Report</th>
@@ -81,14 +99,22 @@
                             <br><small class="text-muted">(old: <?= htmlspecialchars($h['old_lot_number']) ?>)</small>
                         <?php endif; ?>
                     </td>
-                    <td><?= $h['previous_quantity'] ?></td>
+                    <td>
+                        <?php
+                        $lotCurrent = intval($h['lot_current_qty'] ?? 0);
+                        $addedQty = intval($h['added_quantity'] ?? 0);
+                        $prevLotQty = max(0, $lotCurrent - $addedQty);
+                        ?>
+                        <?= $prevLotQty ?>
+                    </td>
                     <td>
                         <span class="text-success">+<?= $h['added_quantity'] ?></span>
                         <?php if (!empty($h['date_edited']) && $h['old_added_quantity'] !== null): ?>
                             <br><small class="text-muted">(old: +<?= $h['old_added_quantity'] ?>)</small>
                         <?php endif; ?>
                     </td>
-                    <td><strong><?= $h['new_quantity'] ?></strong></td>
+                    <td><strong><?= $lotCurrent ?></strong></td>
+                    <td><?= $h['total_po_qty'] ?? 0 ?></td>
                     <td>
                         <?php
                         $ordered = $h['ordered_quantity'] ?? 0;
@@ -127,11 +153,17 @@
                                 <i class="bi bi-pencil"></i>
                             </button>
                         <?php endif; ?>
+                        <a href="?controller=admin&action=deleteProductionHistory&id=<?= $h['history_id'] ?>"
+                           class="btn btn-sm btn-outline-danger"
+                           onclick="return confirm('Delete this production entry and roll back its quantity?')"
+                           title="Delete this entry and undo its impact">
+                            <i class="bi bi-trash"></i>
+                        </a>
                     </td>
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="13" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="14" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -190,8 +222,8 @@
                     <tr><th style="width:40%">History ID</th><td id="prevHistId"></td></tr>
                     <tr><th>Previous Lot</th><td id="prevOldLot"></td></tr>
                     <tr><th>New Lot</th><td id="prevNewLot"></td></tr>
-                    <tr><th>Previous Qty</th><td id="prevOldQty"></td></tr>
-                    <tr><th>New Qty</th><td id="prevNewQty"></td></tr>
+                    <tr><th>Previous Lot Qty</th><td id="prevOldQty"></td></tr>
+                     <tr><th>New Lot Qty</th><td id="prevNewQty"></td></tr>
                 </table>
             </div>
             <div class="modal-footer">
@@ -278,39 +310,6 @@ function saveEditRecord() {
 
 document.getElementById('confirmEditBtn').addEventListener('click', saveEditRecord);
 
-function populateHistoryFilters() {
-    var custData = <?= json_encode(array_values(array_unique(array_filter(array_column($history, 'customer_name'))))) ?>;
-    var itemData = <?= json_encode(array_values(array_unique(array_filter(array_column($history, 'item_description'))))) ?>;
-    var lotData = <?= json_encode(array_values(array_unique(array_filter(array_column($history, 'lot_number'))))) ?>;
-    var custSel = document.getElementById('filterCustomer');
-    custData.forEach(function(c) { var o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
-    var itemSel = document.getElementById('filterItem');
-    itemData.forEach(function(i) { var o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
-    var lotSel = document.getElementById('filterLot');
-    lotData.forEach(function(l) { var o = document.createElement('option'); o.value = l; o.textContent = l; lotSel.appendChild(o); });
-}
-
-function applyHistoryFilters() {
-    const custFilter = document.getElementById('filterCustomer').value.toLowerCase();
-    const itemFilter = document.getElementById('filterItem').value.toLowerCase();
-    const lotFilter = document.getElementById('filterLot').value.toLowerCase();
-    document.querySelectorAll('#historyTableBody tr').forEach(row => {
-        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
-        const cust = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
-        const item = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
-        const lotStrong = row.cells[4] ? row.cells[4].querySelector('strong') : null;
-        const lot = lotStrong ? lotStrong.textContent.trim().toLowerCase() : '';
-        let show = true;
-        if (custFilter && !cust.includes(custFilter)) show = false;
-        if (itemFilter && !item.includes(itemFilter)) show = false;
-        if (lotFilter && !lot.includes(lotFilter)) show = false;
-        row.style.display = show ? '' : 'none';
-    });
-}
-
-document.getElementById('filterCustomer').addEventListener('change', applyHistoryFilters);
-document.getElementById('filterItem').addEventListener('change', applyHistoryFilters);
-document.getElementById('filterLot').addEventListener('change', applyHistoryFilters);
 var _searchTimer;
 document.getElementById('searchHistory').addEventListener('input', function() {
     clearTimeout(_searchTimer);
@@ -322,17 +321,6 @@ document.getElementById('searchHistory').addEventListener('input', function() {
     var s = document.getElementById('searchHistory');
     if (s && s.value) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
 })();
-document.getElementById('clearHistoryFilters').addEventListener('click', function() {
-    document.getElementById('filterCustomer').value = '';
-    document.getElementById('filterItem').value = '';
-    document.getElementById('filterLot').value = '';
-    document.getElementById('searchHistory').value = '';
-    var form = document.querySelector('#searchHistory').closest('form');
-    if (form) form.submit();
-    else applyHistoryFilters();
-});
-
-document.addEventListener('DOMContentLoaded', populateHistoryFilters);
 
 document.querySelectorAll('.sortable').forEach(th => {
     th.addEventListener('click', function() {

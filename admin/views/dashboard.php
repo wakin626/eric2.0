@@ -167,11 +167,12 @@
                                     $qty = $item['quantity'] ?? 0;
                                     $itemProduced = $item['produced_quantity'] ?? 0;
                                     $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                                    $isExcess = $itemProduced > $qty;
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                     <div class="d-flex align-items-center" style="min-height: 20px;">
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                            <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                            <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
                                         </div>
                                         <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                     </div>

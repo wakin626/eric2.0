@@ -176,6 +176,12 @@
                             data-po-id="<?= $d['po_id'] ?>">
                             <i class="bi bi-pencil"></i>
                         </button>
+                        <a href="?controller=admin&action=deleteDelivery&id=<?= $d['delivery_id'] ?>"
+                           class="btn btn-sm btn-outline-danger"
+                           onclick="return confirm('Delete this delivery and roll back its quantities?')"
+                           title="Delete delivery and undo its impact">
+                            <i class="bi bi-trash"></i>
+                        </a>
                     </td>
                 </tr>
                 <?php endforeach; ?>

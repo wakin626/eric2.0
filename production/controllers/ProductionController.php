@@ -2,6 +2,7 @@
 namespace App\Controllers;
 
 use App\Models\WarehouseModel;
+use App\Models\AuditModel;
 use App\Helpers\Pagination;
 
 class ProductionController {
@@ -94,11 +95,36 @@ class ProductionController {
                         $sts_ref = is_array($sts_ref_values) ? ($sts_ref_values[$i] ?? null) : $sts_ref_values;
                         $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
                         $itemDesc = $poi['item_description'] ?? null;
-                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $quantities[$i], $_SESSION['user_id'], $lot, $itemDesc, $sts_ref);
+                        $previousProduced = intval($poi['produced_quantity'] ?? 0);
+                        $addedQty = intval($quantities[$i] ?? 0);
+                        $newProduced = $previousProduced + $addedQty;
+                        $previousLotQty = $previousProduced;
+                        $newLotQty = $newProduced;
                         if ($lot && $lot !== '') {
-                            $this->warehouseModel->updateLotQuantity($poi_id, $lot, $quantities[$i], $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
+                            $lotQtyStmt = \App\Core\BaseModel::getConnection()->prepare("SELECT quantity_produced FROM production_lots WHERE poi_id = :poi_id AND lot_number = :lot_number AND `is_removed` = 0 LIMIT 1");
+                            $lotQtyStmt->execute(['poi_id' => $poi_id, 'lot_number' => $lot]);
+                            $currentLot = $lotQtyStmt->fetch();
+                            $previousLotQty = isset($currentLot['quantity_produced']) ? intval($currentLot['quantity_produced']) : 0;
+                            $newLotQty = $previousLotQty + $addedQty;
+                            $this->warehouseModel->updateLotQuantity($poi_id, $lot, $addedQty, $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
                         }
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $addedQty, $_SESSION['user_id'], $lot, $itemDesc, $sts_ref);
                         $this->checkAndRecordExcess($poi_id, $po_id);
+                        $poLabel = $poi['customer_po_number'] ?? $poi['po_number'] ?? 'PO item #' . $poi_id;
+                        $lotText = $lot ? ' for lot ' . $lot : '';
+                        $lotQtyText = $lot ? ' (lot quantity ' . $previousLotQty . ' → ' . $newLotQty . ')' : '';
+                        $description = 'Updated production quantity for ' . $poLabel . ': added ' . $addedQty . ' pcs' . $lotText . ' (previous ' . $previousProduced . ' → new ' . $newProduced . ')' . $lotQtyText;
+                        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'production', $description, [
+                            'previous_quantity' => $previousLotQty,
+                            'added_quantity' => 0,
+                            'new_quantity' => $previousLotQty,
+                            'lot_number' => $lot,
+                        ], [
+                            'previous_quantity' => $previousLotQty,
+                            'added_quantity' => $addedQty,
+                            'new_quantity' => $newLotQty,
+                            'lot_number' => $lot,
+                        ], 'purchase_order_item', $poi_id);
                     }
                 }
             } else {
@@ -113,11 +139,36 @@ class ProductionController {
                         $sts_ref = is_array($sts_ref_values) ? ($sts_ref_values[$i] ?? null) : $sts_ref_values;
                         $poi = $this->warehouseModel->getPurchaseOrderItemById($poi_id);
                         $itemDesc = $poi['item_description'] ?? null;
-                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $qty, $_SESSION['user_id'], $lot, $itemDesc, $sts_ref);
+                        $previousProduced = intval($poi['produced_quantity'] ?? 0);
+                        $addedQty = intval($qty ?? 0);
+                        $newProduced = $previousProduced + $addedQty;
+                        $previousLotQty = $previousProduced;
+                        $newLotQty = $newProduced;
                         if ($lot && $lot !== '') {
-                            $this->warehouseModel->updateLotQuantity($poi_id, $lot, $qty, $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
+                            $lotQtyStmt = \App\Core\BaseModel::getConnection()->prepare("SELECT quantity_produced FROM production_lots WHERE poi_id = :poi_id AND lot_number = :lot_number AND `is_removed` = 0 LIMIT 1");
+                            $lotQtyStmt->execute(['poi_id' => $poi_id, 'lot_number' => $lot]);
+                            $currentLot = $lotQtyStmt->fetch();
+                            $previousLotQty = isset($currentLot['quantity_produced']) ? intval($currentLot['quantity_produced']) : 0;
+                            $newLotQty = $previousLotQty + $addedQty;
+                            $this->warehouseModel->updateLotQuantity($poi_id, $lot, $addedQty, $_SESSION['user_id'], $poi['po_id'] ?? $po_id);
                         }
+                        $this->warehouseModel->updateItemProducedQuantity($poi_id, $addedQty, $_SESSION['user_id'], $lot, $itemDesc, $sts_ref);
                         $this->checkAndRecordExcess($poi_id, $po_id);
+                        $poLabel = $poi['customer_po_number'] ?? $poi['po_number'] ?? 'PO item #' . $poi_id;
+                        $lotText = $lot ? ' for lot ' . $lot : '';
+                        $lotQtyText = $lot ? ' (lot quantity ' . $previousLotQty . ' → ' . $newLotQty . ')' : '';
+                        $description = 'Updated production quantity for ' . $poLabel . ': added ' . $addedQty . ' pcs' . $lotText . ' (previous ' . $previousProduced . ' → new ' . $newProduced . ')' . $lotQtyText;
+                        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'production', $description, [
+                            'previous_quantity' => $previousLotQty,
+                            'added_quantity' => 0,
+                            'new_quantity' => $previousLotQty,
+                            'lot_number' => $lot,
+                        ], [
+                            'previous_quantity' => $previousLotQty,
+                            'added_quantity' => $addedQty,
+                            'new_quantity' => $newLotQty,
+                            'lot_number' => $lot,
+                        ], 'purchase_order_item', $poi_id);
                     }
                 }
             }
@@ -155,8 +206,31 @@ class ProductionController {
     public function history() {
         $allHistory = $this->warehouseModel->getProductionHistory();
         $search = $_GET['search'] ?? '';
+        $filterCustomer = $_GET['filter_customer'] ?? '';
+        $filterItem = $_GET['filter_item'] ?? '';
+        $filterLot = $_GET['filter_lot'] ?? '';
+
         if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
-        $pagination = Pagination::paginate($allHistory, 10);
+        if ($filterCustomer) {
+            $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['customer_name'] ?? '', $filterCustomer) !== false));
+        }
+        if ($filterItem) {
+            $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['item_description'] ?? '', $filterItem) !== false));
+        }
+        if ($filterLot) {
+            $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['lot_number'] ?? '', $filterLot) !== false));
+        }
+
+        $allCustomers = array_values(array_unique(array_filter(array_column($allHistory, 'customer_name'))));
+        $allItems = array_values(array_unique(array_filter(array_column($allHistory, 'item_description'))));
+        $allLots = array_values(array_unique(array_filter(array_column($allHistory, 'lot_number'))));
+
+        $hasFilter = $filterCustomer || $filterItem || $filterLot;
+        if ($hasFilter) {
+            $pagination = ['items' => $allHistory, 'page' => 1, 'perPage' => count($allHistory), 'total' => count($allHistory), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
+        } else {
+            $pagination = Pagination::paginate($allHistory, 10);
+        }
         $data['history'] = $pagination['items'];
 
         $poiIds = array_column($data['history'], 'poi_id');
@@ -170,6 +244,12 @@ class ProductionController {
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
         $data['search'] = $search;
+        $data['filterCustomer'] = $filterCustomer;
+        $data['filterItem'] = $filterItem;
+        $data['filterLot'] = $filterLot;
+        $data['allCustomers'] = $allCustomers;
+        $data['allItems'] = $allItems;
+        $data['allLots'] = $allLots;
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         $data['page_title'] = 'Production History';
         $this->render('history/index', $data);
@@ -199,6 +279,7 @@ class ProductionController {
                     $reason,
                     $report_type
                 );
+                AuditModel::log($_SESSION['user_id'], 'CREATE', 'production', 'Reported production history entry #' . $history_id . ' with reason: ' . $reason, null, $_POST, 'production_history', null);
                 $_SESSION['success'] = 'Report submitted successfully.';
             } else {
                 $_SESSION['error'] = 'History record not found.';
@@ -271,6 +352,33 @@ class ProductionController {
 
         echo json_encode(['po' => $po, 'po_items' => $po_items]);
         exit;
+    }
+
+    public function activityLogs() {
+        $auditModel = new \App\Models\AuditModel();
+        $filters = [
+            'department' => $_SESSION['department'] ?? 'production',
+            'user_id'    => $_GET['user_id'] ?? '',
+            'module'     => $_GET['module'] ?? '',
+            'log_action' => $_GET['log_action'] ?? '',
+            'date_from'  => $_GET['date_from'] ?? '',
+            'date_to'    => $_GET['date_to'] ?? '',
+            'search'     => $_GET['search'] ?? '',
+        ];
+        foreach ($filters as $k => $v) { if ($v === '') unset($filters[$k]); }
+        $logs = $auditModel->getLogs($filters, $_GET['page'] ?? 1, 20);
+        $data['logs'] = $logs;
+        $data['users'] = $auditModel->getAllUsers();
+        $data['filters'] = $_GET;
+        $data['logController'] = 'production';
+        $data['departmentLocked'] = true;
+        $data['hideDeptColumn'] = true;
+        $data['stats'] = [
+            'today_count' => \App\Models\AuditModel::getLogStats('production')['today_count'] ?? 0,
+            'by_department' => [],
+        ];
+        $data['page_title'] = 'Activity Logs';
+        $this->render('activity_logs/index', $data);
     }
 
     private function render($view, $data = []) {

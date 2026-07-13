@@ -155,9 +155,12 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getPurchaseOrderItemById($poi_id) {
-        $sql = "SELECT poi.*, i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion 
+        $sql = "SELECT poi.*, i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion,
+            po.po_number, po.customer_po_number, c.customer_name
             FROM purchase_order_items poi 
             LEFT JOIN items i ON poi.item_id = i.item_id 
+            LEFT JOIN purchase_orders po ON poi.po_id = po.po_id
+            LEFT JOIN customers c ON po.customer_id = c.customer_id
             WHERE poi.poi_id = :poi_id";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
@@ -263,6 +266,87 @@ class WarehouseModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    public function deleteDelivery($deliveryId) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT po_id, poi_id FROM deliveries WHERE delivery_id = :delivery_id AND `remove` = 0");
+        $stmt->execute(['delivery_id' => $deliveryId]);
+        $delivery = $stmt->fetch();
+        if (!$delivery) return false;
+
+        $conn->beginTransaction();
+        try {
+            $conn->prepare("UPDATE deliveries SET `remove` = 1 WHERE delivery_id = :delivery_id")
+                ->execute(['delivery_id' => $deliveryId]);
+
+            if (!empty($delivery['po_id'])) {
+                $conn->prepare("UPDATE purchase_orders po SET delivered_quantity = (
+                    SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                    WHERE d.po_id = po.po_id AND d.`remove` = 0
+                ) WHERE po.po_id = :po_id")
+                    ->execute(['po_id' => $delivery['po_id']]);
+            }
+
+            if (!empty($delivery['poi_id'])) {
+                $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = (
+                    SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                    WHERE d.poi_id = poi.poi_id AND d.`remove` = 0
+                ) WHERE poi.poi_id = :poi_id")
+                    ->execute(['poi_id' => $delivery['poi_id']]);
+            }
+
+            $conn->commit();
+            return true;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    public function deleteProductionHistory($historyId) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT poi_id, po_id, added_quantity, lot_number FROM production_history WHERE history_id = :history_id");
+        $stmt->execute(['history_id' => $historyId]);
+        $history = $stmt->fetch();
+        if (!$history) return false;
+
+        $conn->beginTransaction();
+        try {
+            if (!empty($history['poi_id'])) {
+                $conn->prepare("UPDATE purchase_order_items SET produced_quantity = GREATEST(0, produced_quantity - :removed_qty) WHERE poi_id = :poi_id")
+                    ->execute(['removed_qty' => $history['added_quantity'], 'poi_id' => $history['poi_id']]);
+            }
+
+            if (!empty($history['po_id'])) {
+                $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                    SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+                ) WHERE po_id = :po_id2")
+                    ->execute(['po_id' => $history['po_id'], 'po_id2' => $history['po_id']]);
+            }
+
+            if (!empty($history['poi_id']) && !empty($history['lot_number'])) {
+                $conn->prepare("UPDATE production_lots SET quantity_produced = GREATEST(0, quantity_produced - :removed_qty)
+                    WHERE poi_id = :poi_id AND lot_number = :lot_number AND `is_removed` = 0")
+                    ->execute([
+                        'removed_qty' => $history['added_quantity'],
+                        'poi_id' => $history['poi_id'],
+                        'lot_number' => $history['lot_number']
+                    ]);
+            }
+
+            $conn->prepare("DELETE FROM production_reports WHERE history_id = :history_id")
+                ->execute(['history_id' => $historyId]);
+
+            $conn->prepare("DELETE FROM production_history WHERE history_id = :history_id")
+                ->execute(['history_id' => $historyId]);
+
+            $conn->commit();
+            return true;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
     public function getNextPONumber() {
         $sql = "SELECT MAX(CAST(SUBSTRING(customer_po_number, 4) AS UNSIGNED)) as max_num FROM purchase_orders";
         $stmt = self::getConnection()->prepare($sql);
@@ -338,7 +422,9 @@ class WarehouseModel extends BaseModel {
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
                     pr.report_type as report_type, pr.new_lot_number as resolved_lot,
-                    poi.quantity as ordered_quantity
+                    poi.quantity as ordered_quantity,
+                    poi.produced_quantity as total_po_qty,
+                    COALESCE(lot_sum.lot_current_qty, 0) AS lot_current_qty
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
@@ -346,10 +432,21 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN users eu ON ph.edited_by = eu.user_id
                 LEFT JOIN production_reports pr ON ph.history_id = pr.history_id AND pr.status = 'pending'
                 LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
+                LEFT JOIN (
+                    SELECT lot_number, poi_id, SUM(quantity_produced) AS lot_current_qty
+                    FROM production_lots WHERE `is_removed` = 0
+                    GROUP BY lot_number, poi_id
+                ) lot_sum ON lot_sum.lot_number = ph.lot_number AND lot_sum.poi_id = ph.poi_id
                 ORDER BY ph.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    public function getProductionHistoryById($historyId) {
+        $stmt = self::getConnection()->prepare("SELECT history_id, po_id, poi_id, lot_number, added_quantity, previous_quantity, new_quantity, old_added_quantity, old_lot_number FROM production_history WHERE history_id = :history_id");
+        $stmt->execute(['history_id' => $historyId]);
+        return $stmt->fetch();
     }
 
     public function getAdvanceProductionPOs() {
@@ -580,6 +677,14 @@ class WarehouseModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['lot_id' => $lot_id]);
         return $stmt->fetch();
+    }
+
+    public function getLotsByLotNumber($lot_number, $poi_id) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("SELECT * FROM production_lots 
+                WHERE lot_number = :lot_number AND poi_id = :poi_id AND `is_removed` = 0");
+        $stmt->execute(['lot_number' => $lot_number, 'poi_id' => $poi_id]);
+        return $stmt->fetchAll();
     }
 
     public function getLotRemaining($lot_id) {

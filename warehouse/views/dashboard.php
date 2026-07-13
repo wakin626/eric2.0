@@ -76,11 +76,12 @@
                                     $qty = $item['quantity'] ?? 0;
                                     $itemProduced = $item['produced_quantity'] ?? 0;
                                     $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                                    $isExcess = $itemProduced > $qty;
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                     <div class="d-flex align-items-center" style="min-height: 20px;">
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                            <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                            <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
                                         </div>
                                         <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                     </div>
@@ -479,7 +480,9 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                         const qty = item.quantity || 0;
                         const itemProduced = item.produced_quantity || 0;
                         const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                        const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
+                        const isExcess = itemProduced > qty;
+                        const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                        const barWidth = Math.min(itemPercent, 100);
                         const lineTotal = item.quantity * item.unit_price;
                         const row = '<tr>' +
                             '<td>' + (item.item_code || '-') + '</td>' +
@@ -489,7 +492,7 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                             '<td>' +
                                 '<div class="d-flex align-items-center">' +
                                     '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
-                                        '<div class="progress-bar ' + barClass + '" style="width: ' + itemPercent + '%"></div>' +
+                                        '<div class="progress-bar ' + barClass + '" style="width: ' + barWidth + '%"></div>' +
                                     '</div>' +
                                     '<small class=\"text-muted\">' + itemProduced + '/' + qty + ' pcs</small>' +
                                 '</div>' +
