@@ -103,7 +103,7 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON po.requested_by = u.user_id 
                 WHERE po.`remove` = 0
-                ORDER BY po.date_created DESC";
+                ORDER BY po.last_update DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
