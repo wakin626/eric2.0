@@ -794,37 +794,42 @@ class WarehouseModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['dr_number' => $dr_number]);
         $deliveries = $stmt->fetchAll();
-        $result = [];
+        $temp = [];
         foreach ($deliveries as $d) {
             $lotItems = json_decode($d['lot_items'] ?? '[]', true);
             if (is_array($lotItems) && count($lotItems) > 0) {
                 foreach ($lotItems as $li) {
-                    $result[] = [
-                        'delivery_id' => $d['delivery_id'],
-                        'po_id' => $d['po_id'],
-                        'lot_number' => $li['lot_number'] ?? '',
-                        'item_code' => $li['item_code'] ?? '',
-                        'item_description' => $li['item_description'] ?? '',
-                        'delivery_quantity' => $li['qty'] ?? 0,
-                        'delivery_date' => $d['delivery_date'],
-                        'dr_number' => $d['dr_number'],
-                        'customer_po_number' => $d['customer_po_number'] ?? '',
-                        'customer_name' => $d['customer_name'] ?? '',
-                        'customer_code' => $d['customer_code'] ?? '',
-                        'customer_address' => $d['customer_address'] ?? '',
-                        'customer_tin' => $d['customer_tin'] ?? '',
-                        'customer_terms' => $d['customer_terms'] ?? 0,
-                        'unit_price' => $li['unit_price'] ?? 0,
-                        'item_uom' => $li['item_uom'] ?? '',
-                        'uom_conversion' => $li['uom_conversion'] ?? null,
-                        'item_id' => $li['item_id'] ?? null,
-                    ];
+                    $key = ($li['lot_number'] ?? '') . '||' . ($li['item_code'] ?? '');
+                    if (isset($temp[$key])) {
+                        $temp[$key]['delivery_quantity'] += $li['qty'] ?? 0;
+                    } else {
+                        $temp[$key] = [
+                            'delivery_id' => $d['delivery_id'],
+                            'po_id' => $d['po_id'],
+                            'lot_number' => $li['lot_number'] ?? '',
+                            'item_code' => $li['item_code'] ?? '',
+                            'item_description' => $li['item_description'] ?? '',
+                            'delivery_quantity' => $li['qty'] ?? 0,
+                            'delivery_date' => $d['delivery_date'],
+                            'dr_number' => $d['dr_number'],
+                            'customer_po_number' => $d['customer_po_number'] ?? '',
+                            'customer_name' => $d['customer_name'] ?? '',
+                            'customer_code' => $d['customer_code'] ?? '',
+                            'customer_address' => $d['customer_address'] ?? '',
+                            'customer_tin' => $d['customer_tin'] ?? '',
+                            'customer_terms' => $d['customer_terms'] ?? 0,
+                            'unit_price' => $li['unit_price'] ?? 0,
+                            'item_uom' => $li['item_uom'] ?? '',
+                            'uom_conversion' => $li['uom_conversion'] ?? null,
+                            'item_id' => $li['item_id'] ?? null,
+                        ];
+                    }
                 }
             } else {
-                $result[] = $d;
+                $temp[] = $d;
             }
         }
-        return $result;
+        return array_values($temp);
     }
 
     public function getLotsByDRNumber($dr_number) {
