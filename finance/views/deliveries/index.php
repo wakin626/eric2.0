@@ -221,7 +221,13 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
         document.getElementById('modalDR').textContent = this.dataset.dr || '-';
         document.getElementById('modalDate').textContent = this.dataset.date || '-';
 
-        var lotItems = JSON.parse(this.dataset.lotItems || '[]');
+        var lotItemsRaw = JSON.parse(this.dataset.lotItems || '[]');
+        var mergedFI = {};
+        lotItemsRaw.forEach(function(item) {
+            var key = (item.lot_number || '') + '||' + (item.item_code || '');
+            if (mergedFI[key]) { mergedFI[key].qty += item.qty || 0; } else { mergedFI[key] = Object.assign({}, item); }
+        });
+        var lotItems = Object.values(mergedFI);
         var tbody = document.getElementById('modalLotItemsBody');
         tbody.innerHTML = '';
         var total = 0;

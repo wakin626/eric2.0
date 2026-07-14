@@ -854,11 +854,20 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
             reportRemarksEl.textContent = reportRemarks;
         }
         var lotItems = JSON.parse(this.dataset.lotItems || '[]');
+        var merged = {};
+        lotItems.forEach(function(item) {
+            var key = (item.lot_number || '') + '||' + (item.item_code || '');
+            if (merged[key]) {
+                merged[key].qty += item.qty || 0;
+            } else {
+                merged[key] = Object.assign({}, item);
+            }
+        });
         var tbody = document.getElementById('viewLotItemsBody');
         tbody.innerHTML = '';
         var total = 0;
         var totalCases = 0;
-        lotItems.forEach(function(item) {
+        Object.values(merged).forEach(function(item) {
             total += item.qty || 0;
             var conv = item.uom_conversion || null;
             var uom = item.item_uom || '';

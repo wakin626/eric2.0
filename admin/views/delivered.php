@@ -294,7 +294,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const poId = this.getAttribute('data-po-id');
             const drNumber = this.getAttribute('data-dr') || '-';
             const lotItemsRaw = this.getAttribute('data-lot-items') || '[]';
-            const lotItems = JSON.parse(lotItemsRaw);
+            const lotItemsRawArr = JSON.parse(lotItemsRaw);
+            const mergedLI = {};
+            lotItemsRawArr.forEach(function(item) {
+                var key = (item.lot_number || '') + '||' + (item.item_code || '');
+                if (mergedLI[key]) { mergedLI[key].qty += item.qty || 0; } else { mergedLI[key] = Object.assign({}, item); }
+            });
+            const lotItems = Object.values(mergedLI);
             const hasLotItems = Array.isArray(lotItems) && lotItems.length > 0;
 
             fetch('?controller=warehouse&action=getPODetails&id=' + poId)
@@ -421,7 +427,13 @@ document.querySelectorAll('.editDeliveryBtn').forEach(function(btn) {
         document.getElementById('editDeliveryDate').value = this.dataset.date || '';
         document.getElementById('editPoId').value = this.dataset.poId || '';
 
-        var lotItems = JSON.parse(this.dataset.lotItems || '[]');
+        var lotItemsRaw = JSON.parse(this.dataset.lotItems || '[]');
+        var mergedED = {};
+        lotItemsRaw.forEach(function(item) {
+            var key = (item.lot_number || '') + '||' + (item.item_code || '');
+            if (mergedED[key]) { mergedED[key].qty += item.qty || 0; } else { mergedED[key] = Object.assign({}, item); }
+        });
+        var lotItems = Object.values(mergedED);
         var container = document.getElementById('editLotItemsContainer');
         container.innerHTML = '';
 
