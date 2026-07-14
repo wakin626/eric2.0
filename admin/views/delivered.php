@@ -2,21 +2,62 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div class="d-flex gap-2 flex-wrap">
-        <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:180px">
-            <option value="">All Customers</option>
-        </select>
-        <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
-            <option value="">All Items</option>
-        </select>
-        <select id="filterDR" class="form-select form-select-sm filter-select" style="width:160px">
-            <option value="">All DR Numbers</option>
-        </select>
-        <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Delivery Date">
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
+        <form method="GET" class="d-flex gap-2 flex-wrap">
+            <input type="hidden" name="controller" value="admin">
+            <input type="hidden" name="action" value="delivered">
+            <select name="filter_customer" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
+                <option value="">All Customers</option>
+                <?php foreach (($allCustomers ?? []) as $c): ?>
+                    <option value="<?= htmlspecialchars($c) ?>" <?= ($filterCustomer ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="filter_item" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
+                <option value="">All Items</option>
+                <?php foreach (($allItems ?? []) as $i): ?>
+                    <option value="<?= htmlspecialchars($i) ?>" <?= ($filterItem ?? '') === $i ? 'selected' : '' ?>><?= htmlspecialchars($i) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="filter_dr" class="form-select form-select-sm filter-select" style="width:140px" onchange="this.form.submit()">
+                <option value="">All DR Numbers</option>
+                <?php foreach (($allDRs ?? []) as $d): ?>
+                    <option value="<?= htmlspecialchars($d) ?>" <?= ($filterDR ?? '') === $d ? 'selected' : '' ?>><?= htmlspecialchars($d) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="filter_po" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
+                <option value="">All PO Numbers</option>
+                <?php foreach (($allPOs ?? []) as $p): ?>
+                    <option value="<?= htmlspecialchars($p) ?>" <?= ($filterPo ?? '') === $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="filter_delivered_by" class="form-select form-select-sm filter-select" style="width:160px" onchange="this.form.submit()">
+                <option value="">All Delivered By</option>
+                <?php foreach (($allDeliveredBy ?? []) as $u): ?>
+                    <option value="<?= htmlspecialchars($u) ?>" <?= ($filterDeliveredBy ?? '') === $u ? 'selected' : '' ?>><?= htmlspecialchars($u) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="filter_type" class="form-select form-select-sm filter-select" style="width:130px" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                <option value="normal" <?= ($filterType ?? '') === 'normal' ? 'selected' : '' ?>>Normal</option>
+                <option value="advance" <?= ($filterType ?? '') === 'advance' ? 'selected' : '' ?>>Advance</option>
+            </select>
+            <input type="date" name="filter_date" class="form-control form-control-sm" style="width:150px" value="<?= htmlspecialchars($filterDate ?? '') ?>" title="Filter by Delivery Date" onchange="this.form.submit()">
+        </form>
+        <a href="?controller=admin&action=delivered" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
     </div>
     <div class="search-box" style="width: 300px;">
-        <i class="bi bi-search"></i>
-        <input type="text" id="searchDelivered" class="form-control" placeholder="Search...">
+        <form method="GET" class="d-flex align-items-center">
+            <input type="hidden" name="controller" value="admin">
+            <input type="hidden" name="action" value="delivered">
+            <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
+            <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
+            <input type="hidden" name="filter_dr" value="<?= htmlspecialchars($filterDR ?? '') ?>">
+            <input type="hidden" name="filter_po" value="<?= htmlspecialchars($filterPo ?? '') ?>">
+            <input type="hidden" name="filter_delivered_by" value="<?= htmlspecialchars($filterDeliveredBy ?? '') ?>">
+            <input type="hidden" name="filter_type" value="<?= htmlspecialchars($filterType ?? '') ?>">
+            <input type="hidden" name="filter_date" value="<?= htmlspecialchars($filterDate ?? '') ?>">
+            <i class="bi bi-search"></i>
+            <input type="text" name="search" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($search ?? '') ?>">
+        </form>
     </div>
 </div>
 
@@ -186,12 +227,42 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php else: ?>
-                <tr><td colspan="12" class="text-center text-muted py-4">No delivery records found</td></tr>
+                <tr><td colspan="13" class="text-center text-muted py-4">No delivery records found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
 </div>
+
+<?php if (($totalPages ?? 1) > 1): ?>
+<?php
+$pages = \App\Helpers\Pagination::getPageRange($page, $totalPages);
+$pageParams = 'controller=admin&action=delivered';
+foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 'filter_delivered_by', 'filter_type', 'filter_date'] as $p) {
+    $val = $GLOBALS['_GET'][$p] ?? $$p ?? '';
+    if ($val !== '') $pageParams .= '&' . $p . '=' . urlencode($val);
+}
+?>
+<nav>
+    <ul class="pagination justify-content-center mt-4">
+        <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?<?= $pageParams ?>&page=<?= $page - 1 ?>">&laquo; Prev</a>
+        </li>
+        <?php foreach ($pages as $p): ?>
+            <?php if ($p === '...'): ?>
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            <?php else: ?>
+            <li class="page-item <?= $p == $page ? 'active' : '' ?>">
+                <a class="page-link" href="?<?= $pageParams ?>&page=<?= $p ?>"><?= $p ?></a>
+            </li>
+            <?php endif; ?>
+        <?php endforeach; ?>
+        <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?<?= $pageParams ?>&page=<?= $page + 1 ?>">Next &raquo;</a>
+        </li>
+    </ul>
+</nav>
+<?php endif; ?>
 
 <!-- Edit Delivery Modal -->
 <div class="modal fade" id="editDeliveryModal" tabindex="-1">
@@ -349,77 +420,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-    var customers = new Set();
-    var items = new Set();
-    var drNumbers = new Set();
-    document.querySelectorAll('#deliveryTableBody tr').forEach(function(row) {
-        if (row.querySelector('td[colspan]')) return;
-        var cust = row.cells[1] ? row.cells[1].textContent.trim() : '';
-        if (cust) customers.add(cust);
-        var itemCell = row.cells[3];
-        if (itemCell) {
-            var divs = itemCell.querySelectorAll('div');
-            if (divs.length > 0) {
-                divs.forEach(function(d) {
-                    var t = d.textContent.trim().split('(')[0].trim();
-                    if (t && t !== '-') items.add(t);
-                });
-            } else {
-                itemCell.querySelectorAll('small').forEach(function(s) {
-                    var t = s.textContent.trim().split('(')[0].trim();
-                    if (t && t !== '-') items.add(t);
-                });
-            }
-        }
-        var dr = row.cells[2] ? row.cells[2].textContent.trim() : '';
-        if (dr && dr !== '-') drNumbers.add(dr);
-    });
-    var custSel = document.getElementById('filterCustomer');
-    customers.forEach(function(c) { var o = document.createElement('option'); o.value = c; o.textContent = c; custSel.appendChild(o); });
-    var itemSel = document.getElementById('filterItem');
-    items.forEach(function(i) { var o = document.createElement('option'); o.value = i; o.textContent = i; itemSel.appendChild(o); });
-    var drSel = document.getElementById('filterDR');
-    drNumbers.forEach(function(d) { var o = document.createElement('option'); o.value = d; o.textContent = d; drSel.appendChild(o); });
-});
-
-function applyAdminFilters() {
-    var custFilter = document.getElementById('filterCustomer').value.toLowerCase();
-    var itemFilter = document.getElementById('filterItem').value.toLowerCase();
-    var drFilter = document.getElementById('filterDR').value.toLowerCase();
-    var dateFilter = document.getElementById('filterDate').value;
-    var searchQuery = document.getElementById('searchDelivered').value.toLowerCase();
-    document.querySelectorAll('#deliveryTableBody tr').forEach(function(row) {
-        if (row.querySelector('td[colspan]')) { row.style.display = ''; return; }
-        var cust = row.cells[1] ? row.cells[1].textContent.trim().toLowerCase() : '';
-        var itemText = row.cells[3] ? row.cells[3].textContent.trim().toLowerCase() : '';
-        var drText = row.cells[2] ? row.cells[2].textContent.trim().toLowerCase() : '';
-        var deliveryDate = row.cells[6] ? row.cells[6].textContent.trim() : '';
-        var rowText = row.textContent.toLowerCase();
-        var show = true;
-        if (custFilter && !cust.includes(custFilter)) show = false;
-        if (itemFilter && !itemText.includes(itemFilter)) show = false;
-        if (drFilter && !drText.includes(drFilter)) show = false;
-        if (dateFilter && deliveryDate !== dateFilter) show = false;
-        if (searchQuery && !rowText.includes(searchQuery)) show = false;
-        row.style.display = show ? '' : 'none';
-    });
-}
-
-document.getElementById('searchDelivered').addEventListener('keyup', applyAdminFilters);
-document.getElementById('filterCustomer').addEventListener('change', applyAdminFilters);
-document.getElementById('filterItem').addEventListener('change', applyAdminFilters);
-document.getElementById('filterDR').addEventListener('change', applyAdminFilters);
-document.getElementById('filterDate').addEventListener('change', applyAdminFilters);
-document.getElementById('clearFilters').addEventListener('click', function() {
-    document.getElementById('filterCustomer').value = '';
-    document.getElementById('filterItem').value = '';
-    document.getElementById('filterDR').value = '';
-    document.getElementById('filterDate').value = '';
-    document.getElementById('searchDelivered').value = '';
-    applyAdminFilters();
-});
-
 document.querySelectorAll('.editDeliveryBtn').forEach(function(btn) {
     btn.addEventListener('click', function() {
         document.getElementById('editDeliveryId').value = this.dataset.deliveryId;
@@ -467,7 +467,6 @@ document.getElementById('editDeliveryForm').addEventListener('submit', function(
     e.preventDefault();
     var formData = new FormData(this);
 
-    // Collect lot quantity changes
     var lotChanges = [];
     document.querySelectorAll('.edit-lot-qty').forEach(function(input) {
         var oldQty = parseInt(input.dataset.oldQty) || 0;

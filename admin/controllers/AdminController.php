@@ -433,7 +433,86 @@ public function purchaseOrders() {
 }
 
 public function delivered() {
-    $data['deliveries'] = $this->warehouseModel->getDeliveries();
+    $allDeliveries = $this->warehouseModel->getDeliveries();
+    $search = $_GET['search'] ?? '';
+    $filterCustomer = $_GET['filter_customer'] ?? '';
+    $filterItem = $_GET['filter_item'] ?? '';
+    $filterDR = $_GET['filter_dr'] ?? '';
+    $filterDate = $_GET['filter_date'] ?? '';
+    $filterPo = $_GET['filter_po'] ?? '';
+    $filterDeliveredBy = $_GET['filter_delivered_by'] ?? '';
+    $filterType = $_GET['filter_type'] ?? '';
+
+    if ($search) $allDeliveries = Pagination::filterBySearch($allDeliveries, $search);
+    if ($filterCustomer) {
+        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['customer_name'] ?? '', $filterCustomer) !== false));
+    }
+    if ($filterItem) {
+        $allDeliveries = array_values(array_filter($allDeliveries, function($d) use ($filterItem) {
+            $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+            if (is_array($lotItems)) {
+                foreach ($lotItems as $li) {
+                    if (stripos($li['item_description'] ?? '', $filterItem) !== false) return true;
+                }
+            }
+            return stripos($d['item_description'] ?? '', $filterItem) !== false;
+        }));
+    }
+    if ($filterDR) {
+        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['dr_number'] ?? '', $filterDR) !== false));
+    }
+    if ($filterDate) {
+        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => substr($d['delivery_date'] ?? '', 0, 10) === $filterDate));
+    }
+    if ($filterPo) {
+        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['customer_po_number'] ?? '', $filterPo) !== false));
+    }
+    if ($filterDeliveredBy) {
+        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['delivered_by_name'] ?? '', $filterDeliveredBy) !== false));
+    }
+    if ($filterType) {
+        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => ($d['production_type'] ?? 'normal') === $filterType));
+    }
+
+    $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
+    $allItems = [];
+    foreach ($allDeliveries as $d) {
+        $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+        if (is_array($lotItems)) {
+            foreach ($lotItems as $li) { if (!empty($li['item_description'])) $allItems[] = $li['item_description']; }
+        } elseif (!empty($d['item_description'])) {
+            $allItems[] = $d['item_description'];
+        }
+    }
+    $allItems = array_values(array_unique($allItems));
+    $allDRs = array_values(array_unique(array_filter(array_column($allDeliveries, 'dr_number'))));
+    $allPOs = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_po_number'))));
+    $allDeliveredBy = array_values(array_unique(array_filter(array_column($allDeliveries, 'delivered_by_name'))));
+
+    $hasFilter = $filterCustomer || $filterItem || $filterDR || $filterDate || $filterPo || $filterDeliveredBy || $filterType;
+    if ($hasFilter) {
+        $pagination = ['items' => $allDeliveries, 'page' => 1, 'perPage' => count($allDeliveries), 'total' => count($allDeliveries), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
+    } else {
+        $pagination = Pagination::paginate($allDeliveries, 20);
+    }
+
+    $data['deliveries'] = $pagination['items'];
+    $data['page'] = $pagination['page'];
+    $data['totalPages'] = $pagination['totalPages'];
+    $data['total'] = $pagination['total'];
+    $data['search'] = $search;
+    $data['filterCustomer'] = $filterCustomer;
+    $data['filterItem'] = $filterItem;
+    $data['filterDR'] = $filterDR;
+    $data['filterDate'] = $filterDate;
+    $data['filterPo'] = $filterPo;
+    $data['filterDeliveredBy'] = $filterDeliveredBy;
+    $data['filterType'] = $filterType;
+    $data['allCustomers'] = $allCustomers;
+    $data['allItems'] = $allItems;
+    $data['allDRs'] = $allDRs;
+    $data['allPOs'] = $allPOs;
+    $data['allDeliveredBy'] = $allDeliveredBy;
     $data['reportedCount'] = $this->warehouseModel->getReportedRemarksCount();
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['page_title'] = 'Deliveries';
@@ -571,6 +650,9 @@ public function productionHistory() {
     $filterCustomer = $_GET['filter_customer'] ?? '';
     $filterItem = $_GET['filter_item'] ?? '';
     $filterLot = $_GET['filter_lot'] ?? '';
+    $filterPo = $_GET['filter_po'] ?? '';
+    $filterDateFrom = $_GET['filter_date_from'] ?? '';
+    $filterDateTo = $_GET['filter_date_to'] ?? '';
 
     if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
     if ($filterCustomer) {
@@ -582,12 +664,22 @@ public function productionHistory() {
     if ($filterLot) {
         $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['lot_number'] ?? '', $filterLot) !== false));
     }
+    if ($filterPo) {
+        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['customer_po_number'] ?? '', $filterPo) !== false));
+    }
+    if ($filterDateFrom) {
+        $allHistory = array_values(array_filter($allHistory, fn($h) => substr($h['date_created'] ?? '', 0, 10) >= $filterDateFrom));
+    }
+    if ($filterDateTo) {
+        $allHistory = array_values(array_filter($allHistory, fn($h) => substr($h['date_created'] ?? '', 0, 10) <= $filterDateTo));
+    }
 
     $allCustomers = array_values(array_unique(array_filter(array_column($allHistory, 'customer_name'))));
     $allItems = array_values(array_unique(array_filter(array_column($allHistory, 'item_description'))));
     $allLots = array_values(array_unique(array_filter(array_column($allHistory, 'lot_number'))));
+    $allPos = array_values(array_unique(array_filter(array_column($allHistory, 'customer_po_number'))));
 
-    $hasFilter = $filterCustomer || $filterItem || $filterLot;
+    $hasFilter = $filterCustomer || $filterItem || $filterLot || $filterPo || $filterDateFrom || $filterDateTo;
     if ($hasFilter) {
         $pagination = ['items' => $allHistory, 'page' => 1, 'perPage' => count($allHistory), 'total' => count($allHistory), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
     } else {
@@ -609,9 +701,13 @@ public function productionHistory() {
     $data['filterCustomer'] = $filterCustomer;
     $data['filterItem'] = $filterItem;
     $data['filterLot'] = $filterLot;
+    $data['filterPo'] = $filterPo;
+    $data['filterDateFrom'] = $filterDateFrom;
+    $data['filterDateTo'] = $filterDateTo;
     $data['allCustomers'] = $allCustomers;
     $data['allItems'] = $allItems;
     $data['allLots'] = $allLots;
+    $data['allPos'] = $allPos;
     $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['page_title'] = 'Production History';

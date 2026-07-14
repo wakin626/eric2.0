@@ -5,25 +5,32 @@
         <form method="GET" id="historyFilterForm" class="d-flex gap-2 flex-wrap">
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="productionHistory">
-            <input type="hidden" name="search" value="<?= htmlspecialchars($search ?? '') ?>">
-            <select name="filter_customer" class="form-select form-select-sm filter-select" style="width:180px" onchange="this.form.submit()">
+            <select name="filter_customer" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
                 <option value="">All Customers</option>
                 <?php foreach (($allCustomers ?? []) as $c): ?>
                     <option value="<?= htmlspecialchars($c) ?>" <?= ($filterCustomer ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
                 <?php endforeach; ?>
             </select>
-            <select name="filter_item" class="form-select form-select-sm filter-select" style="width:180px" onchange="this.form.submit()">
+            <select name="filter_item" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
                 <option value="">All Items</option>
                 <?php foreach (($allItems ?? []) as $i): ?>
                     <option value="<?= htmlspecialchars($i) ?>" <?= ($filterItem ?? '') === $i ? 'selected' : '' ?>><?= htmlspecialchars($i) ?></option>
                 <?php endforeach; ?>
             </select>
-            <select name="filter_lot" class="form-select form-select-sm filter-select" style="width:160px" onchange="this.form.submit()">
+            <select name="filter_lot" class="form-select form-select-sm filter-select" style="width:140px" onchange="this.form.submit()">
                 <option value="">All Lots</option>
                 <?php foreach (($allLots ?? []) as $l): ?>
                     <option value="<?= htmlspecialchars($l) ?>" <?= ($filterLot ?? '') === $l ? 'selected' : '' ?>><?= htmlspecialchars($l) ?></option>
                 <?php endforeach; ?>
             </select>
+            <select name="filter_po" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
+                <option value="">All PO Numbers</option>
+                <?php foreach (($allPos ?? []) as $p): ?>
+                    <option value="<?= htmlspecialchars($p) ?>" <?= ($filterPo ?? '') === $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <input type="date" name="filter_date_from" class="form-control form-control-sm" style="width:150px" value="<?= htmlspecialchars($filterDateFrom ?? '') ?>" placeholder="From" onchange="this.form.submit()">
+            <input type="date" name="filter_date_to" class="form-control form-control-sm" style="width:150px" value="<?= htmlspecialchars($filterDateTo ?? '') ?>" placeholder="To" onchange="this.form.submit()">
         </form>
         <a href="?controller=admin&action=productionHistory" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
     </div>
@@ -34,6 +41,9 @@
             <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
             <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
             <input type="hidden" name="filter_lot" value="<?= htmlspecialchars($filterLot ?? '') ?>">
+            <input type="hidden" name="filter_po" value="<?= htmlspecialchars($filterPo ?? '') ?>">
+            <input type="hidden" name="filter_date_from" value="<?= htmlspecialchars($filterDateFrom ?? '') ?>">
+            <input type="hidden" name="filter_date_to" value="<?= htmlspecialchars($filterDateTo ?? '') ?>">
             <i class="bi bi-search"></i>
             <input type="text" name="search" id="searchHistory" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($search ?? '') ?>">
         </form>
@@ -230,23 +240,30 @@
 </div>
 
 <?php if ($totalPages > 1): ?>
-<?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
+<?php
+$pages = \App\Helpers\Pagination::getPageRange($page, $totalPages);
+$pageParams = 'controller=admin&action=productionHistory';
+foreach (['search', 'filter_customer', 'filter_item', 'filter_lot', 'filter_po', 'filter_date_from', 'filter_date_to'] as $p) {
+    $val = $GLOBALS['_GET'][$p] ?? $$p ?? '';
+    if ($val !== '') $pageParams .= '&' . $p . '=' . urlencode($val);
+}
+?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
         <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-            <a class="page-link" href="?controller=admin&action=productionHistory&page=<?= $page - 1 ?>&search=<?= urlencode($search ?? '') ?>">&laquo; Prev</a>
+            <a class="page-link" href="?<?= $pageParams ?>&page=<?= $page - 1 ?>">&laquo; Prev</a>
         </li>
         <?php foreach ($pages as $p): ?>
             <?php if ($p === '...'): ?>
             <li class="page-item disabled"><span class="page-link">...</span></li>
             <?php else: ?>
             <li class="page-item <?= $p == $page ? 'active' : '' ?>">
-                <a class="page-link" href="?controller=admin&action=productionHistory&page=<?= $p ?>&search=<?= urlencode($search ?? '') ?>"><?= $p ?></a>
+                <a class="page-link" href="?<?= $pageParams ?>&page=<?= $p ?>"><?= $p ?></a>
             </li>
             <?php endif; ?>
         <?php endforeach; ?>
         <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-            <a class="page-link" href="?controller=admin&action=productionHistory&page=<?= $page + 1 ?>&search=<?= urlencode($search ?? '') ?>">Next &raquo;</a>
+            <a class="page-link" href="?<?= $pageParams ?>&page=<?= $page + 1 ?>">Next &raquo;</a>
         </li>
     </ul>
 </nav>
