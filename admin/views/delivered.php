@@ -1,7 +1,20 @@
 <h4><i class="bi bi-truck me-2"></i>Delivered PO</h4>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+        <?php if (($reportedCount ?? 0) > 0): ?>
+            <?php if ($filterReports ?? false): ?>
+                <a href="?controller=admin&action=delivered<?= ($filterCustomer ?? '') ? '&filter_customer=' . urlencode($filterCustomer) : '' ?><?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterDR ?? '') ? '&filter_dr=' . urlencode($filterDR) : '' ?><?= ($filterPo ?? '') ? '&filter_po=' . urlencode($filterPo) : '' ?><?= ($filterDeliveredBy ?? '') ? '&filter_delivered_by=' . urlencode($filterDeliveredBy) : '' ?><?= ($filterType ?? '') ? '&filter_type=' . urlencode($filterType) : '' ?><?= ($filterDate ?? '') ? '&filter_date=' . urlencode($filterDate) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
+                   class="btn btn-sm btn-warning fw-bold">
+                    <i class="bi bi-flag-fill me-1"></i>Show All
+                </a>
+            <?php else: ?>
+                <a href="?controller=admin&action=delivered&filter_reports=1<?= ($filterCustomer ?? '') ? '&filter_customer=' . urlencode($filterCustomer) : '' ?><?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterDR ?? '') ? '&filter_dr=' . urlencode($filterDR) : '' ?><?= ($filterPo ?? '') ? '&filter_po=' . urlencode($filterPo) : '' ?><?= ($filterDeliveredBy ?? '') ? '&filter_delivered_by=' . urlencode($filterDeliveredBy) : '' ?><?= ($filterType ?? '') ? '&filter_type=' . urlencode($filterType) : '' ?><?= ($filterDate ?? '') ? '&filter_date=' . urlencode($filterDate) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
+                   class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-flag-fill me-1"></i>Reports <span class="badge bg-danger ms-1"><?= $reportedCount ?></span>
+                </a>
+            <?php endif; ?>
+        <?php endif; ?>
         <form method="GET" class="d-flex gap-2 flex-wrap">
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="delivered">
@@ -55,6 +68,9 @@
             <input type="hidden" name="filter_delivered_by" value="<?= htmlspecialchars($filterDeliveredBy ?? '') ?>">
             <input type="hidden" name="filter_type" value="<?= htmlspecialchars($filterType ?? '') ?>">
             <input type="hidden" name="filter_date" value="<?= htmlspecialchars($filterDate ?? '') ?>">
+            <?php if ($filterReports ?? false): ?>
+            <input type="hidden" name="filter_reports" value="1">
+            <?php endif; ?>
             <i class="bi bi-search"></i>
             <input type="text" name="search" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($search ?? '') ?>">
         </form>
@@ -238,7 +254,7 @@
 <?php
 $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages);
 $pageParams = 'controller=admin&action=delivered';
-foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 'filter_delivered_by', 'filter_type', 'filter_date'] as $p) {
+foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 'filter_delivered_by', 'filter_type', 'filter_date', 'filter_reports'] as $p) {
     $val = $GLOBALS['_GET'][$p] ?? $$p ?? '';
     if ($val !== '') $pageParams .= '&' . $p . '=' . urlencode($val);
 }

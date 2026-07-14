@@ -442,6 +442,12 @@ public function delivered() {
     $filterPo = $_GET['filter_po'] ?? '';
     $filterDeliveredBy = $_GET['filter_delivered_by'] ?? '';
     $filterType = $_GET['filter_type'] ?? '';
+    $filterReports = isset($_GET['filter_reports']) && $_GET['filter_reports'] === '1';
+
+    $reportedCount = 0;
+    foreach ($allDeliveries as $d) {
+        if (($d['remarks_type'] ?? '') === 'report') $reportedCount++;
+    }
 
     if ($search) $allDeliveries = Pagination::filterBySearch($allDeliveries, $search);
     if ($filterCustomer) {
@@ -473,6 +479,16 @@ public function delivered() {
     if ($filterType) {
         $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => ($d['production_type'] ?? 'normal') === $filterType));
     }
+    if ($filterReports) {
+        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => ($d['remarks_type'] ?? '') === 'report'));
+    }
+
+    usort($allDeliveries, function($a, $b) {
+        $aReported = ($a['remarks_type'] ?? '') === 'report' ? 1 : 0;
+        $bReported = ($b['remarks_type'] ?? '') === 'report' ? 1 : 0;
+        if ($aReported !== $bReported) return $bReported - $aReported;
+        return strtotime($b['date_created'] ?? '') - strtotime($a['date_created'] ?? '');
+    });
 
     $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
     $allItems = [];
@@ -489,7 +505,7 @@ public function delivered() {
     $allPOs = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_po_number'))));
     $allDeliveredBy = array_values(array_unique(array_filter(array_column($allDeliveries, 'delivered_by_name'))));
 
-    $hasFilter = $filterCustomer || $filterItem || $filterDR || $filterDate || $filterPo || $filterDeliveredBy || $filterType;
+    $hasFilter = $filterCustomer || $filterItem || $filterDR || $filterDate || $filterPo || $filterDeliveredBy || $filterType || $filterReports;
     if ($hasFilter) {
         $pagination = ['items' => $allDeliveries, 'page' => 1, 'perPage' => count($allDeliveries), 'total' => count($allDeliveries), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
     } else {
@@ -508,6 +524,8 @@ public function delivered() {
     $data['filterPo'] = $filterPo;
     $data['filterDeliveredBy'] = $filterDeliveredBy;
     $data['filterType'] = $filterType;
+    $data['filterReports'] = $filterReports;
+    $data['reportedCount'] = $reportedCount;
     $data['allCustomers'] = $allCustomers;
     $data['allItems'] = $allItems;
     $data['allDRs'] = $allDRs;
@@ -653,6 +671,12 @@ public function productionHistory() {
     $filterPo = $_GET['filter_po'] ?? '';
     $filterDateFrom = $_GET['filter_date_from'] ?? '';
     $filterDateTo = $_GET['filter_date_to'] ?? '';
+    $filterReports = isset($_GET['filter_reports']) && $_GET['filter_reports'] === '1';
+
+    $reportsCount = 0;
+    foreach ($allHistory as $h) {
+        if (($h['report_status'] ?? '') === 'pending') $reportsCount++;
+    }
 
     if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
     if ($filterCustomer) {
@@ -673,13 +697,23 @@ public function productionHistory() {
     if ($filterDateTo) {
         $allHistory = array_values(array_filter($allHistory, fn($h) => substr($h['date_created'] ?? '', 0, 10) <= $filterDateTo));
     }
+    if ($filterReports) {
+        $allHistory = array_values(array_filter($allHistory, fn($h) => ($h['report_status'] ?? '') === 'pending'));
+    }
+
+    usort($allHistory, function($a, $b) {
+        $aReported = ($a['report_status'] ?? '') === 'pending' ? 1 : 0;
+        $bReported = ($b['report_status'] ?? '') === 'pending' ? 1 : 0;
+        if ($aReported !== $bReported) return $bReported - $aReported;
+        return strtotime($a['date_created'] ?? '') - strtotime($b['date_created'] ?? '');
+    });
 
     $allCustomers = array_values(array_unique(array_filter(array_column($allHistory, 'customer_name'))));
     $allItems = array_values(array_unique(array_filter(array_column($allHistory, 'item_description'))));
     $allLots = array_values(array_unique(array_filter(array_column($allHistory, 'lot_number'))));
     $allPos = array_values(array_unique(array_filter(array_column($allHistory, 'customer_po_number'))));
 
-    $hasFilter = $filterCustomer || $filterItem || $filterLot || $filterPo || $filterDateFrom || $filterDateTo;
+    $hasFilter = $filterCustomer || $filterItem || $filterLot || $filterPo || $filterDateFrom || $filterDateTo || $filterReports;
     if ($hasFilter) {
         $pagination = ['items' => $allHistory, 'page' => 1, 'perPage' => count($allHistory), 'total' => count($allHistory), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
     } else {
@@ -704,11 +738,12 @@ public function productionHistory() {
     $data['filterPo'] = $filterPo;
     $data['filterDateFrom'] = $filterDateFrom;
     $data['filterDateTo'] = $filterDateTo;
+    $data['filterReports'] = $filterReports;
     $data['allCustomers'] = $allCustomers;
     $data['allItems'] = $allItems;
     $data['allLots'] = $allLots;
     $data['allPos'] = $allPos;
-    $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+    $data['reportsCount'] = $reportsCount;
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['page_title'] = 'Production History';
     $this->render('production_history/index', $data);

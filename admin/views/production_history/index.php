@@ -1,7 +1,20 @@
 <h4><i class="bi bi-clock-history me-2"></i>Production History</h4>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+        <?php if (($reportsCount ?? 0) > 0): ?>
+            <?php if ($filterReports ?? false): ?>
+                <a href="?controller=admin&action=productionHistory<?= ($filterCustomer ?? '') ? '&filter_customer=' . urlencode($filterCustomer) : '' ?><?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterLot ?? '') ? '&filter_lot=' . urlencode($filterLot) : '' ?><?= ($filterPo ?? '') ? '&filter_po=' . urlencode($filterPo) : '' ?><?= ($filterDateFrom ?? '') ? '&filter_date_from=' . urlencode($filterDateFrom) : '' ?><?= ($filterDateTo ?? '') ? '&filter_date_to=' . urlencode($filterDateTo) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
+                   class="btn btn-sm btn-warning fw-bold">
+                    <i class="bi bi-flag-fill me-1"></i>Show All
+                </a>
+            <?php else: ?>
+                <a href="?controller=admin&action=productionHistory&filter_reports=1<?= ($filterCustomer ?? '') ? '&filter_customer=' . urlencode($filterCustomer) : '' ?><?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterLot ?? '') ? '&filter_lot=' . urlencode($filterLot) : '' ?><?= ($filterPo ?? '') ? '&filter_po=' . urlencode($filterPo) : '' ?><?= ($filterDateFrom ?? '') ? '&filter_date_from=' . urlencode($filterDateFrom) : '' ?><?= ($filterDateTo ?? '') ? '&filter_date_to=' . urlencode($filterDateTo) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
+                   class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-flag-fill me-1"></i>Reports <span class="badge bg-danger ms-1"><?= $reportsCount ?></span>
+                </a>
+            <?php endif; ?>
+        <?php endif; ?>
         <form method="GET" id="historyFilterForm" class="d-flex gap-2 flex-wrap">
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="productionHistory">
@@ -44,18 +57,14 @@
             <input type="hidden" name="filter_po" value="<?= htmlspecialchars($filterPo ?? '') ?>">
             <input type="hidden" name="filter_date_from" value="<?= htmlspecialchars($filterDateFrom ?? '') ?>">
             <input type="hidden" name="filter_date_to" value="<?= htmlspecialchars($filterDateTo ?? '') ?>">
+            <?php if ($filterReports ?? false): ?>
+            <input type="hidden" name="filter_reports" value="1">
+            <?php endif; ?>
             <i class="bi bi-search"></i>
             <input type="text" name="search" id="searchHistory" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($search ?? '') ?>">
         </form>
     </div>
 </div>
-
-<?php if (!empty($reportsCount) && $reportsCount > 0): ?>
-<div class="alert alert-warning d-flex align-items-center mb-3">
-    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-    <strong><?= $reportsCount ?></strong>&nbsp;production report(s) pending action.
-</div>
-<?php endif; ?>
 
 <div class="card data-card">
     <div class="table-responsive">
@@ -243,7 +252,7 @@
 <?php
 $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages);
 $pageParams = 'controller=admin&action=productionHistory';
-foreach (['search', 'filter_customer', 'filter_item', 'filter_lot', 'filter_po', 'filter_date_from', 'filter_date_to'] as $p) {
+foreach (['search', 'filter_customer', 'filter_item', 'filter_lot', 'filter_po', 'filter_date_from', 'filter_date_to', 'filter_reports'] as $p) {
     $val = $GLOBALS['_GET'][$p] ?? $$p ?? '';
     if ($val !== '') $pageParams .= '&' . $p . '=' . urlencode($val);
 }
