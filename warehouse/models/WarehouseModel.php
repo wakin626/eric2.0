@@ -548,8 +548,11 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getLotsByPOItem($poi_id) {
-        $sql = "SELECT * FROM production_lots 
+        $sql = "SELECT MIN(lot_id) as lot_id, poi_id, lot_number, SUM(quantity_produced) as quantity_produced,
+                       MIN(lot_date) as lot_date, MIN(created_by) as created_by, MIN(date_created) as date_created
+                FROM production_lots 
                 WHERE poi_id = :poi_id AND `is_removed` = 0 
+                GROUP BY poi_id, lot_number
                 ORDER BY lot_number ASC, date_created ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
@@ -1327,14 +1330,38 @@ class WarehouseModel extends BaseModel {
         }
 
         if ($lot_changed && $history['poi_id'] && $history['lot_number']) {
-            $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
-                WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
-                ->execute(['new_lot' => $new_lot_number, 'poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
+            $check = $conn->prepare("SELECT lot_id, quantity_produced FROM production_lots 
+                WHERE poi_id = :poi_id AND lot_number = :new_lot AND `is_removed` = 0");
+            $check->execute(['poi_id' => $history['poi_id'], 'new_lot' => $new_lot_number]);
+            $existingTarget = $check->fetch();
 
-            if ($delta != 0) {
-                $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced + :delta 
-                    WHERE poi_id = :poi_id AND lot_number = :lot AND `is_removed` = 0")
-                    ->execute(['delta' => $delta, 'poi_id' => $history['poi_id'], 'lot' => $new_lot_number]);
+            $oldLots = $conn->prepare("SELECT lot_id FROM production_lots 
+                WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0");
+            $oldLots->execute(['poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
+            $oldLotRows = $oldLots->fetchAll();
+
+            if ($existingTarget) {
+                if ($delta != 0) {
+                    $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced + :delta 
+                        WHERE lot_id = :lot_id")
+                        ->execute(['delta' => $delta, 'lot_id' => $existingTarget['lot_id']]);
+                }
+                foreach ($oldLotRows as $ol) {
+                    if ($ol['lot_id'] != $existingTarget['lot_id']) {
+                        $conn->prepare("UPDATE production_lots SET `is_removed` = 1 WHERE lot_id = :lot_id")
+                            ->execute(['lot_id' => $ol['lot_id']]);
+                    }
+                }
+            } else {
+                $conn->prepare("UPDATE production_lots SET lot_number = :new_lot 
+                    WHERE poi_id = :poi_id AND lot_number = :old_lot AND `is_removed` = 0")
+                    ->execute(['new_lot' => $new_lot_number, 'poi_id' => $history['poi_id'], 'old_lot' => $history['lot_number']]);
+
+                if ($delta != 0) {
+                    $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced + :delta 
+                        WHERE poi_id = :poi_id AND lot_number = :lot AND `is_removed` = 0")
+                        ->execute(['delta' => $delta, 'poi_id' => $history['poi_id'], 'lot' => $new_lot_number]);
+                }
             }
         } elseif ($history['poi_id'] && $delta != 0) {
             $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced + :delta 
