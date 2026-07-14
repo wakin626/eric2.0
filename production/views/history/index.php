@@ -92,12 +92,7 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php
-                        $lotCurrent = intval($h['lot_current_qty'] ?? 0);
-                        $addedQty = intval($h['added_quantity'] ?? 0);
-                        $prevLotQty = max(0, $lotCurrent - $addedQty);
-                        ?>
-                        <?= $prevLotQty ?>
+                        <?= intval($h['previous_quantity'] ?? 0) ?>
                     </td>
                     <td>
                         <span class="text-success">+<?= $h['added_quantity'] ?></span>
@@ -105,7 +100,7 @@
                             <br><small class="text-muted">(old: +<?= $h['old_added_quantity'] ?>)</small>
                         <?php endif; ?>
                     </td>
-                    <td><strong><?= $lotCurrent ?></strong></td>
+                    <td><strong><?= intval($h['new_quantity'] ?? 0) ?></strong></td>
                     <td><?= $h['total_po_qty'] ?? 0 ?></td>
                     <td>
                         <?php
