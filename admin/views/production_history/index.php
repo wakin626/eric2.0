@@ -109,7 +109,7 @@
                         <?php endif; ?>
                     </td>
                     <td><strong><?= intval($h['new_quantity'] ?? 0) ?></strong></td>
-                    <td><?= $h['total_po_qty'] ?? 0 ?></td>
+                    <td><?= $h['computed_po_qty'] ?? 0 ?></td>
                     <td>
                         <?php
                         $ordered = $h['ordered_quantity'] ?? 0;

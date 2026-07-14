@@ -422,9 +422,7 @@ class WarehouseModel extends BaseModel {
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
                     pr.report_type as report_type, pr.new_lot_number as resolved_lot,
-                    poi.quantity as ordered_quantity,
-                    poi.produced_quantity as total_po_qty,
-                    COALESCE(lot_sum.lot_current_qty, 0) AS lot_current_qty
+                    poi.quantity as ordered_quantity
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
@@ -432,15 +430,25 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN users eu ON ph.edited_by = eu.user_id
                 LEFT JOIN production_reports pr ON ph.history_id = pr.history_id AND pr.status = 'pending'
                 LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
-                LEFT JOIN (
-                    SELECT lot_number, poi_id, SUM(quantity_produced) AS lot_current_qty
-                    FROM production_lots WHERE `is_removed` = 0
-                    GROUP BY lot_number, poi_id
-                ) lot_sum ON lot_sum.lot_number = ph.lot_number AND lot_sum.poi_id = ph.poi_id
-                ORDER BY ph.date_created DESC";
+                ORDER BY ph.date_created ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+
+        $poiTotals = [];
+        foreach ($rows as &$row) {
+            $pid = $row['poi_id'];
+            if (!isset($poiTotals[$pid])) $poiTotals[$pid] = 0;
+            $poiTotals[$pid] += $row['added_quantity'];
+            if (!empty($row['old_added_quantity']) && $row['old_added_quantity'] !== null) {
+                $poiTotals[$pid] += ($row['added_quantity'] - $row['old_added_quantity']);
+            }
+            $row['computed_po_qty'] = $poiTotals[$pid];
+        }
+        unset($row);
+
+        krsort($rows);
+        return array_values($rows);
     }
 
     public function getProductionHistoryById($historyId) {
