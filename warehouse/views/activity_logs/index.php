@@ -46,103 +46,17 @@ $display = function($v) {
     if (strlen($s) > 80) return substr($s, 0, 80) . '...';
     return $s;
 };
-$skipFields = [
-    'poi_id', 'item_id', 'uom', 'items_json', 'controller', 'action',
-    'po_id', 'customer_id', 'requested_by', 'customer_terms', 'item_uom',
-    'produced_quantity', 'delivered_quantity', 'delivery_quantity',
-    'status', 'remove', 'total_quantity', 'unit_price', 'items',
-    'lot_ids',
-];
-$buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
-    $old = $log['old_values'] ? json_decode($log['old_values'], true) : null;
-    $new = $log['new_values'] ? json_decode($log['new_values'], true) : null;
-    if (in_array($log['action'], ['LOGIN', 'LOGOUT'])) return null;
-    $allKeys = array_unique(array_merge(array_keys($old ?? []), array_keys($new ?? [])));
-    if (empty($allKeys)) return null;
+$formatValues = function($json) use ($humanize, $display) {
+    $data = $json ? json_decode($json, true) : null;
+    if (empty($data)) return '<span class="text-muted">None</span>';
+    $skip = ['poi_id','item_id','uom','items_json','controller','action','po_id','customer_id','requested_by','customer_terms','item_uom','lot_ids'];
     $parts = [];
-    $productionQtyContext = false;
-    if (($log['target_type'] ?? '') === 'production_history' || (stripos($log['description'] ?? '', 'production') !== false && stripos($log['description'] ?? '', 'history') !== false)) {
-        $productionQtyContext = true;
-    }
-    foreach ($allKeys as $key) {
-        if (in_array($key, $skipFields, true)) continue;
-        if ($productionQtyContext && in_array($key, ['added_quantity','previous_quantity','new_quantity','old_added_quantity','old_lot_number','lot_number'], true)) {
-            $oldAdded = $old['added_quantity'] ?? null;
-            $newAdded = $new['added_quantity'] ?? null;
-            $oldPrev = $old['previous_quantity'] ?? null;
-            $newPrev = $new['previous_quantity'] ?? null;
-            $oldNewQty = $old['new_quantity'] ?? null;
-            $newNewQty = $new['new_quantity'] ?? null;
-            $oldLot = $old['lot_number'] ?? $old['old_lot_number'] ?? null;
-            $newLot = $new['lot_number'] ?? $new['old_lot_number'] ?? null;
-            if ($oldAdded !== null || $newAdded !== null || $oldPrev !== null || $newPrev !== null || $oldNewQty !== null || $newNewQty !== null) {
-                $qtyParts = [];
-                if ($oldLot !== null || $newLot !== null) {
-                    $lotLabel = $newLot !== null ? $newLot : ($oldLot !== null ? $oldLot : '?');
-                    $qtyParts[] = 'lot ' . $lotLabel . ' quantity ' . ($oldPrev !== null ? $oldPrev : '?') . ' → ' . ($newNewQty !== null ? $newNewQty : ($newPrev !== null ? $newPrev : '?'));
-                } else {
-                    if ($oldPrev !== null || $newPrev !== null) {
-                        $qtyParts[] = 'previous quantity ' . ($oldPrev !== null ? $oldPrev : '?') . ' → ' . ($newPrev !== null ? $newPrev : '?');
-                    }
-                    if ($oldAdded !== null || $newAdded !== null) {
-                        $qtyParts[] = 'added quantity ' . ($oldAdded !== null ? $oldAdded : '?') . ' → ' . ($newAdded !== null ? $newAdded : '?');
-                    }
-                    if ($oldNewQty !== null || $newNewQty !== null) {
-                        $qtyParts[] = 'new quantity ' . ($oldNewQty !== null ? $oldNewQty : '?') . ' → ' . ($newNewQty !== null ? $newNewQty : '?');
-                    }
-                }
-                $parts[] = 'Production record updated: ' . implode('; ', $qtyParts);
-            }
-            continue;
-        }
-        if ($key === 'items' && (is_array($old[$key] ?? null) || is_array($new[$key] ?? null))) {
-            $oldItems = $old['items'] ?? [];
-            $newItems = $new['items'] ?? [];
-            $oldMap = [];
-            foreach ($oldItems as $item) {
-                if (!empty($item['poi_id'])) {
-                    $oldMap[$item['poi_id']] = $item;
-                }
-            }
-            $newMap = [];
-            foreach ($newItems as $item) {
-                if (!empty($item['poi_id'])) {
-                    $newMap[$item['poi_id']] = $item;
-                }
-            }
-            $allPoiIds = array_unique(array_merge(array_keys($oldMap), array_keys($newMap)));
-            foreach ($allPoiIds as $poiId) {
-                $oldItem = $oldMap[$poiId] ?? null;
-                $newItem = $newMap[$poiId] ?? null;
-                $itemId = $newItem['item_id'] ?? $oldItem['item_id'] ?? 0;
-                if ($oldItem && $newItem) {
-                    $oldQty = $oldItem['quantity'] ?? 0;
-                    $newQty = $newItem['quantity'] ?? 0;
-                    if ($oldQty != $newQty) {
-                        $parts[] = "Item #{$itemId} (POI #{$poiId}): Quantity {$oldQty} → {$newQty}";
-                    }
-                } elseif ($newItem && !$oldItem) {
-                    $qty = $newItem['quantity'] ?? 0;
-                    $parts[] = "Added Item #{$itemId} (POI #{$poiId}): Qty {$qty}";
-                } elseif ($oldItem && !$newItem) {
-                    $oldQty = $oldItem['quantity'] ?? 0;
-                    $parts[] = "Removed Item #{$itemId} (POI #{$poiId}) (was Qty {$oldQty})";
-                }
-            }
-            continue;
-        }
+    foreach ($data as $key => $val) {
+        if (in_array($key, $skip)) continue;
         $label = $humanize($key);
-        $oldVal = $old[$key] ?? null;
-        $newVal = $new[$key] ?? null;
-        if ($oldVal !== null && $newVal !== null && $oldVal != $newVal) {
-            $parts[] = $label . ': ' . $display($oldVal) . ' → ' . $display($newVal);
-        } elseif ($newVal !== null && $oldVal === null) {
-            $parts[] = $label . ': ' . $display($newVal);
-        } elseif ($oldVal !== null && $newVal === null) {
-            $parts[] = $label . ' (was ' . $display($oldVal) . ')';
-        }
+        $parts[] = '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars($display($val));
     }
-    return $parts ? implode(' | ', $parts) : null;
+    return $parts ? implode('<br>', $parts) : '<span class="text-muted">None</span>';
 };
 ?>
 
@@ -246,33 +160,95 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
                     <th>Action</th>
                     <th>Module</th>
                     <th>Description</th>
+                    <th width="50"></th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!empty($logs['items'])): ?>
                     <?php foreach ($logs['items'] as $log): ?>
-                        <?php $changeSummary = $buildChangeSummary($log); ?>
                         <tr>
                             <td><small class="text-muted"><?= date('M d, Y H:i:s', strtotime($log['created_at'])) ?></small></td>
                             <td><strong><?= htmlspecialchars($log['username']) ?></strong></td>
                             <?php if (!$hideDeptColumn): ?>
                                 <td><?= ucfirst(htmlspecialchars($log['department'])) ?></td>
                             <?php endif; ?>
-                            <td><?= $log['action'] ?></td>
-                            <td><?= ucfirst($log['module']) ?></td>
                             <td>
-                                <?= htmlspecialchars($log['description']) ?>
-                                <?php if ($changeSummary): ?>
-                                    <br><small class="text-muted"><?= htmlspecialchars($changeSummary) ?></small>
-                                <?php endif; ?>
+                                <?php
+                                $actColors = ['CREATE'=>'success','UPDATE'=>'primary','DELETE'=>'danger','LOGIN'=>'info','LOGOUT'=>'secondary'];
+                                $actColor = $actColors[$log['action']] ?? 'secondary';
+                                ?>
+                                <span class="badge bg-<?= $actColor ?>"><?= $log['action'] ?></span>
+                            </td>
+                            <td><?= ucfirst(htmlspecialchars($log['module'])) ?></td>
+                            <td><small><?= htmlspecialchars($log['description']) ?></small></td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-info viewLogBtn"
+                                    data-timestamp="<?= htmlspecialchars(date('M d, Y H:i:s', strtotime($log['created_at']))) ?>"
+                                    data-username="<?= htmlspecialchars($log['username']) ?>"
+                                    data-department="<?= htmlspecialchars($log['department']) ?>"
+                                    data-action="<?= htmlspecialchars($log['action']) ?>"
+                                    data-module="<?= htmlspecialchars($log['module']) ?>"
+                                    data-description="<?= htmlspecialchars($log['description']) ?>"
+                                    data-oldvalues="<?= htmlspecialchars($log['old_values'] ?? '') ?>"
+                                    data-newvalues="<?= htmlspecialchars($log['new_values'] ?? '') ?>"
+                                    data-targettype="<?= htmlspecialchars($log['target_type'] ?? '') ?>"
+                                    data-targetid="<?= htmlspecialchars($log['target_id'] ?? '') ?>"
+                                    title="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </button>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <tr><td colspan="<?= $hideDeptColumn ? '5' : '6' ?>" class="text-center text-muted py-4">No logs found</td></tr>
+                    <tr><td colspan="<?= $hideDeptColumn ? '6' : '7' ?>" class="text-center text-muted py-4">No logs found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- View Log Modal -->
+<div class="modal fade" id="viewLogModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Log Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6"><strong>Timestamp:</strong> <span id="logTimestamp">-</span></div>
+                    <div class="col-md-6"><strong>User:</strong> <span id="logUser">-</span></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4"><strong>Department:</strong> <span id="logDept">-</span></div>
+                    <div class="col-md-4"><strong>Action:</strong> <span id="logAction">-</span></div>
+                    <div class="col-md-4"><strong>Module:</strong> <span id="logModule">-</span></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6"><strong>Target Type:</strong> <span id="logTargetType">-</span></div>
+                    <div class="col-md-6"><strong>Target ID:</strong> <span id="logTargetId">-</span></div>
+                </div>
+                <hr>
+                <div class="mb-3">
+                    <strong>Description:</strong>
+                    <div id="logDescription" class="mt-1 p-2 rounded" style="background:#f8f9fa; white-space:pre-wrap;"></div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Old Values:</strong>
+                        <div id="logOldValues" class="mt-1 p-2 rounded" style="background:#fef2f2; min-height:60px; font-size:0.85rem;"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>New Values:</strong>
+                        <div id="logNewValues" class="mt-1 p-2 rounded" style="background:#f0fdf4; min-height:60px; font-size:0.85rem;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -302,3 +278,46 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
     </ul>
 </nav>
 <?php endif; ?>
+
+<script>
+document.querySelectorAll('.viewLogBtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('logTimestamp').textContent = this.dataset.timestamp || '-';
+        document.getElementById('logUser').textContent = this.dataset.username || '-';
+        document.getElementById('logDept').textContent = this.dataset.department || '-';
+        document.getElementById('logAction').innerHTML = '<span class="badge bg-' + ({
+            CREATE:'success',UPDATE:'primary',DELETE:'danger',LOGIN:'info',LOGOUT:'secondary'
+        }[this.dataset.action] || 'secondary') + '">' + (this.dataset.action || '-') + '</span>';
+        document.getElementById('logModule').textContent = this.dataset.module || '-';
+        document.getElementById('logTargetType').textContent = this.dataset.targettype || '-';
+        document.getElementById('logTargetId').textContent = this.dataset.targetid || '-';
+        document.getElementById('logDescription').textContent = this.dataset.description || '-';
+
+        var oldVals = this.dataset.oldvalues;
+        var newVals = this.dataset.newvalues;
+        document.getElementById('logOldValues').innerHTML = formatValues(oldVals);
+        document.getElementById('logNewValues').innerHTML = formatValues(newVals);
+
+        var modal = new bootstrap.Modal(document.getElementById('viewLogModal'));
+        modal.show();
+    });
+});
+
+function formatValues(json) {
+    if (!json) return '<span class="text-muted">None</span>';
+    var data;
+    try { data = JSON.parse(json); } catch(e) { return '<span class="text-muted">None</span>'; }
+    if (!data || Object.keys(data).length === 0) return '<span class="text-muted">None</span>';
+    var skip = ['poi_id','item_id','uom','items_json','controller','action','po_id','customer_id','requested_by','customer_terms','item_uom','lot_ids'];
+    var labels = <?= json_encode($fieldLabels) ?>;
+    var html = '';
+    for (var key in data) {
+        if (skip.indexOf(key) !== -1) continue;
+        var label = labels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, function(l){ return l.toUpperCase(); });
+        var val = data[key];
+        if (typeof val === 'object' && val !== null) val = JSON.stringify(val);
+        html += '<strong>' + label + ':</strong> ' + (val !== null && val !== undefined ? val : '(empty)') + '<br>';
+    }
+    return html || '<span class="text-muted">None</span>';
+}
+</script>
