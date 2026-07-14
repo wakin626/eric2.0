@@ -51,6 +51,7 @@ $skipFields = [
     'po_id', 'customer_id', 'requested_by', 'customer_terms', 'item_uom',
     'produced_quantity', 'delivered_quantity', 'delivery_quantity',
     'status', 'remove', 'total_quantity', 'unit_price', 'items',
+    'lot_ids',
 ];
 $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
     $old = $log['old_values'] ? json_decode($log['old_values'], true) : null;
@@ -181,7 +182,6 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
     <?php endif; ?>
 </div>
 
-<?php if (!$departmentLocked): ?>
 <!-- Filters -->
 <div class="card data-card mb-3">
     <div class="card-body py-2">
@@ -198,6 +198,7 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
                 <?php endforeach; ?>
             </select>
 
+            <?php if (!$departmentLocked): ?>
             <select name="department" class="form-select form-select-sm" style="width:140px">
                 <option value="">All Depts</option>
                 <?php foreach (['admin', 'warehouse', 'production', 'finance'] as $d): ?>
@@ -211,6 +212,7 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
                     <option value="<?= $m ?>" <?= ($filters['module'] ?? '') === $m ? 'selected' : '' ?>><?= ucfirst($m) ?></option>
                 <?php endforeach; ?>
             </select>
+            <?php endif; ?>
 
             <select name="log_action" class="form-select form-select-sm" style="width:130px">
                 <option value="">All Actions</option>
@@ -229,7 +231,6 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
         </form>
     </div>
 </div>
-<?php endif; ?>
 
 <!-- Logs Table -->
 <div class="card data-card">

@@ -51,6 +51,7 @@ $skipFields = [
     'po_id', 'customer_id', 'requested_by', 'customer_terms', 'item_uom',
     'produced_quantity', 'delivered_quantity', 'delivery_quantity',
     'status', 'remove', 'total_quantity', 'unit_price', 'items',
+    'lot_ids',
 ];
 $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
     $old = $log['old_values'] ? json_decode($log['old_values'], true) : null;
@@ -204,7 +205,6 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
                     <option value="<?= $d ?>" <?= ($filters['department'] ?? '') === $d ? 'selected' : '' ?>><?= ucfirst($d) ?></option>
                 <?php endforeach; ?>
             </select>
-            <?php endif; ?>
 
             <select name="module" class="form-select form-select-sm" style="width:140px">
                 <option value="">All Modules</option>
@@ -212,6 +212,7 @@ $buildChangeSummary = function($log) use ($humanize, $display, $skipFields) {
                     <option value="<?= $m ?>" <?= ($filters['module'] ?? '') === $m ? 'selected' : '' ?>><?= ucfirst($m) ?></option>
                 <?php endforeach; ?>
             </select>
+            <?php endif; ?>
 
             <select name="log_action" class="form-select form-select-sm" style="width:130px">
                 <option value="">All Actions</option>
