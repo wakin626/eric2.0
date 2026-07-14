@@ -114,7 +114,6 @@ class WarehouseController {
         $data['filterItem'] = $filterItem;
         $data['filterDate'] = $filterDate;
         $data['allCustomers'] = $allCustomers;
-        $data['allItems'] = $allItems;
         $data['page_title'] = 'Customer PO';
         $this->render('purchase_orders/index', $data);
     }
