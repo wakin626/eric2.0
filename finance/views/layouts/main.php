@@ -89,11 +89,6 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= $currentAction === 'purchaseOrders' ? 'active' : '' ?>" href="?controller=finance&action=purchaseOrders">
-                            <i class="bi bi-cart3 me-2"></i>Customer PO
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
                             <i class="bi bi-receipt me-2"></i>Sales Invoice
                             <?php if ($pendingSIcount > 0): ?>
