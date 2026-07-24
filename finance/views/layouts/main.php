@@ -84,16 +84,21 @@
                     } catch (Exception $e) {}
                     ?>
                     <li class="nav-item">
-                        <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
-                            <i class="bi bi-receipt me-2"></i>Sales Invoice
-                            <?php if ($pendingSIcount > 0): ?>
-                                <span class="badge bg-danger rounded-pill ms-auto"><?= $pendingSIcount ?></span>
-                            <?php endif; ?>
+                        <a class="nav-link <?= $currentAction === '' ? 'active' : '' ?>" href="?controller=finance">
+                            <i class="bi bi-speedometer2 me-2"></i>Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= $currentAction === 'purchaseOrders' ? 'active' : '' ?>" href="?controller=finance&action=purchaseOrders">
                             <i class="bi bi-cart3 me-2"></i>Customer PO
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
+                            <i class="bi bi-receipt me-2"></i>Sales Invoice
+                            <?php if ($pendingSIcount > 0): ?>
+                                <span class="badge bg-danger rounded-pill ms-auto"><?= $pendingSIcount ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
                     <li class="nav-item">
