@@ -85,6 +85,7 @@
                     <th>PO Number</th>
                     <th>Customer</th>
                     <th>DR Number</th>
+                    <th>SI Number</th>
                     <th>Item</th>
                     <th>Lot Number</th>
                     <th>Quantity</th>
@@ -228,6 +229,7 @@
                             data-po-id="<?= $d['po_id'] ?>"
                             data-delivery-id="<?= $d['delivery_id'] ?>"
                             data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>"
+                            data-si="<?= htmlspecialchars($d['si_number'] ?? '') ?>"
                             data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
                             data-delivery-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>"
                             data-receipts="<?= htmlspecialchars(json_encode($receipts_map[$d['delivery_id']] ?? [])) ?>"
@@ -337,7 +339,7 @@ foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>PO Details - <span id="viewPONumber"></span></h5>
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>PO Details - <span id="viewPONumber"></span> <span id="viewSIBadge" class="badge bg-success ms-2" style="display:none;"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -399,6 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             const poId = this.getAttribute('data-po-id');
             const drNumber = this.getAttribute('data-dr') || '-';
+            const siNumber = this.getAttribute('data-si') || '';
             var receipts = [];
             try { receipts = JSON.parse(this.getAttribute('data-receipts') || '[]'); } catch(e) {}
             const lotItemsRaw = this.getAttribute('data-lot-items') || '[]';
@@ -417,6 +420,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     const po = data.po;
 
                     document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
+                    var siBadge = document.getElementById('viewSIBadge');
+                    if (siNumber) {
+                        siBadge.textContent = siNumber;
+                        siBadge.style.display = '';
+                    } else {
+                        siBadge.style.display = 'none';
+                    }
                     document.getElementById('viewCustomerCode').textContent = po.customer_code || '-';
                     document.getElementById('viewCustomerName').textContent = po.customer_name || '-';
                     document.getElementById('viewCustomerTin').textContent = po.customer_tin || '-';
@@ -439,11 +449,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 '<td class="text-end">' + qty + ' pcs</td>' +
                                 '<td class="text-end">' + (cases > 0 ? cases + ' CS' : '---') + '</td>' +
                                 '<td><span class="badge bg-secondary">' + drNumber + '</span></td>' +
+                                '<td>' + (siNumber ? '<span class="badge bg-success">' + siNumber + '</span>' : '<span class="text-muted">-</span>') + '</td>' +
                                 '</tr>';
                             tbody.innerHTML += row;
                         });
                     } else {
-                        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No lot items found for this delivery</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No lot items found for this delivery</td></tr>';
                     }
 
                     const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
