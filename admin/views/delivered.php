@@ -114,6 +114,13 @@
                         <?php endif; ?>
                     </td>
                     <td>
+                        <?php if (!empty($d['si_number'])): ?>
+                            <strong class="text-success"><?= htmlspecialchars($d['si_number']) ?></strong>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <?php if ($hasLotItems): ?>
                             <?php foreach ($lotItems as $idx => $li): ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
@@ -362,7 +369,8 @@ foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 
                                 <th>Lot Number</th>
                                 <th class="text-end">Delivered</th>
                                 <th class="text-end">Cases</th>
-                                <th>DR Number</th>
+                    <th>DR Number</th>
+                    <th>SI Number</th>
                             </tr>
                         </thead>
                         <tbody id="viewPOItems"></tbody>
@@ -372,6 +380,11 @@ foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 
                 <h6 class="mb-2"><i class="bi bi-paperclip me-1"></i>DR Attachments</h6>
                 <div id="viewDRPhotoSection">
                     <div id="viewDRPhotoContainer" class="d-flex flex-wrap gap-2"></div>
+                </div>
+                <hr>
+                <h6 class="mb-2"><i class="bi bi-receipt me-1"></i>SI Attachments</h6>
+                <div id="viewSISection">
+                    <div id="viewSIContainer" class="d-flex flex-wrap gap-2"></div>
                 </div>
             </div>
         </div>
@@ -437,9 +450,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     modal.show();
 
                     var photoContainer = document.getElementById('viewDRPhotoContainer');
+                    var siContainer = document.getElementById('viewSIContainer');
                     photoContainer.innerHTML = '';
-                    if (receipts.length > 0) {
-                        receipts.forEach(function(r) {
+                    siContainer.innerHTML = '';
+
+                    var drReceipts = receipts.filter(function(r) { return (r.type || 'dr') === 'dr'; });
+                    var siReceipts = receipts.filter(function(r) { return r.type === 'si'; });
+
+                    if (drReceipts.length > 0) {
+                        drReceipts.forEach(function(r) {
                             var path = r.file_path || '';
                             var wrapper = document.createElement('div');
                             wrapper.className = 'position-relative d-inline-block';
@@ -451,7 +470,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             photoContainer.appendChild(wrapper);
                         });
                     } else {
-                        photoContainer.innerHTML = '<span class="text-muted">No attachments attached for this DR</span>';
+                        photoContainer.innerHTML = '<span class="text-muted">No DR attachments</span>';
+                    }
+
+                    if (siReceipts.length > 0) {
+                        siReceipts.forEach(function(r) {
+                            var path = r.file_path || '';
+                            var wrapper = document.createElement('div');
+                            wrapper.className = 'position-relative d-inline-block';
+                            if (path.toLowerCase().endsWith('.pdf')) {
+                                wrapper.innerHTML = '<a href="' + path + '" target="_blank" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</a>';
+                            } else {
+                                wrapper.innerHTML = '<a href="' + path + '" target="_blank"><img src="' + path + '" alt="SI Attachment" style="max-height:120px;border-radius:6px;border:1px solid #ddd;" onerror="this.parentElement.innerHTML=\'<span class=text-muted>File not found</span>\'"></a>';
+                            }
+                            siContainer.appendChild(wrapper);
+                        });
+                    } else {
+                        siContainer.innerHTML = '<span class="text-muted">No SI attachments</span>';
                     }
                 })
                 .catch(function(error) {
