@@ -198,18 +198,15 @@ class FinanceController {
                     exit;
                 }
 
-                $conn = self::getConnection();
+                $financeModel = new \App\Models\FinanceModel();
 
-                $check = $conn->prepare("SELECT delivery_id FROM deliveries WHERE si_number = :si_number AND delivery_id != :delivery_id AND `remove` = 0");
-                $check->execute(['si_number' => $si_number, 'delivery_id' => $delivery_id]);
-                if ($check->fetch()) {
+                if ($financeModel->isSINumberTaken($si_number, $delivery_id)) {
                     $_SESSION['error'] = 'SI number "' . $si_number . '" is already used on another delivery';
                     header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
                     exit;
                 }
 
-                $stmt = $conn->prepare("UPDATE deliveries SET si_number = :si_number WHERE delivery_id = :delivery_id");
-                $stmt->execute(['si_number' => $si_number, 'delivery_id' => $delivery_id]);
+                $financeModel->saveSINumber($delivery_id, $si_number);
 
                 AuditModel::log($_SESSION['user_id'], 'UPDATE', 'finance', 'Set SI number ' . $si_number . ' on delivery #' . $delivery_id, null, ['si_number' => $si_number], 'delivery', $delivery_id);
 

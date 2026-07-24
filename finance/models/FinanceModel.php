@@ -62,6 +62,25 @@ class FinanceModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    public function isSINumberTaken($si_number, $exclude_delivery_id = null) {
+        $sql = "SELECT delivery_id FROM deliveries WHERE si_number = :si_number AND `remove` = 0";
+        $params = ['si_number' => $si_number];
+        if ($exclude_delivery_id) {
+            $sql .= " AND delivery_id != :delivery_id";
+            $params['delivery_id'] = $exclude_delivery_id;
+        }
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetch() ? true : false;
+    }
+
+    public function saveSINumber($delivery_id, $si_number) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare("UPDATE deliveries SET si_number = :si_number WHERE delivery_id = :delivery_id");
+        $stmt->execute(['si_number' => $si_number, 'delivery_id' => $delivery_id]);
+        return $stmt->rowCount() > 0;
+    }
+
     public function getAllDeliveries() {
         $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type,
                 c.customer_name, u.full_name as delivered_by_name,
