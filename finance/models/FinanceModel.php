@@ -128,8 +128,9 @@ class FinanceModel extends BaseModel {
     }
 
     public function attachReceipt($data) {
-        $sql = "INSERT INTO delivery_receipts (delivery_id, po_id, file_name, file_path, file_type, file_size, uploaded_by) 
-                VALUES (:delivery_id, :po_id, :file_name, :file_path, :file_type, :file_size, :uploaded_by)";
+        $type = $data['type'] ?? 'si';
+        $sql = "INSERT INTO delivery_receipts (delivery_id, po_id, file_name, file_path, file_type, file_size, type, uploaded_by) 
+                VALUES (:delivery_id, :po_id, :file_name, :file_path, :file_type, :file_size, :type, :uploaded_by)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'delivery_id' => $data['delivery_id'],
@@ -138,6 +139,7 @@ class FinanceModel extends BaseModel {
             'file_path' => $data['file_path'],
             'file_type' => $data['file_type'],
             'file_size' => $data['file_size'],
+            'type' => $type,
             'uploaded_by' => $data['uploaded_by']
         ]);
         return self::getConnection()->lastInsertId();

@@ -133,11 +133,42 @@
 
         <div class="card data-card mb-4">
             <div class="card-header">
-                <i class="bi bi-paperclip me-2"></i>Delivery Receipts
+                <i class="bi bi-paperclip me-2"></i>Delivery Receipt Attachments
             </div>
             <div class="card-body">
-                <?php if (!empty($receipts)): ?>
-                    <?php foreach ($receipts as $r): ?>
+                <?php if (!empty($dr_receipts)): ?>
+                    <?php foreach ($dr_receipts as $r): ?>
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                        <div>
+                            <i class="bi bi-file-earmark me-2"></i>
+                            <strong><?= htmlspecialchars($r['file_name']) ?></strong>
+                            <br>
+                            <small class="text-muted">
+                                <?= number_format($r['file_size'] / 1024, 1) ?> KB &middot; 
+                                <?= date('M d, Y', strtotime($r['date_created'])) ?>
+                                <?php if (!empty($r['uploaded_by_name'])): ?>
+                                    &middot; by <?= htmlspecialchars($r['uploaded_by_name']) ?>
+                                <?php endif; ?>
+                            </small>
+                        </div>
+                        <a href="<?= $r['file_path'] ?>" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <p class="text-center text-muted py-3">No DR attachments uploaded by warehouse</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="card data-card mb-4">
+            <div class="card-header">
+                <i class="bi bi-receipt me-2"></i>Sales Invoice Attachments
+            </div>
+            <div class="card-body">
+                <?php if (!empty($si_receipts)): ?>
+                    <?php foreach ($si_receipts as $r): ?>
                     <div class="d-flex justify-content-between align-items-center border-bottom py-2">
                         <div>
                             <i class="bi bi-file-earmark me-2"></i>
@@ -154,21 +185,21 @@
                             </a>
                             <a href="?controller=finance&action=deleteReceipt&id=<?= $r['receipt_id'] ?>&delivery_id=<?= $delivery['delivery_id'] ?>" 
                                class="btn btn-sm btn-outline-danger" title="Delete"
-                               onclick="return confirm('Are you sure you want to delete this delivery receipt?')">
+                               onclick="return confirm('Are you sure you want to delete this SI attachment?')">
                                 <i class="bi bi-trash"></i>
                             </a>
                         </div>
                     </div>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <p class="text-center text-muted py-3">No delivery receipts attached yet</p>
+                    <p class="text-center text-muted py-3">No SI attachments yet</p>
                 <?php endif; ?>
             </div>
         </div>
 
         <div class="card data-card">
             <div class="card-header">
-                <i class="bi bi-upload me-2"></i>Attach Delivery Receipt
+                <i class="bi bi-upload me-2"></i>Attach Sales Invoice
             </div>
             <div class="card-body">
                 <form method="POST" action="?controller=finance&action=uploadReceipt" enctype="multipart/form-data">
@@ -177,12 +208,12 @@
                     
                     <div class="mb-3">
                         <label class="form-label">Select File</label>
-                        <input type="file" name="receipt_file" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx" required>
-                        <div class="form-text">Allowed: JPG, PNG, GIF, WebP, PDF, DOC, DOCX (max 10MB)</div>
+                        <input type="file" name="receipt_file" class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf" required>
+                        <div class="form-text">Allowed: JPG, PNG, GIF, WebP, PDF (max 10MB)</div>
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-upload me-2"></i>Upload Delivery Receipt
+                        <i class="bi bi-upload me-2"></i>Upload SI Attachment
                     </button>
                 </form>
             </div>

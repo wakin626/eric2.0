@@ -161,7 +161,9 @@ class FinanceController {
         }
 
         $data['delivery'] = $delivery;
-        $data['receipts'] = $this->financeModel->getReceiptsByDelivery($id);
+        $allReceipts = $this->financeModel->getReceiptsByDelivery($id);
+        $data['dr_receipts'] = array_filter($allReceipts, fn($r) => ($r['type'] ?? 'dr') === 'dr');
+        $data['si_receipts'] = array_filter($allReceipts, fn($r) => ($r['type'] ?? 'dr') === 'si');
         $data['poi_item'] = $this->financeModel->getDeliveryPoiItem($delivery['poi_id'] ?? 0);
         $data['price_list'] = !empty($data['poi_item']['item_id']) ? $this->priceListModel->getByItemId($data['poi_item']['item_id']) : null;
         $siNumber = $delivery['si_number'] ?? null;
@@ -272,12 +274,13 @@ class FinanceController {
                     'file_path' => 'uploads/receipts/' . $fileName,
                     'file_type' => $file['type'],
                     'file_size' => $file['size'],
+                    'type' => 'si',
                     'uploaded_by' => $_SESSION['user_id']
                 ]);
                 $poFinance = (new \App\Models\FinanceModel())->getPurchaseOrderById($po_id);
-                AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Uploaded delivery receipt ' . $fileName . ' for ' . ($poFinance['customer_po_number'] ?? $poFinance['po_number'] ?? 'PO #' . $po_id) . ' on delivery #' . $delivery_id, null, ['file' => $fileName], 'receipt', $po_id);
+                AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Uploaded sales invoice attachment ' . $fileName . ' for ' . ($poFinance['customer_po_number'] ?? $poFinance['po_number'] ?? 'PO #' . $po_id) . ' on delivery #' . $delivery_id, null, ['file' => $fileName], 'receipt', $po_id);
 
-                $_SESSION['success'] = 'Delivery receipt uploaded successfully';
+                $_SESSION['success'] = 'Sales invoice attachment uploaded successfully';
                 header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
                 exit;
             } catch (\Exception $e) {
