@@ -12,6 +12,7 @@ class FinanceModel extends BaseModel {
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON po.requested_by = u.user_id 
                 WHERE po.`remove` = 0 
+                AND po.production_type = 'normal'
                 AND po.produced_quantity > po.delivered_quantity
                 ORDER BY po.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -184,7 +185,7 @@ class FinanceModel extends BaseModel {
         $stmt = self::getConnection()->query("SELECT COUNT(*) as cnt FROM purchase_orders WHERE `remove` = 0");
         $data['total_pos'] = $stmt->fetch()['cnt'];
 
-        $stmt = self::getConnection()->query("SELECT COUNT(*) as cnt FROM purchase_orders WHERE `remove` = 0 AND produced_quantity > delivered_quantity");
+        $stmt = self::getConnection()->query("SELECT COUNT(*) as cnt FROM purchase_orders WHERE `remove` = 0 AND production_type = 'normal' AND produced_quantity > delivered_quantity");
         $data['ready_to_deliver'] = $stmt->fetch()['cnt'];
 
         $stmt = self::getConnection()->query("SELECT COUNT(*) as cnt FROM deliveries WHERE `remove` = 0");
@@ -287,6 +288,7 @@ class FinanceModel extends BaseModel {
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON po.requested_by = u.user_id 
                 WHERE po.`remove` = 0 
+                AND po.production_type = 'normal'
                 AND po.produced_quantity > po.delivered_quantity";
         $params = [];
 
