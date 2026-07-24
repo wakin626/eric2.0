@@ -94,11 +94,12 @@
                             <?php if (!empty($items)): ?>
                                 <?php foreach ($items as $idx => $item):
                                     $qty = $item['quantity'] ?? 0;
+                                    $itemProduced = $item['produced_quantity'] ?? 0;
                                     $itemDelivered = $item['delivered_quantity'] ?? 0;
-                                    $remaining = $qty - $itemDelivered;
+                                    $remaining = max(0, $qty - $itemDelivered);
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <?php if ($qty > 0 && $itemDelivered >= $qty): ?>
+                                    <?php if ($qty > 0 && $itemDelivered >= $qty && $itemProduced >= $qty): ?>
                                         <span class="badge bg-success">Fully Delivered</span>
                                     <?php elseif ($itemDelivered > 0): ?>
                                         <span class="badge bg-warning text-dark">Partial (<?= $remaining ?> left)</span>

@@ -373,6 +373,36 @@
                         </tbody>
                     </table>
                 </div>
+
+                <hr>
+                <h5 class="mb-3">Lot Tracker</h5>
+                <div class="row mb-3 align-items-center">
+                    <div class="col-md-4">
+                        <label for="lotTrackerItem" class="form-label fw-bold">Select Item</label>
+                        <select id="lotTrackerItem" class="form-select form-select-sm">
+                            <option value="">-- Select Item --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0" id="lotTrackerTable">
+                        <thead>
+                            <tr>
+                                <th>Lot No.</th>
+                                <th class="text-end">Qty Produced</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lotTrackerBody">
+                            <tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>
+                        </tbody>
+                        <tfoot id="lotTrackerFoot" style="display:none;">
+                            <tr class="table-light fw-bold">
+                                <td>Total</td>
+                                <td class="text-end" id="lotTrackerTotal">0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -485,13 +515,30 @@ function makeSearchable(row) {
 
     function rebuildList() {
         list.innerHTML = '';
-        Array.from(select.options).forEach(function(opt) {
+        var opts = Array.from(select.options);
+        opts.sort(function(a, b) {
+            if (!a.value) return -1;
+            if (!b.value) return 1;
+            var aEx = a.dataset.hasExcess ? 1 : 0;
+            var bEx = b.dataset.hasExcess ? 1 : 0;
+            return bEx - aEx;
+        });
+        opts.forEach(function(opt) {
             var li = document.createElement('li');
             li.textContent = opt.textContent;
             li.dataset.value = opt.value;
             if (opt.disabled) li.classList.add('disabled');
             if (opt.value === select.value) li.classList.add('active');
             if (!opt.value) li.style.display = 'none';
+            if (opt.dataset.hasExcess) {
+                li.classList.add('has-excess');
+                li.style.backgroundColor = '#fff3c4';
+                li.style.color = '#5c4a00';
+                li.style.fontWeight = '700';
+                li.style.borderLeft = '4px solid #f5c518';
+                li.addEventListener('mouseenter', function() { li.style.backgroundColor = '#ffe082'; });
+                li.addEventListener('mouseleave', function() { li.style.backgroundColor = '#fff3c4'; });
+            }
             list.appendChild(li);
         });
     }
@@ -671,35 +718,66 @@ customerSelect.addEventListener('change', function() {
     customerTerms.value = option.dataset.terms || '0';
     customerDetails.classList.remove('d-none');
 
-    fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + this.value)
-        .then(function(r) { return r.json(); })
-        .then(function(items) {
-            var html = '<option value="">Select Item</option>';
-            items.forEach(function(item) {
-                html += '<option value="' + item.item_id + '" data-code="' + (item.item_code || '') + '" data-description="' + (item.item_description || '') + '" data-uom="' + (item.item_uom || '') + '" data-price="' + (item.item_amount || 0) + '">' + item.item_code + ' - ' + item.item_description + '</option>';
-            });
-            document.querySelectorAll('.item-select').forEach(function(sel) {
-                sel.innerHTML = html;
-            });
-            refreshSearchables();
+    var itemsContainer = document.getElementById('itemsContainer');
+    var firstRow = itemsContainer.querySelector('.item-row');
+    var freshRow = firstRow.cloneNode(true);
+    freshRow.querySelectorAll('input').forEach(function(el) { el.value = ''; });
+    freshRow.querySelector('.item-select').value = '';
+    var fInput = freshRow.querySelector('.searchable-input');
+    if (fInput) fInput.value = '';
+    var fList = freshRow.querySelector('.searchable-list');
+    if (fList) { fList.innerHTML = ''; fList.classList.remove('show'); }
+    var fUom = freshRow.querySelector('.item-uom');
+    if (fUom) fUom.value = 'PCS';
+    itemsContainer.innerHTML = '';
+    itemsContainer.appendChild(freshRow);
+    setupItemRow(freshRow);
+    updateRemoveButtons();
+
+    var itemsPromise = fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + this.value).then(function(r) { return r.json(); });
+    var excessPromise = fetch('?controller=warehouse&action=getExcessByCustomer&customer_id=' + this.value).then(function(r) { return r.json(); });
+
+    Promise.all([itemsPromise, excessPromise]).then(function(results) {
+        var items = results[0];
+        var excessItems = results[1];
+
+        window._customerExcess = {};
+        window._customerAdvance = {};
+        var excessIds = [];
+        excessItems.forEach(function(e) {
+            window._customerExcess[e.item_id] = e.total_remaining;
+            excessIds.push(Number(e.item_id));
+            if (e.excess_remaining > 0 && e.advance_remaining > 0) {
+                window._customerAdvance[e.item_id] = 'Excess: ' + e.excess_remaining + ' + Advance: ' + e.advance_remaining;
+            } else if (e.advance_remaining > 0) {
+                window._customerAdvance[e.item_id] = 'Advance production: ' + e.advance_remaining + ' pcs';
+            } else {
+                window._customerAdvance[e.item_id] = 'Excess from previous PO: ' + e.excess_remaining + ' pcs';
+            }
         });
 
-    fetch('?controller=warehouse&action=getExcessByCustomer&customer_id=' + this.value)
-        .then(function(r) { return r.json(); })
-        .then(function(excessItems) {
-            window._customerExcess = {};
-            window._customerAdvance = {};
-            excessItems.forEach(function(e) {
-                window._customerExcess[e.item_id] = e.total_remaining;
-                if (e.excess_remaining > 0 && e.advance_remaining > 0) {
-                    window._customerAdvance[e.item_id] = 'Excess: ' + e.excess_remaining + ' + Advance: ' + e.advance_remaining;
-                } else if (e.advance_remaining > 0) {
-                    window._customerAdvance[e.item_id] = 'Advance production: ' + e.advance_remaining + ' pcs';
-                } else {
-                    window._customerAdvance[e.item_id] = 'Excess from previous PO: ' + e.excess_remaining + ' pcs';
-                }
-            });
+        var excessList = items.filter(function(i) { return excessIds.indexOf(Number(i.item_id)) !== -1; });
+        var regularList = items.filter(function(i) { return excessIds.indexOf(Number(i.item_id)) === -1; });
+        var sorted = excessList.concat(regularList);
+
+        var html = '<option value="">Select Item</option>';
+        sorted.forEach(function(item) {
+            var hasExcess = excessIds.indexOf(Number(item.item_id)) !== -1;
+            html += '<option value="' + item.item_id + '"'
+                + (hasExcess ? ' data-has-excess="true"' : '')
+                + ' data-code="' + (item.item_code || '') + '"'
+                + ' data-description="' + (item.item_description || '') + '"'
+                + ' data-uom="' + (item.item_uom || '') + '"'
+                + ' data-price="' + (item.item_amount || 0) + '">'
+                + item.item_code + ' - ' + item.item_description
+                + (hasExcess ? ' (Has Available Qty)' : '')
+                + '</option>';
         });
+        document.querySelectorAll('.item-select').forEach(function(sel) {
+            sel.innerHTML = html;
+        });
+        refreshSearchables();
+    });
 });
 
 function updateRemoveButtons() {
@@ -758,6 +836,7 @@ function setupItemRow(row) {
                 excessBadge.classList.remove('d-none');
             }
         } else {
+            qtyInput.value = '';
             if (excessBadge) {
                 excessBadge.textContent = '';
                 excessBadge.classList.add('d-none');
@@ -937,6 +1016,18 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                 } else {
                     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No items found</td></tr>';
                 }
+
+                var lotSelect = document.getElementById('lotTrackerItem');
+                lotSelect.innerHTML = '<option value="">-- Select Item --</option>';
+                if (items && items.length > 0) {
+                    items.forEach(function(item) {
+                        lotSelect.innerHTML += '<option value="' + item.poi_id + '">' +
+                            (item.item_code || '') + ' - ' + (item.item_description || '-') +
+                            '</option>';
+                    });
+                }
+                document.getElementById('lotTrackerBody').innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>';
+                document.getElementById('lotTrackerFoot').style.display = 'none';
                 
                 const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
                 modal.show();
@@ -946,6 +1037,48 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                 alert('Failed to load PO details');
             });
     });
+});
+
+function loadLots(poiId) {
+    var tbody = document.getElementById('lotTrackerBody');
+    var foot = document.getElementById('lotTrackerFoot');
+    var totalEl = document.getElementById('lotTrackerTotal');
+    if (!poiId) {
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>';
+        foot.style.display = 'none';
+        return;
+    }
+    tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Loading...</td></tr>';
+    foot.style.display = 'none';
+    fetch('?controller=warehouse&action=getLotsByPOItem&poi_id=' + poiId)
+        .then(function(r) { return r.json(); })
+        .then(function(lots) {
+            tbody.innerHTML = '';
+            if (lots && lots.length > 0) {
+                var total = 0;
+                lots.forEach(function(lot) {
+                    var qty = parseInt(lot.quantity_produced) || 0;
+                    total += qty;
+                    tbody.innerHTML += '<tr>' +
+                        '<td><strong>' + (lot.lot_number || '-') + '</strong></td>' +
+                        '<td class="text-end">' + qty.toLocaleString() + '</td>' +
+                        '</tr>';
+                });
+                totalEl.textContent = total.toLocaleString();
+                foot.style.display = '';
+            } else {
+                tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">No lots created</td></tr>';
+                foot.style.display = 'none';
+            }
+        })
+        .catch(function() {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-3">Failed to load lots</td></tr>';
+            foot.style.display = 'none';
+        });
+}
+
+document.getElementById('lotTrackerItem').addEventListener('change', function() {
+    loadLots(this.value);
 });
 
 document.querySelectorAll('.sortable').forEach(th => {
@@ -1004,22 +1137,14 @@ function buildEditItemRow(poiId, itemId, itemCode, itemDesc, itemUom, qty, unitP
     }
     selectHtml += '</select>';
 
-    var itemFieldHtml;
-    if (isExisting) {
-        itemFieldHtml =
-            '<label class="form-label">Item</label>' +
-            selectHtml +
-            '<div class="form-control" style="background:#f8fafc;cursor:default;">' + (itemCode || '') + ' - ' + (itemDesc || '') + '</div>';
-    } else {
-        itemFieldHtml =
-            '<label class="form-label">Item</label>' +
-            selectHtml +
-            '<div class="searchable-wrap">' +
-                '<input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">' +
-                '<i class="bi bi-chevron-down searchable-arrow"></i>' +
-                '<ul class="searchable-list"></ul>' +
-            '</div>';
-    }
+    var itemFieldHtml =
+        '<label class="form-label">Item</label>' +
+        selectHtml +
+        '<div class="searchable-wrap">' +
+            '<input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">' +
+            '<i class="bi bi-chevron-down searchable-arrow"></i>' +
+            '<ul class="searchable-list"></ul>' +
+        '</div>';
 
     row.innerHTML =
         '<input type="hidden" name="poi_id[]" class="edit-poi-id" value="' + (poiId || '') + '">' +

@@ -68,7 +68,8 @@
                             if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'lots' => [], 'conv' => null, 'uom' => ''];
                             $grouped[$key]['qty'] += $li['qty'] ?? 0;
                             $grouped[$key]['lots'][] = $li['lot_number'] ?? '?';
-                            if (!empty($li['uom_conversion'])) $grouped[$key]['conv'] = $li['uom_conversion'];
+                            if (!empty($li['actual_uom_conversion'])) $grouped[$key]['conv'] = $li['actual_uom_conversion'];
+                            elseif (empty($grouped[$key]['conv']) && !empty($li['uom_conversion'])) $grouped[$key]['conv'] = $li['uom_conversion'];
                             if (!empty($li['item_uom'])) $grouped[$key]['uom'] = $li['item_uom'];
                         }
                         $parts = [];
@@ -86,7 +87,7 @@
                     } else {
                         $itemSummary = htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? ''));
                         if (!empty($d['lot_number'])) $itemSummary .= '<br><small>' . htmlspecialchars($d['lot_number']) . '</small>';
-                        $conv = $d['uom_conversion'] ?? null;
+                        $conv = $d['actual_uom_conversion'] ?? $d['uom_conversion'] ?? null;
                         $itemUom = $d['item_uom'] ?? '';
                         if ($conv && $itemUom !== 'CS') {
                             $casesSummary = floor(($d['delivery_quantity'] ?? 0) / $conv) . ' CS';
@@ -156,8 +157,7 @@
                             data-remarks-type="<?= htmlspecialchars($d['remarks_type'] ?? '') ?>"
                             data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
                             data-delivered-by="<?= htmlspecialchars($d['delivered_by_name'] ?? '') ?>"
-                            data-receipt-id="<?= $receipts_map[$d['delivery_id']]['receipt_id'] ?? '' ?>"
-                            data-receipt-path="<?= htmlspecialchars($receipts_map[$d['delivery_id']]['file_path'] ?? '') ?>">
+                            data-receipts="<?= htmlspecialchars(json_encode($receipts_map[$d['delivery_id']] ?? [])) ?>">
                             <i class="bi bi-eye"></i> View
                         </button>
                         <?php endif; ?>
@@ -407,9 +407,9 @@
                     </tfoot>
                 </table>
                 <hr>
-                <h6 class="mb-2"><i class="bi bi-camera me-1"></i>DR Photo</h6>
+                <h6 class="mb-2"><i class="bi bi-paperclip me-1"></i>DR Attachments</h6>
                 <div id="viewDRPhotoSection">
-                    <div id="viewDRPhotoContainer"></div>
+                    <div id="viewDRPhotoContainer" class="d-flex flex-wrap gap-2"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -465,22 +465,22 @@
     <div class="modal-dialog modal-md">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-camera me-2"></i>Attach DR Photo</h5>
+                <h5 class="modal-title"><i class="bi bi-paperclip me-2"></i>Attach DR File</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted mb-3">Upload a photo of the physical Delivery Receipt as proof it was printed.</p>
+                <p class="text-muted mb-3">Upload a photo or PDF of the physical Delivery Receipt as proof it was printed.</p>
                 <div class="mb-3">
                     <label class="form-label">DR Number</label>
                     <input type="text" id="attachDRNumber" class="form-control" readonly>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Actual DR Photo <span class="text-danger">*</span></label>
+                    <label class="form-label">Actual DR File <span class="text-danger">*</span></label>
                     <div id="dropZone" class="border border-secondary border-dashed rounded p-4 text-center" style="cursor:pointer; min-height: 120px; display:flex; align-items:center; justify-content:center; flex-direction:column;">
                         <i class="bi bi-cloud-arrow-up fs-1 text-muted"></i>
-                        <p class="mb-1 text-muted">Drag & drop photo here or <strong>click to browse</strong></p>
-                        <small class="text-muted">JPG, PNG, GIF, WebP only (max 10MB)</small>
-                        <input type="file" id="drPhotoInput" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none">
+                        <p class="mb-1 text-muted">Drag & drop file here or <strong>click to browse</strong></p>
+                        <small class="text-muted">JPG, PNG, GIF, WebP, PDF only (max 10MB)</small>
+                        <input type="file" id="drPhotoInput" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" class="d-none">
                     </div>
                     <div id="photoPreview" class="mt-3" style="display:none;">
                         <img id="previewImg" src="" alt="Preview" class="img-fluid rounded" style="max-height:200px;">
@@ -491,7 +491,7 @@
                 <input type="hidden" id="attachPoId">
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Done</button>
                 <button type="button" class="btn btn-success" id="submitDRPhotoBtn"><i class="bi bi-upload me-1"></i>Upload</button>
             </div>
         </div>
@@ -554,50 +554,124 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
     hdr.dataset.poiId = poiId;
     hdr.textContent = itemName;
     lotContainer.appendChild(hdr);
+    var stdConversion = null;
+    for (var p = 0; p < poItemsCache.length; p++) {
+        if (String(poItemsCache[p].poi_id) === String(poiId)) {
+            stdConversion = poItemsCache[p].uom_conversion || null;
+            break;
+        }
+    }
+    var lotCounts = {};
+    lots.forEach(function(l) { lotCounts[l.lot_number] = (lotCounts[l.lot_number] || 0) + 1; });
     for (var i = 0; i < lots.length; i++) {
         var lot = lots[i];
         if (document.getElementById('lotChk_' + lot.lot_id)) continue;
+        const lotId = lot.lot_id;
+        const lotConversion = lot.pcs_per_case || stdConversion || null;
         const wrapper = document.createElement('div');
-        wrapper.className = 'd-flex align-items-center mb-2 p-2 border rounded bg-light lot-wrapper';
+        wrapper.className = 'd-flex align-items-center flex-wrap mb-3 p-3 border rounded bg-light lot-wrapper';
         wrapper.dataset.poiId = poiId;
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.className = 'form-check-input me-2';
+        checkbox.className = 'form-check-input me-3';
         checkbox.value = lot.lot_id;
-        checkbox.id = 'lotChk_' + lot.lot_id;
+        checkbox.id = 'lotChk_' + lotId;
         const label = document.createElement('label');
-        label.className = 'form-check-label me-2 fw-bold';
+        label.className = 'form-check-label me-3 fw-bold';
         label.htmlFor = checkbox.id;
         label.style.whiteSpace = 'nowrap';
-        label.textContent = lot.lot_number;
+        if (lotCounts[lot.lot_number] > 1 && lotConversion) {
+            label.textContent = lot.lot_number + ' (' + lotConversion + ' CS)';
+        } else {
+            label.textContent = lot.lot_number;
+        }
         const availBadge = document.createElement('span');
-        availBadge.className = 'badge bg-secondary me-2';
+        availBadge.className = 'badge bg-secondary me-3';
         availBadge.textContent = 'Avail: ' + lot.available_quantity;
         const qtyInput = document.createElement('input');
         qtyInput.type = 'number';
         qtyInput.className = 'form-control form-control-sm';
-        qtyInput.style.width = '100px';
+        qtyInput.style.width = '110px';
         qtyInput.min = '1';
         qtyInput.max = lot.available_quantity;
         qtyInput.placeholder = 'Qty';
         qtyInput.disabled = true;
-        qtyInput.dataset.lotId = lot.lot_id;
+        qtyInput.dataset.lotId = lotId;
         qtyInput.dataset.max = lot.available_quantity;
-        qtyInput.id = 'lotQty_' + lot.lot_id;
-        const hint = document.createElement('small');
-        hint.className = 'text-muted ms-1';
-        hint.style.whiteSpace = 'nowrap';
-        hint.textContent = 'Required';
-        wrapper.appendChild(checkbox);
-        wrapper.appendChild(label);
-        wrapper.appendChild(availBadge);
-        wrapper.appendChild(qtyInput);
-        wrapper.appendChild(hint);
+        qtyInput.id = 'lotQty_' + lotId;
+        if (lotConversion && (lot.item_uom || 'PCS') !== 'CS') {
+            const spacer = document.createElement('span');
+            spacer.className = 'mx-4';
+            spacer.textContent = '';
+            const caseInput = document.createElement('input');
+            caseInput.type = 'number';
+            caseInput.className = 'form-control form-control-sm';
+            caseInput.style.width = '80px';
+            caseInput.min = '0';
+            caseInput.placeholder = 'Case';
+            caseInput.disabled = true;
+            caseInput.dataset.lotId = lotId;
+            caseInput.dataset.conv = lotConversion;
+            caseInput.id = 'lotCase_' + lotId;
+            caseInput.title = 'Enter cases to auto-calculate qty (conversion: ' + lotConversion + ' PCS/case)';
+            const caseLabel = document.createElement('small');
+            caseLabel.className = 'text-muted ms-2';
+            caseLabel.style.whiteSpace = 'nowrap';
+            caseLabel.textContent = 'Case';
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(label);
+            wrapper.appendChild(availBadge);
+            wrapper.appendChild(qtyInput);
+            wrapper.appendChild(spacer);
+            wrapper.appendChild(caseInput);
+            wrapper.appendChild(caseLabel);
+
+            var _converting = false;
+            caseInput.addEventListener('input', function() {
+                if (_converting) return;
+                _converting = true;
+                var cases = parseInt(this.value) || 0;
+                qtyInput.value = cases * lotConversion;
+                var warnEl = document.getElementById('lotWarn_' + lotId);
+                if (warnEl) warnEl.textContent = '';
+                _converting = false;
+            });
+            qtyInput.addEventListener('input', function() {
+                if (_converting) return;
+                _converting = true;
+                var qty = parseInt(this.value) || 0;
+                caseInput.value = lotConversion ? Math.floor(qty / lotConversion) : '';
+                var warnEl = document.getElementById('lotWarn_' + lotId);
+                if (warnEl) {
+                    if (qty > 0 && lotConversion && qty % lotConversion !== 0) {
+                        var remainder = qty % lotConversion;
+                        warnEl.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-triangle"></i> ' + qty + ' pcs is not exact — ' + remainder + ' pc' + (remainder > 1 ? 's' : '') + ' excess. Use ' + (qty - remainder) + ' or ' + (qty + (lotConversion - remainder)) + ' pcs.</small>';
+                    } else {
+                        warnEl.textContent = '';
+                    }
+                }
+                _converting = false;
+            });
+            const warnEl = document.createElement('div');
+            warnEl.className = 'w-100';
+            warnEl.id = 'lotWarn_' + lotId;
+            wrapper.appendChild(warnEl);
+        } else {
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(label);
+            wrapper.appendChild(availBadge);
+            wrapper.appendChild(qtyInput);
+        }
         lotContainer.appendChild(wrapper);
         checkbox.addEventListener('change', function() {
             qtyInput.disabled = !this.checked;
+            var caseEl = document.getElementById('lotCase_' + lotId);
+            if (caseEl) caseEl.disabled = !this.checked;
             if (!this.checked) {
                 qtyInput.value = '';
+                if (caseEl) caseEl.value = '';
+                var warnEl = document.getElementById('lotWarn_' + lotId);
+                if (warnEl) warnEl.textContent = '';
             } else {
                 qtyInput.value = '';
                 qtyInput.focus();
@@ -725,7 +799,15 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
             alert('Quantity ' + qty + ' exceeds available ' + max + ' for ' + lotLabel);
             return;
         }
-        lotPairs.push(lotId + ':' + qty);
+        const caseInput = document.getElementById('lotCase_' + lotId);
+        const actualConv = caseInput ? parseInt(caseInput.dataset.conv) || 0 : 0;
+        if (actualConv > 0 && qty % actualConv !== 0) {
+            hasError = true;
+            var remainder = qty % actualConv;
+            alert('Quantity for ' + lotLabel + ' is ' + qty + ' pcs, but ' + actualConv + ' pcs/case means ' + remainder + ' pc' + (remainder > 1 ? 's' : '') + ' excess.\n\nUse ' + (qty - remainder) + ' or ' + (qty + (actualConv - remainder)) + ' pcs instead.');
+            return;
+        }
+        lotPairs.push(lotId + ':' + qty + ':' + actualConv);
     });
     if (hasError) return;
 
@@ -869,7 +951,7 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
         var totalCases = 0;
         Object.values(merged).forEach(function(item) {
             total += item.qty || 0;
-            var conv = item.uom_conversion || null;
+            var conv = item.actual_uom_conversion || item.uom_conversion || null;
             var uom = item.item_uom || '';
             var cases = (conv && uom !== 'CS') ? Math.floor((item.qty || 0) / conv) : 0;
             totalCases += cases;
@@ -885,13 +967,52 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
         document.getElementById('viewTotalCases').textContent = totalCases > 0 ? totalCases + ' CS' : '—';
 
         var photoContainer = document.getElementById('viewDRPhotoContainer');
-        var receiptPath = this.dataset.receiptPath || '';
-        if (receiptPath) {
-            photoContainer.innerHTML = '<a href="' + receiptPath + '" target="_blank"><img src="' + receiptPath + '" alt="DR Photo" style="max-height:120px; border-radius:6px; border:1px solid #ddd;"></a>';
+        photoContainer.innerHTML = '';
+        var receipts = [];
+        try { receipts = JSON.parse(this.dataset.receipts || '[]'); } catch(e) {}
+        if (receipts.length > 0) {
+            receipts.forEach(function(r) {
+                var path = r.file_path || '';
+                var receiptId = r.receipt_id || '';
+                var wrapper = document.createElement('div');
+                wrapper.className = 'position-relative d-inline-block';
+                wrapper.id = 'receipt_' + receiptId;
+                if (path.toLowerCase().endsWith('.pdf')) {
+                    wrapper.innerHTML = '<a href="' + path + '" target="_blank" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</a>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger position-absolute deleteReceiptBtn" style="top:-6px;right:-6px;width:18px;height:18px;padding:0;font-size:10px;border-radius:50%;" data-receipt-id="' + receiptId + '" title="Remove attachment"><i class="bi bi-x"></i></button>';
+                } else {
+                    wrapper.innerHTML = '<a href="' + path + '" target="_blank"><img src="' + path + '" alt="DR Attachment" style="max-height:120px;border-radius:6px;border:1px solid #ddd;" onerror="this.parentElement.innerHTML=\'<span class=text-muted>File not found</span>\'"></a>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger position-absolute deleteReceiptBtn" style="top:-6px;right:-6px;width:18px;height:18px;padding:0;font-size:10px;border-radius:50%;" data-receipt-id="' + receiptId + '" title="Remove attachment"><i class="bi bi-x"></i></button>';
+                }
+                photoContainer.appendChild(wrapper);
+            });
         } else {
-            photoContainer.innerHTML = '<span class="text-muted">No attachment attached for this DR</span>';
+            photoContainer.innerHTML = '<span class="text-muted">No attachments attached for this DR</span>';
         }
     });
+});
+
+document.getElementById('viewDRPhotoContainer').addEventListener('click', function(e) {
+    var btn = e.target.closest('.deleteReceiptBtn');
+    if (!btn) return;
+    if (!confirm('Remove this attachment?')) return;
+    var receiptId = btn.dataset.receiptId;
+    var formData = new FormData();
+    formData.append('receipt_id', receiptId);
+    fetch('?controller=warehouse&action=deleteDRPhoto', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var el = document.getElementById('receipt_' + receiptId);
+            if (el) el.remove();
+            if (!document.getElementById('viewDRPhotoContainer').children.length) {
+                document.getElementById('viewDRPhotoContainer').innerHTML = '<span class="text-muted">No attachments attached for this DR</span>';
+            }
+        } else {
+            alert('Error: ' + (data.error || 'Failed to delete'));
+        }
+    })
+    .catch(function(err) { alert('Error: ' + err.message); });
 });
 
 var reportDeliveryModal = null;
@@ -1019,9 +1140,9 @@ drPhotoInput.addEventListener('change', function() {
 });
 
 function handleDRFile(file) {
-    var allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    var allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
     if (!allowed.includes(file.type)) {
-        alert('Invalid file type. Allowed: JPG, PNG, GIF, WebP');
+        alert('Invalid file type. Allowed: JPG, PNG, GIF, WebP, PDF');
         return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -1029,20 +1150,40 @@ function handleDRFile(file) {
         return;
     }
     selectedDRFile = file;
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        document.getElementById('previewImg').src = e.target.result;
-        document.getElementById('previewName').textContent = file.name;
-        document.getElementById('photoPreview').style.display = 'block';
-    };
-    reader.readAsDataURL(file);
+    var previewImg = document.getElementById('previewImg');
+    var previewName = document.getElementById('previewName');
+    previewName.textContent = file.name;
+    if (file.type === 'application/pdf') {
+        previewImg.src = '';
+        previewImg.alt = 'PDF File';
+        previewImg.style.display = 'none';
+        var pdfIcon = document.createElement('div');
+        pdfIcon.innerHTML = '<i class="bi bi-file-earmark-pdf text-danger" style="font-size:3rem;"></i><br><small class="text-muted">' + file.name + '</small>';
+        var existing = document.getElementById('previewPdfIcon');
+        if (existing) existing.remove();
+        pdfIcon.id = 'previewPdfIcon';
+        document.getElementById('photoPreview').appendChild(pdfIcon);
+    } else {
+        var existingPdf = document.getElementById('previewPdfIcon');
+        if (existingPdf) existingPdf.remove();
+        previewImg.style.display = 'block';
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+    document.getElementById('photoPreview').style.display = 'block';
 }
 
 document.getElementById('submitDRPhotoBtn').addEventListener('click', function() {
     if (!selectedDRFile) {
-        alert('Please select a photo first');
+        alert('Please select a file first');
         return;
     }
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Uploading...';
     var formData = new FormData();
     formData.append('delivery_id', document.getElementById('attachDeliveryId').value);
     formData.append('po_id', document.getElementById('attachPoId').value);
@@ -1054,15 +1195,23 @@ document.getElementById('submitDRPhotoBtn').addEventListener('click', function()
     })
     .then(function(response) { return response.json(); })
     .then(function(data) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload me-1"></i>Upload';
         if (data.success) {
-            attachDRModal.hide();
-            location.reload();
+            showToast('File uploaded successfully!', 'success');
+            document.getElementById('drPhotoInput').value = '';
+            document.getElementById('photoPreview').style.display = 'none';
+            var pdfIcon = document.getElementById('previewPdfIcon');
+            if (pdfIcon) pdfIcon.remove();
+            selectedDRFile = null;
         } else {
             alert('Error: ' + (data.error || 'Failed to upload'));
         }
     })
     .catch(function(err) {
-        alert('Error uploading photo: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload me-1"></i>Upload';
+        alert('Error uploading file: ' + err.message);
     });
 });
 

@@ -133,4 +133,36 @@ class ItemModel extends BaseModel {
         $result = $stmt->fetch();
         return $result ? $result['item_amount'] : null;
     }
+
+    public function getAllFiltered($filters = [], $activeOnly = false) {
+        $sql = "SELECT i.*, c.customer_name FROM {$this->table} i
+                LEFT JOIN customers c ON i.customer_id = c.customer_id AND c.`remove` = 0
+                WHERE i.`remove` = 0";
+        $params = [];
+
+        if ($activeOnly) {
+            $sql .= " AND i.status = 1";
+        }
+
+        if (!empty($filters['search'])) {
+            $like = '%' . $filters['search'] . '%';
+            $sql .= " AND (i.item_code LIKE :search1 
+                       OR i.item_description LIKE :search2
+                       OR c.customer_name LIKE :search3
+                       OR i.item_uom LIKE :search4)";
+            $params['search1'] = $like;
+            $params['search2'] = $like;
+            $params['search3'] = $like;
+            $params['search4'] = $like;
+        }
+        if (!empty($filters['customer_id'])) {
+            $sql .= " AND i.customer_id = :filter_customer_id";
+            $params['filter_customer_id'] = (int)$filters['customer_id'];
+        }
+
+        $sql .= " ORDER BY i.status DESC, i.item_id DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
 }

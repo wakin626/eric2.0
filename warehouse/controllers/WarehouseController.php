@@ -14,7 +14,7 @@ class WarehouseController {
             exit;
         }
         $action = $_GET['action'] ?? '';
-        if ($action !== 'getPODetails' && $action !== 'getItemsByCustomer' && $action !== 'getExcessByCustomer' && $action !== 'excessProduction' && $action !== 'updateExcessNotes' && ($_SESSION['department'] ?? '') !== 'warehouse') {
+        if ($action !== 'getPODetails' && $action !== 'getItemsByCustomer' && $action !== 'getExcessByCustomer' && $action !== 'excessProduction' && $action !== 'updateExcessNotes' && $action !== 'getLotsByPOItem' && ($_SESSION['department'] ?? '') !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
         }
@@ -47,36 +47,24 @@ class WarehouseController {
     }
 
     public function purchaseOrders() {
-        $allPOs = $this->warehouseModel->getPurchaseOrders();
         $search = $_GET['search'] ?? '';
         $filterCustomer = $_GET['filter_customer'] ?? '';
         $filterItem = $_GET['filter_item'] ?? '';
         $filterDate = $_GET['filter_date'] ?? '';
 
-        if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
-
-        $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
-
-        if ($filterCustomer) {
-            $allPOs = array_values(array_filter($allPOs, fn($po) => stripos($po['customer_name'] ?? '', $filterCustomer) !== false));
-        }
-        if ($filterItem) {
-            $allPOs = array_values(array_filter($allPOs, function($po) use ($filterItem) {
-                $items = $this->warehouseModel->getPurchaseOrderItemsByPOIds([$po['po_id']]);
-                foreach (($items[$po['po_id']] ?? []) as $item) {
-                    if (stripos($item['item_description'] ?? '', $filterItem) !== false) return true;
-                }
-                return false;
-            }));
-        }
-        if ($filterDate) {
-            $allPOs = array_values(array_filter($allPOs, fn($po) => substr($po['date_created'] ?? '', 0, 10) === $filterDate));
-        }
-
         $hasFilter = $search || $filterCustomer || $filterItem || $filterDate;
         if ($hasFilter) {
+            $filters = [];
+            if ($search) $filters['search'] = $search;
+            if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
+            if ($filterItem) $filters['item_description'] = $filterItem;
+            if ($filterDate) $filters['date'] = $filterDate;
+            $allPOs = $this->warehouseModel->getPurchaseOrdersFiltered($filters);
+            $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
             $pagination = ['items' => $allPOs, 'page' => 1, 'perPage' => count($allPOs), 'total' => count($allPOs), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
         } else {
+            $allPOs = $this->warehouseModel->getPurchaseOrders();
+            $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
             $pagination = Pagination::paginate($allPOs, 10);
         }
 
@@ -120,112 +108,120 @@ class WarehouseController {
 
     public function createPO() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $customer_id = $_POST['customer_id'];
-            $production_type = $_POST['production_type'] ?? 'normal';
-            $conn = \App\Core\BaseModel::getConnection();
+            try {
+                $customer_id = $_POST['customer_id'];
+                $production_type = $_POST['production_type'] ?? 'normal';
+                $conn = \App\Core\BaseModel::getConnection();
 
-            $po_id = $this->warehouseModel->createPurchaseOrder([
-                'customer_po_number' => $_POST['customer_po_number'],
-                'customer_po_date' => $_POST['customer_po_date'],
-                'customer_id' => $customer_id,
-                'requested_by' => $_SESSION['user_id'],
-                'customer_terms' => $_POST['customer_terms'] ?? 0,
-                'production_type' => $production_type
-            ]);
+                $po_id = $this->warehouseModel->createPurchaseOrder([
+                    'customer_po_number' => $_POST['customer_po_number'],
+                    'customer_po_date' => $_POST['customer_po_date'],
+                    'customer_id' => $customer_id,
+                    'requested_by' => $_SESSION['user_id'],
+                    'customer_terms' => $_POST['customer_terms'] ?? 0,
+                    'production_type' => $production_type
+                ]);
 
-            $items = json_decode($_POST['items_json'], true);
-            foreach ($items as $item) {
-                $poi_id = $this->warehouseModel->createPurchaseOrderItem(
-                    $po_id,
-                    $item['item_id'],
-                    $item['quantity'],
-                    $item['unit_price'],
-                    $item['uom'] ?? 'PCS'
-                );
+                $items = json_decode($_POST['items_json'], true);
+                foreach ($items as $item) {
+                    $poi_id = $this->warehouseModel->createPurchaseOrderItem(
+                        $po_id,
+                        $item['item_id'],
+                        $item['quantity'],
+                        $item['unit_price'],
+                        $item['uom'] ?? 'PCS'
+                    );
 
-                // 1. Consume from excess_production (existing logic)
-                $pendingExcess = $this->warehouseModel->getPendingExcessForItem($customer_id, $item['item_id']);
-                $totalExcessAvailable = 0;
-                foreach ($pendingExcess as $excess) {
-                    $totalExcessAvailable += $excess['remaining_quantity'];
-                }
-
-                $currentProduced = 0;
-                if ($totalExcessAvailable > 0) {
-                    $consumeQty = min($totalExcessAvailable, $item['quantity']);
-                    $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
-                        ->execute(['produced' => $consumeQty, 'poi_id' => $poi_id]);
-                    $currentProduced = $consumeQty;
-
-                    $remainingToConsume = $consumeQty;
+                    // 1. Consume from excess_production (existing logic)
+                    $pendingExcess = $this->warehouseModel->getPendingExcessForItem($customer_id, $item['item_id']);
+                    $totalExcessAvailable = 0;
                     foreach ($pendingExcess as $excess) {
-                        if ($remainingToConsume <= 0) break;
-                        $available = $excess['remaining_quantity'];
-                        $take = min($available, $remainingToConsume);
-                        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity - :qty WHERE poi_id = :poi_id")
-                            ->execute(['qty' => $take, 'poi_id' => $excess['source_poi_id']]);
-                        $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
-                            SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
-                        ) WHERE po_id = :po_id2")
-                            ->execute(['po_id' => $excess['source_po_id'], 'po_id2' => $excess['source_po_id']]);
-                        $this->warehouseModel->consumeExcess($excess['excess_id'], $take);
-                        $remainingToConsume -= $take;
-                    }
-                }
-
-                // 2. Consume from advance production (only for normal POs)
-                if ($production_type === 'normal' && $currentProduced < $item['quantity']) {
-                    $advanceItems = $this->warehouseModel->getAvailableAdvanceProduction($customer_id, $item['item_id']);
-                    $advanceTotal = 0;
-                    foreach ($advanceItems as $ai) {
-                        $advanceTotal += $ai['available_quantity'];
+                        $totalExcessAvailable += $excess['remaining_quantity'];
                     }
 
-                    if ($advanceTotal > 0) {
-                        $advanceConsume = min($advanceTotal, $item['quantity'] - $currentProduced);
+                    $currentProduced = 0;
+                    if ($totalExcessAvailable > 0) {
+                        $consumeQty = min($totalExcessAvailable, $item['quantity']);
+                        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
+                            ->execute(['produced' => $consumeQty, 'poi_id' => $poi_id]);
+                        $currentProduced = $consumeQty;
 
-                        // Create allocation records
-                        $remainingAdvance = $advanceConsume;
+                        $remainingToConsume = $consumeQty;
+                        foreach ($pendingExcess as $excess) {
+                            if ($remainingToConsume <= 0) break;
+                            $available = $excess['remaining_quantity'];
+                            $take = min($available, $remainingToConsume);
+                            $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity - :qty WHERE poi_id = :poi_id")
+                                ->execute(['qty' => $take, 'poi_id' => $excess['source_poi_id']]);
+                            $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                                SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+                            ) WHERE po_id = :po_id2")
+                                ->execute(['po_id' => $excess['source_po_id'], 'po_id2' => $excess['source_po_id']]);
+                            $this->warehouseModel->consumeExcess($excess['excess_id'], $take);
+                            $remainingToConsume -= $take;
+                        }
+                    }
+
+                    // 2. Consume from advance production (only for normal POs)
+                    if ($production_type === 'normal' && $currentProduced < $item['quantity']) {
+                        $advanceItems = $this->warehouseModel->getAvailableAdvanceProduction($customer_id, $item['item_id']);
+                        $advanceTotal = 0;
                         foreach ($advanceItems as $ai) {
-                            if ($remainingAdvance <= 0) break;
-                            $take = min($ai['available_quantity'], $remainingAdvance);
-                            $this->warehouseModel->consumeAdvanceProduction(
-                                $ai['poi_id'], $ai['po_id'],
-                                $poi_id, $po_id,
-                                $take
-                            );
-                            $remainingAdvance -= $take;
+                            $advanceTotal += $ai['available_quantity'];
                         }
 
-                        // Update produced_quantity on new PO item
-                        $newProduced = $currentProduced + $advanceConsume;
-                        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
-                            ->execute(['produced' => $newProduced, 'poi_id' => $poi_id]);
-                        $currentProduced = $newProduced;
+                        if ($advanceTotal > 0) {
+                            $advanceConsume = min($advanceTotal, $item['quantity'] - $currentProduced);
+
+                            // Create allocation records
+                            $remainingAdvance = $advanceConsume;
+                            foreach ($advanceItems as $ai) {
+                                if ($remainingAdvance <= 0) break;
+                                $take = min($ai['available_quantity'], $remainingAdvance);
+                                $this->warehouseModel->consumeAdvanceProduction(
+                                    $ai['poi_id'], $ai['po_id'],
+                                    $poi_id, $po_id,
+                                    $take
+                                );
+                                $remainingAdvance -= $take;
+                            }
+
+                            // Update produced_quantity on new PO item
+                            $newProduced = $currentProduced + $advanceConsume;
+                            $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
+                                ->execute(['produced' => $newProduced, 'poi_id' => $poi_id]);
+                            $currentProduced = $newProduced;
+                        }
                     }
+
                 }
 
-                // Recalculate PO-level produced_quantity
+                // Recalculate PO-level produced_quantity (once after all items)
                 $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
                     SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
                 ) WHERE po_id = :po_id2")
                     ->execute(['po_id' => $po_id, 'po_id2' => $po_id]);
+
+                $po = $this->warehouseModel->getPurchaseOrderById($po_id);
+                $cleanData = [
+                    'customer_po_number' => $_POST['customer_po_number'] ?? '',
+                    'customer_po_date' => $_POST['customer_po_date'] ?? '',
+                    'production_type' => $_POST['production_type'] ?? 'normal',
+                ];
+                $poLabel = $po['customer_po_number'] ?? $po['po_number'] ?? 'PO #' . $po_id;
+                $customerLabel = $po['customer_name'] ?? 'customer #' . $customer_id;
+                $productionTypeLabel = (($cleanData['production_type'] ?? 'normal') === 'advance') ? 'advance production' : 'normal production';
+                AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Created purchase order ' . $poLabel . ' for ' . $customerLabel . ' (' . $productionTypeLabel . ')', null, $cleanData, 'purchase_order', $po_id);
+
+                $_SESSION['success'] = 'Purchase Order ' . $_POST['customer_po_number'] . ' created successfully';
+                header('Location: ?controller=warehouse&action=purchaseOrders');
+                exit;
+            } catch (\Exception $e) {
+                error_log('createPO error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Failed to create purchase order: ' . $e->getMessage();
+                header('Location: ?controller=warehouse&action=createPO');
+                exit;
             }
-
-            $po = $this->warehouseModel->getPurchaseOrderById($po_id);
-            $cleanData = [
-                'customer_po_number' => $_POST['customer_po_number'] ?? '',
-                'customer_po_date' => $_POST['customer_po_date'] ?? '',
-                'production_type' => $_POST['production_type'] ?? 'normal',
-            ];
-            $poLabel = $po['customer_po_number'] ?? $po['po_number'] ?? 'PO #' . $po_id;
-            $customerLabel = $po['customer_name'] ?? 'customer #' . $customer_id;
-            $productionTypeLabel = (($cleanData['production_type'] ?? 'normal') === 'advance') ? 'advance production' : 'normal production';
-            AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Created purchase order ' . $poLabel . ' for ' . $customerLabel . ' (' . $productionTypeLabel . ')', null, $cleanData, 'purchase_order', $po_id);
-
-            $_SESSION['success'] = 'Purchase Order ' . $_POST['customer_po_number'] . ' created successfully';
-            header('Location: ?controller=warehouse&action=purchaseOrders');
-            exit;
         }
         $data['page_title'] = 'Create PO';
         $data['customers'] = $this->warehouseModel->getCustomers();
@@ -243,6 +239,8 @@ class WarehouseController {
             }
 
             $conn = \App\Core\BaseModel::getConnection();
+            $conn->beginTransaction();
+            try {
 
             // Fetch OLD PO header data BEFORE any updates (for audit log)
             $oldPoStmt = $conn->prepare("SELECT customer_id, customer_po_number, customer_po_date, production_type FROM purchase_orders WHERE po_id = :po_id");
@@ -300,7 +298,10 @@ class WarehouseController {
 
                         $this->warehouseModel->updatePurchaseOrderItem(
                             $item['poi_id'],
-                            $item['quantity']
+                            $item['quantity'],
+                            $item['item_id'] ?? null,
+                            $item['unit_price'] ?? null,
+                            $item['uom'] ?? null
                         );
 
                         $produced = (int)($currentItem['produced_quantity'] ?? 0);
@@ -444,12 +445,6 @@ class WarehouseController {
 
             $this->warehouseModel->updatePOTotalQuantity($po_id);
 
-            // Recalculate PO-level produced_quantity
-            $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
-                SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
-            ) WHERE po_id = :po_id2")
-                ->execute(['po_id' => $po_id, 'po_id2' => $po_id]);
-
             // Track items added and removed
             $newPoiIds = [];
             foreach ($items as $item) {
@@ -479,7 +474,39 @@ class WarehouseController {
                     'item_id' => $oldItems[$poiId]['item_id'] ?? 0,
                     'old_quantity' => $oldItems[$poiId]['quantity'] ?? 0,
                 ];
+                // Cascade delete all related data for removed PO items
+                $conn->prepare("DELETE FROM advance_production_consumption WHERE normal_poi_id = :poi_id OR advance_poi_id = :poi_id2")
+                    ->execute(['poi_id' => $poiId, 'poi_id2' => $poiId]);
+                $conn->prepare("DELETE FROM production_lots WHERE poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
+                $conn->prepare("DELETE FROM production_history WHERE poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
+                $conn->prepare("DELETE FROM production_reports WHERE poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
+                $conn->prepare("DELETE FROM delivery_reports WHERE poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
+                // Delete delivery_receipts for this PO's deliveries first (FK dependency)
+                $conn->prepare("DELETE dr FROM delivery_receipts dr 
+                    INNER JOIN deliveries d ON dr.delivery_id = d.delivery_id 
+                    WHERE d.poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
+                $conn->prepare("DELETE FROM deliveries WHERE poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
+                $conn->prepare("DELETE FROM excess_production WHERE source_poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
+                $conn->prepare("DELETE FROM purchase_order_items WHERE poi_id = :poi_id")
+                    ->execute(['poi_id' => $poiId]);
             }
+
+            // Recalculate PO-level quantities after deletes
+            $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+            ) WHERE po_id = :po_id2")
+                ->execute(['po_id' => $po_id, 'po_id2' => $po_id]);
+            $conn->prepare("UPDATE purchase_orders SET delivered_quantity = (
+                SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d WHERE d.po_id = :po_id AND d.`remove` = 0
+            ) WHERE po_id = :po_id2")
+                ->execute(['po_id' => $po_id, 'po_id2' => $po_id]);
 
             $po = $this->warehouseModel->getPurchaseOrderById($po_id);
             $oldValues = [
@@ -517,10 +544,47 @@ class WarehouseController {
             $poLabel = $po['customer_po_number'] ?? $po['po_number'] ?? 'PO #' . $po_id;
             AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Updated purchase order ' . $poLabel . ' with the latest header and item changes', $oldValues, $newValues, 'purchase_order', $po_id);
 
+            $conn->commit();
             $_SESSION['success'] = 'Purchase Order updated successfully';
             header('Location: ?controller=warehouse&action=purchaseOrders');
             exit;
+
+            } catch (\Exception $e) {
+                $conn->rollBack();
+                $_SESSION['error'] = 'Failed to update PO: ' . $e->getMessage();
+                header('Location: ?controller=warehouse&action=purchaseOrders');
+                exit;
+            }
         }
+    }
+
+    public function excessProduction() {
+        $filters = [];
+        if (!empty($_GET['customer_id'])) $filters['customer_id'] = $_GET['customer_id'];
+        if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
+        $data['excess'] = $this->warehouseModel->getAllExcess($filters);
+        $data['advance'] = $this->warehouseModel->getAllAdvanceProduction($filters);
+        $data['customers'] = $this->warehouseModel->getCustomers();
+        $data['page_title'] = 'Excess Production';
+        $this->render('excess_production/index', $data);
+    }
+
+    public function updateExcessNotes() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false]);
+            exit;
+        }
+        $excess_id = $_POST['excess_id'] ?? null;
+        $notes = $_POST['notes'] ?? '';
+        if (!$excess_id) {
+            echo json_encode(['success' => false, 'message' => 'Missing excess_id']);
+            exit;
+        }
+        $this->warehouseModel->updateExcessNotes($excess_id, $notes);
+        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Updated excess notes for #' . $excess_id, null, ['notes' => $notes], 'excess_production', $excess_id);
+        echo json_encode(['success' => true]);
+        exit;
     }
 
     public function viewPO() {
@@ -604,35 +668,7 @@ class WarehouseController {
         exit;
     }
 
-    public function excessProduction() {
-        $filters = [];
-        if (!empty($_GET['customer_id'])) $filters['customer_id'] = $_GET['customer_id'];
-        if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
-        $data['excess'] = $this->warehouseModel->getAllExcess($filters);
-        $data['customers'] = $this->warehouseModel->getCustomers();
-        $data['page_title'] = 'Excess Production';
-        $this->render('excess_production/index', $data);
-    }
-
-    public function updateExcessNotes() {
-        header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false]);
-            exit;
-        }
-        $excess_id = $_POST['excess_id'] ?? null;
-        $notes = $_POST['notes'] ?? '';
-        if (!$excess_id) {
-            echo json_encode(['success' => false, 'message' => 'Missing excess_id']);
-            exit;
-        }
-        $this->warehouseModel->updateExcessNotes($excess_id, $notes);
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Updated excess notes for #' . $excess_id, null, ['notes' => $notes], 'excess_production', $excess_id);
-        echo json_encode(['success' => true]);
-        exit;
-    }
-
-    public function getPODetails() {
+        public function getPODetails() {
         header('Content-Type: application/json');
         $id = $_GET['id'] ?? null;
         $po = $this->warehouseModel->getPurchaseOrderById($id);
@@ -714,27 +750,35 @@ class WarehouseController {
         exit;
     }
 
+    public function getLotsByPOItem() {
+        header('Content-Type: application/json');
+        $poiId = $_GET['poi_id'] ?? null;
+        if (!$poiId) {
+            echo json_encode([]);
+            exit;
+        }
+        $lots = $this->warehouseModel->getLotsByPOItem($poiId);
+        echo json_encode($lots);
+        exit;
+    }
+
     public function deliveries() {
-        $allDeliveries = $this->warehouseModel->getDeliveries();
         $search = $_GET['search'] ?? '';
         $filterCustomer = $_GET['filter_customer'] ?? '';
         $filterItem = $_GET['filter_item'] ?? '';
 
-        if ($search) $allDeliveries = Pagination::filterBySearch($allDeliveries, $search);
-
-        $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
-
-        if ($filterCustomer) {
-            $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['customer_name'] ?? '', $filterCustomer) !== false));
-        }
-        if ($filterItem) {
-            $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['item_description'] ?? '', $filterItem) !== false));
-        }
-
         $hasFilter = $search || $filterCustomer || $filterItem;
         if ($hasFilter) {
+            $filters = [];
+            if ($search) $filters['search'] = $search;
+            if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
+            if ($filterItem) $filters['item_description'] = $filterItem;
+            $allDeliveries = $this->warehouseModel->getDeliveriesFiltered($filters);
+            $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
             $pagination = ['items' => $allDeliveries, 'page' => 1, 'perPage' => count($allDeliveries), 'total' => count($allDeliveries), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
         } else {
+            $allDeliveries = $this->warehouseModel->getDeliveries();
+            $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
             $pagination = Pagination::paginate($allDeliveries, 10);
         }
 
@@ -744,12 +788,10 @@ class WarehouseController {
         if (!empty($deliveryIds)) {
             $placeholders = implode(',', array_fill(0, count($deliveryIds), '?'));
             $conn = $this->warehouseModel::getConnection();
-            $stmt = $conn->prepare("SELECT * FROM delivery_receipts WHERE delivery_id IN ($placeholders) AND `remove` = 0");
+            $stmt = $conn->prepare("SELECT * FROM delivery_receipts WHERE delivery_id IN ($placeholders) AND `remove` = 0 ORDER BY date_created ASC");
             $stmt->execute($deliveryIds);
             foreach ($stmt->fetchAll() as $r) {
-                if (!isset($receiptsMap[$r['delivery_id']])) {
-                    $receiptsMap[$r['delivery_id']] = $r;
-                }
+                $receiptsMap[$r['delivery_id']][] = $r;
             }
         }
         $data['receipts_map'] = $receiptsMap;
@@ -776,9 +818,12 @@ class WarehouseController {
     }
 
     public function readyToDeliver() {
-        $allPOs = $this->warehouseModel->getPOsReadyToDeliver();
         $search = $_GET['search'] ?? '';
-        if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
+        if ($search) {
+            $allPOs = $this->warehouseModel->getPOsReadyToDeliverFiltered(['search' => $search]);
+        } else {
+            $allPOs = $this->warehouseModel->getPOsReadyToDeliver();
+        }
         $pagination = Pagination::paginate($allPOs, 10);
         $data['purchase_orders'] = $pagination['items'];
         $poIds = array_column($pagination['items'], 'po_id');
@@ -803,20 +848,27 @@ class WarehouseController {
 
     public function deleteDRPhoto() {
         header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method not allowed']);
-            exit;
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $receiptId = $_POST['receipt_id'] ?? null;
+            if (!$receiptId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Missing receipt_id']);
+                exit;
+            }
+            $receipt = $this->warehouseModel->getReceiptById($receiptId);
+            $this->warehouseModel->deleteDRPhoto($receiptId);
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'warehouse', 'Deleted DR photo for receipt #' . $receiptId . ' from the delivery record', ['path' => $receipt['file_path'] ?? ''], null, 'delivery_photo', $receiptId);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            error_log('deleteDRPhoto error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to delete photo']);
         }
-        $receiptId = $_POST['receipt_id'] ?? null;
-        if (!$receiptId) {
-            echo json_encode(['error' => 'Missing receipt_id']);
-            exit;
-        }
-        $receipt = $this->warehouseModel->getReceiptById($receiptId);
-        $this->warehouseModel->deleteDRPhoto($receiptId);
-        AuditModel::log($_SESSION['user_id'], 'DELETE', 'warehouse', 'Deleted DR photo for receipt #' . $receiptId . ' from the delivery record', ['path' => $receipt['file_path'] ?? ''], null, 'delivery_photo', $receiptId);
-        echo json_encode(['success' => true]);
         exit;
     }
 
@@ -825,191 +877,226 @@ class WarehouseController {
             header('Location: ?controller=warehouse&action=deliveries');
             exit;
         }
-        $po_id = $_POST['po_id'] ?? null;
-        $dr_number = trim($_POST['dr_number'] ?? '');
-        $lotIdsRaw = $_POST['lot_ids'] ?? '';
-        $delivery_date = $_POST['delivery_date'] ?? date('Y-m-d');
-        $remarks = $_POST['remarks'] ?? '';
-        if (empty($po_id) || empty($dr_number) || empty($lotIdsRaw)) {
-            $_SESSION['error'] = 'Missing required fields for delivery.';
-            header('Location: ?controller=warehouse&action=deliveries');
-            exit;
-        }
-        $pairs = explode(',', $lotIdsRaw);
-        $lotItems = [];
-        $totalQty = 0;
-        $firstPoiId = null;
-        foreach ($pairs as $pair) {
-            $parts = explode(':', $pair);
-            if (count($parts) !== 2) continue;
-            $lotId = intval($parts[0]);
-            $deliveryQty = intval($parts[1]);
-            if ($lotId <= 0 || $deliveryQty <= 0) continue;
-            $lot = $this->warehouseModel->getLotById($lotId);
-            if (!$lot) continue;
-            $poiId = $lot['poi_id'] ?? null;
-            if (!$firstPoiId) $firstPoiId = $poiId;
-
-            $siblings = $this->warehouseModel->getLotsByLotNumber($lot['lot_number'], $poiId);
-
-            if (count($siblings) > 1) {
-                $totalRemaining = 0;
-                $remMap = [];
-                foreach ($siblings as $sib) {
-                    $rem = $this->warehouseModel->getLotRemaining($sib['lot_id']);
-                    $remMap[$sib['lot_id']] = $rem;
-                    $totalRemaining += $rem;
-                }
-                if ($deliveryQty > $totalRemaining) $deliveryQty = $totalRemaining;
-                $toSplit = $deliveryQty;
-                $siblingCount = count($siblings);
-                foreach ($siblings as $idx => $sib) {
-                    $sibId = $sib['lot_id'];
-                    if ($idx === $siblingCount - 1) {
-                        $sibQty = $toSplit;
-                    } else {
-                        $sibQty = ($totalRemaining > 0) ? round($deliveryQty * $remMap[$sibId] / $totalRemaining) : 0;
-                        $toSplit -= $sibQty;
-                    }
-                    if ($sibQty > 0) {
-                        $item = $this->warehouseModel->getItemByPoiId($poiId);
-                        $lotItems[] = [
-                            'lot_id' => $sibId,
-                            'poi_id' => $poiId,
-                            'lot_number' => $sib['lot_number'] ?? '',
-                            'item_code' => $item['item_code'] ?? '',
-                            'item_description' => $item['item_description'] ?? '',
-                            'qty' => $sibQty,
-                            'item_uom' => $item['item_uom'] ?? '',
-                            'uom_conversion' => $item['uom_conversion'] ?? null,
-                        ];
-                        $totalQty += $sibQty;
-                    }
-                }
-            } else {
-                $remaining = $this->warehouseModel->getLotRemaining($lotId);
-                if ($deliveryQty > $remaining) $deliveryQty = $remaining;
-                if ($deliveryQty <= 0) continue;
-                $item = $this->warehouseModel->getItemByPoiId($poiId);
-                $lotItems[] = [
-                    'lot_id' => $lotId,
-                    'poi_id' => $poiId,
-                    'lot_number' => $lot['lot_number'] ?? '',
-                    'item_code' => $item['item_code'] ?? '',
-                    'item_description' => $item['item_description'] ?? '',
-                    'qty' => $deliveryQty,
-                    'item_uom' => $item['item_uom'] ?? '',
-                    'uom_conversion' => $item['uom_conversion'] ?? null,
-                ];
-                $totalQty += $deliveryQty;
+        try {
+            $po_id = $_POST['po_id'] ?? null;
+            $dr_number = trim($_POST['dr_number'] ?? '');
+            $lotIdsRaw = $_POST['lot_ids'] ?? '';
+            $delivery_date = $_POST['delivery_date'] ?? date('Y-m-d');
+            $remarks = $_POST['remarks'] ?? '';
+            if (empty($po_id) || empty($dr_number) || empty($lotIdsRaw)) {
+                $_SESSION['error'] = 'Missing required fields for delivery.';
+                header('Location: ?controller=warehouse&action=deliveries');
+                exit;
             }
-        }
-        if (empty($lotItems)) {
-            $_SESSION['error'] = 'No valid lots selected for delivery.';
+            $pairs = explode(',', $lotIdsRaw);
+            $lotItems = [];
+            $totalQty = 0;
+            $firstPoiId = null;
+            foreach ($pairs as $pair) {
+                $parts = explode(':', $pair);
+                if (count($parts) < 2 || count($parts) > 3) continue;
+                $lotId = intval($parts[0]);
+                $deliveryQty = intval($parts[1]);
+                $actualConversion = (!empty($parts[2]) && is_numeric($parts[2])) ? intval($parts[2]) : null;
+                if ($lotId <= 0 || $deliveryQty <= 0) continue;
+                $lot = $this->warehouseModel->getLotById($lotId);
+                if (!$lot) continue;
+                $poiId = $lot['poi_id'] ?? null;
+                if (!$firstPoiId) $firstPoiId = $poiId;
+
+                $siblings = $this->warehouseModel->getLotsByLotNumber($lot['lot_number'], $poiId);
+
+                if (count($siblings) > 1) {
+                    $totalRemaining = 0;
+                    $remMap = [];
+                    foreach ($siblings as $sib) {
+                        $rem = $this->warehouseModel->getLotRemaining($sib['lot_id']);
+                        $remMap[$sib['lot_id']] = $rem;
+                        $totalRemaining += $rem;
+                    }
+                    if ($deliveryQty > $totalRemaining) $deliveryQty = $totalRemaining;
+                    $toSplit = $deliveryQty;
+                    $siblingCount = count($siblings);
+                    foreach ($siblings as $idx => $sib) {
+                        $sibId = $sib['lot_id'];
+                        if ($idx === $siblingCount - 1) {
+                            $sibQty = $toSplit;
+                        } else {
+                            $sibQty = ($totalRemaining > 0) ? round($deliveryQty * $remMap[$sibId] / $totalRemaining) : 0;
+                            $toSplit -= $sibQty;
+                        }
+                        if ($sibQty > 0) {
+                            $item = $this->warehouseModel->getItemByPoiId($poiId);
+                            $lotItems[] = [
+                                'lot_id' => $sibId,
+                                'poi_id' => $poiId,
+                                'lot_number' => $sib['lot_number'] ?? '',
+                                'item_code' => $item['item_code'] ?? '',
+                                'item_description' => $item['item_description'] ?? '',
+                                'qty' => $sibQty,
+                                'item_uom' => $item['item_uom'] ?? '',
+                                'uom_conversion' => $item['uom_conversion'] ?? null,
+                                'actual_uom_conversion' => $actualConversion,
+                            ];
+                            $totalQty += $sibQty;
+                        }
+                    }
+                } else {
+                    $remaining = $this->warehouseModel->getLotRemaining($lotId);
+                    if ($deliveryQty > $remaining) $deliveryQty = $remaining;
+                    if ($deliveryQty <= 0) continue;
+                    $item = $this->warehouseModel->getItemByPoiId($poiId);
+                    $lotItems[] = [
+                        'lot_id' => $lotId,
+                        'poi_id' => $poiId,
+                        'lot_number' => $lot['lot_number'] ?? '',
+                        'item_code' => $item['item_code'] ?? '',
+                        'item_description' => $item['item_description'] ?? '',
+                        'qty' => $deliveryQty,
+                        'item_uom' => $item['item_uom'] ?? '',
+                        'uom_conversion' => $item['uom_conversion'] ?? null,
+                        'actual_uom_conversion' => $actualConversion,
+                    ];
+                    $totalQty += $deliveryQty;
+                }
+            }
+            if (empty($lotItems)) {
+                $_SESSION['error'] = 'No valid lots selected for delivery.';
+                header('Location: ?controller=warehouse&action=deliveries');
+                exit;
+            }
+            $deliveryId = $this->warehouseModel->createDelivery([
+                'po_id' => $po_id,
+                'poi_id' => $firstPoiId,
+                'delivered_by' => $_SESSION['user_id'],
+                'delivery_date' => $delivery_date,
+                'delivery_quantity' => $totalQty,
+                'dr_number' => $dr_number,
+                'lot_items' => json_encode($lotItems),
+                'remarks' => $remarks
+            ]);
+            $poDel = (!empty($_POST['po_id'])) ? $this->warehouseModel->getPurchaseOrderById($_POST['po_id']) : null;
+            $deliveryLabel = $poDel['customer_po_number'] ?? $poDel['po_number'] ?? 'PO #' . ($_POST['po_id'] ?? '');
+            AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Created delivery records for ' . $deliveryLabel . ($dr_number ? ' with DR ' . $dr_number : ''), null, ['lot_ids' => $_POST['lot_ids'] ?? []], 'delivery', null);
+
+            $_SESSION['success'] = "Delivery recorded successfully for DR {$dr_number}.";
+            header('Location: ?controller=warehouse&action=deliveries');
+            exit;
+        } catch (\Exception $e) {
+            error_log('createMultipleDelivery error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to create delivery';
             header('Location: ?controller=warehouse&action=deliveries');
             exit;
         }
-        $deliveryId = $this->warehouseModel->createDelivery([
-            'po_id' => $po_id,
-            'poi_id' => $firstPoiId,
-            'delivered_by' => $_SESSION['user_id'],
-            'delivery_date' => $delivery_date,
-            'delivery_quantity' => $totalQty,
-            'dr_number' => $dr_number,
-            'lot_items' => json_encode($lotItems),
-            'remarks' => $remarks
-        ]);
-        $poDel = (!empty($_POST['po_id'])) ? $this->warehouseModel->getPurchaseOrderById($_POST['po_id']) : null;
-        $deliveryLabel = $poDel['customer_po_number'] ?? $poDel['po_number'] ?? 'PO #' . ($_POST['po_id'] ?? '');
-        AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Created delivery records for ' . $deliveryLabel . ($dr_number ? ' with DR ' . $dr_number : ''), null, ['lot_ids' => $_POST['lot_ids'] ?? []], 'delivery', null);
-
-        $_SESSION['success'] = "Delivery recorded successfully for DR {$dr_number}.";
-        header('Location: ?controller=warehouse&action=deliveries');
-        exit;
     }
 
     public function updateDRNumber() {
         header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
-            exit;
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $delivery_id = $_POST['delivery_id'] ?? null;
+            $dr_number = trim($_POST['dr_number'] ?? '');
+            if (!$delivery_id) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Delivery ID is required']);
+                exit;
+            }
+            $this->warehouseModel->updateDRNumber($delivery_id, $dr_number);
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Updated DR number to ' . $dr_number . ' for delivery #' . $delivery_id, null, ['dr_number' => $dr_number], 'delivery', $delivery_id);
+            echo json_encode(['success' => true, 'dr_number' => $dr_number]);
+        } catch (\Exception $e) {
+            error_log('updateDRNumber error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to update DR number']);
         }
-        $delivery_id = $_POST['delivery_id'] ?? null;
-        $dr_number = trim($_POST['dr_number'] ?? '');
-        if (!$delivery_id) {
-            echo json_encode(['success' => false, 'message' => 'Delivery ID is required']);
-            exit;
-        }
-        $this->warehouseModel->updateDRNumber($delivery_id, $dr_number);
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Updated DR number to ' . $dr_number . ' for delivery #' . $delivery_id, null, ['dr_number' => $dr_number], 'delivery', $delivery_id);
-        echo json_encode(['success' => true, 'dr_number' => $dr_number]);
         exit;
     }
 
     public function getAvailableLots() {
         header('Content-Type: application/json');
-        $po_id = $_GET['po_id'] ?? null;
-        $poi_id = $_GET['poi_id'] ?? null;
-        if ($po_id) {
-            $lots = $this->warehouseModel->getAvailableLotsForPO($po_id);
-        } elseif ($poi_id) {
-            $lots = $this->warehouseModel->getAvailableLotsForDelivery($poi_id);
-        } else {
-            $lots = [];
+        try {
+            $po_id = $_GET['po_id'] ?? null;
+            $poi_id = $_GET['poi_id'] ?? null;
+            if ($po_id) {
+                $lots = $this->warehouseModel->getAvailableLotsForPO($po_id);
+            } elseif ($poi_id) {
+                $lots = $this->warehouseModel->getAvailableLotsForDelivery($poi_id);
+            } else {
+                $lots = [];
+            }
+            echo json_encode($lots);
+        } catch (\Exception $e) {
+            error_log('getAvailableLots error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to load lots']);
         }
-        echo json_encode($lots);
         exit;
     }
 
     public function getLotsForPrint() {
         header('Content-Type: application/json');
-        $po_id = $_GET['po_id'] ?? null;
-        if (!$po_id) {
-            echo json_encode([]);
-            exit;
+        try {
+            $po_id = $_GET['po_id'] ?? null;
+            if (!$po_id) {
+                echo json_encode([]);
+                exit;
+            }
+            $lots = $this->warehouseModel->getLotsByPOForPrint($po_id);
+            echo json_encode($lots);
+        } catch (\Exception $e) {
+            error_log('getLotsForPrint error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to load lots']);
         }
-        $lots = $this->warehouseModel->getLotsByPOForPrint($po_id);
-        echo json_encode($lots);
         exit;
     }
 
     public function checkDRNumber() {
         header('Content-Type: application/json');
-        $dr_number = $_GET['dr_number'] ?? '';
-        if (empty($dr_number)) {
-            echo json_encode(['exists' => false]);
-            exit;
+        try {
+            $dr_number = $_GET['dr_number'] ?? '';
+            if (empty($dr_number)) {
+                echo json_encode(['exists' => false]);
+                exit;
+            }
+            $result = $this->warehouseModel->checkDRNumber($dr_number);
+            echo json_encode($result);
+        } catch (\Exception $e) {
+            error_log('checkDRNumber error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to check DR number']);
         }
-        $result = $this->warehouseModel->checkDRNumber($dr_number);
-        echo json_encode($result);
         exit;
     }
 
     public function reportDelivery() {
         header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method not allowed']);
-            exit;
-        }
-        $deliveryId = $_POST['delivery_id'] ?? null;
-        $remarks = trim($_POST['remarks'] ?? '');
-        $reportType = $_POST['report_type'] ?? 'dr_number';
-        $lotId = $_POST['lot_id'] ?? null ? intval($_POST['lot_id']) : null;
-        $poiId = $_POST['poi_id'] ?? null ? intval($_POST['poi_id']) : null;
-        $poId = $_POST['po_id'] ?? null ? intval($_POST['po_id']) : null;
-        $oldQuantity = $_POST['old_quantity'] ?? null ? intval($_POST['old_quantity']) : null;
-
-        if (!$deliveryId || empty($remarks)) {
-            echo json_encode(['error' => 'Missing delivery_id or remarks']);
-            exit;
-        }
-
         try {
-            // Update the delivery remarks
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $deliveryId = $_POST['delivery_id'] ?? null;
+            $remarks = trim($_POST['remarks'] ?? '');
+            $reportType = $_POST['report_type'] ?? 'dr_number';
+            $lotId = $_POST['lot_id'] ?? null ? intval($_POST['lot_id']) : null;
+            $poiId = $_POST['poi_id'] ?? null ? intval($_POST['poi_id']) : null;
+            $poId = $_POST['po_id'] ?? null ? intval($_POST['po_id']) : null;
+            $oldQuantity = $_POST['old_quantity'] ?? null ? intval($_POST['old_quantity']) : null;
+
+            if (!$deliveryId || empty($remarks)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Missing delivery_id or remarks']);
+                exit;
+            }
+
             $this->warehouseModel->reportDelivery($deliveryId, $remarks);
 
-            // Create a structured delivery report
             if ($poId) {
                 $this->warehouseModel->createDeliveryReport(
                     $deliveryId, $poiId, $poId, $lotId, $oldQuantity,
@@ -1017,77 +1104,89 @@ class WarehouseController {
                 );
             }
 
-            echo json_encode(['success' => true]);
             AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Reported delivery issue for delivery #' . $deliveryId . ' (' . $reportType . ')', null, $_POST, 'delivery_report', $deliveryId);
+            echo json_encode(['success' => true]);
         } catch (\Exception $e) {
+            error_log('reportDelivery error: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['error' => 'Failed to submit report: ' . $e->getMessage()]);
+            echo json_encode(['error' => 'Failed to submit report']);
         }
         exit;
     }
 
     public function uploadDRPhoto() {
         header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(405);
-            echo json_encode(['error' => 'Method not allowed']);
-            exit;
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+
+            $deliveryId = $_POST['delivery_id'] ?? null;
+            $poId = $_POST['po_id'] ?? null;
+
+            if (!$deliveryId || !$poId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Missing delivery_id or po_id']);
+                exit;
+            }
+
+            if (!isset($_FILES['dr_photo']) || $_FILES['dr_photo']['error'] !== UPLOAD_ERR_OK) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Please select a file to upload']);
+                exit;
+            }
+
+            $file = $_FILES['dr_photo'];
+            $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+
+            if (!in_array($file['type'], $allowedTypes)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid file type. Allowed: JPG, PNG, GIF, WebP, PDF']);
+                exit;
+            }
+
+            $maxSize = 10 * 1024 * 1024;
+            if ($file['size'] > $maxSize) {
+                http_response_code(400);
+                echo json_encode(['error' => 'File size must be less than 10MB']);
+                exit;
+            }
+
+            $uploadDir = __DIR__ . '/../../uploads/receipts/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $fileName = 'dr_photo_' . $deliveryId . '_' . time() . '.' . $extension;
+            $filePath = $uploadDir . $fileName;
+
+            if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+                http_response_code(500);
+                echo json_encode(['error' => 'Failed to upload file']);
+                exit;
+            }
+
+            $this->warehouseModel->attachDRPhoto([
+                'delivery_id' => $deliveryId,
+                'po_id' => $poId,
+                'file_name' => $file['name'],
+                'file_path' => 'uploads/receipts/' . $fileName,
+                'file_type' => $file['type'],
+                'file_size' => $file['size'],
+                'uploaded_by' => $_SESSION['user_id']
+            ]);
+
+            AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Uploaded DR file for delivery #' . $deliveryId . ' as ' . $fileName, null, ['file' => $fileName], 'delivery_photo', $deliveryId);
+
+            echo json_encode(['success' => true, 'file_path' => 'uploads/receipts/' . $fileName]);
+        } catch (\Exception $e) {
+            error_log('uploadDRPhoto error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to upload DR photo']);
         }
-
-        $deliveryId = $_POST['delivery_id'] ?? null;
-        $poId = $_POST['po_id'] ?? null;
-
-        if (!$deliveryId || !$poId) {
-            echo json_encode(['error' => 'Missing delivery_id or po_id']);
-            exit;
-        }
-
-        if (!isset($_FILES['dr_photo']) || $_FILES['dr_photo']['error'] !== UPLOAD_ERR_OK) {
-            echo json_encode(['error' => 'Please select a file to upload']);
-            exit;
-        }
-
-        $file = $_FILES['dr_photo'];
-        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-        if (!in_array($file['type'], $allowedTypes)) {
-            echo json_encode(['error' => 'Invalid file type. Allowed: JPG, PNG, GIF, WebP']);
-            exit;
-        }
-
-        $maxSize = 10 * 1024 * 1024;
-        if ($file['size'] > $maxSize) {
-            echo json_encode(['error' => 'File size must be less than 10MB']);
-            exit;
-        }
-
-        $uploadDir = __DIR__ . '/../../uploads/receipts/';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $fileName = 'dr_photo_' . $deliveryId . '_' . time() . '.' . $extension;
-        $filePath = $uploadDir . $fileName;
-
-        if (!move_uploaded_file($file['tmp_name'], $filePath)) {
-            echo json_encode(['error' => 'Failed to upload file']);
-            exit;
-        }
-
-        $this->warehouseModel->attachDRPhoto([
-            'delivery_id' => $deliveryId,
-            'po_id' => $poId,
-            'file_name' => $file['name'],
-            'file_path' => 'uploads/receipts/' . $fileName,
-            'file_type' => $file['type'],
-            'file_size' => $file['size'],
-            'uploaded_by' => $_SESSION['user_id']
-        ]);
-
-        AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Uploaded DR photo for delivery #' . $deliveryId . ' as ' . $fileName, null, ['file' => $fileName], 'delivery_photo', $deliveryId);
-
-        echo json_encode(['success' => true, 'file_path' => 'uploads/receipts/' . $fileName]);
         exit;
     }
 
@@ -1137,60 +1236,69 @@ class WarehouseController {
 
     public function saveDRNumberForLots() {
         header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false]);
-            exit;
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $lotIds = $_POST['lot_ids'] ?? '';
+            $dr_number = trim($_POST['dr_number'] ?? '');
+            $po_id = $_POST['po_id'] ?? null;
+            if (empty($lotIds) || empty($dr_number) || empty($po_id)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Missing parameters']);
+                exit;
+            }
+            $lotIdArray = array_map('intval', explode(',', $lotIds));
+            $lotIdArray = array_filter($lotIdArray);
+            $lotItems = [];
+            $totalQty = 0;
+            $firstPoiId = null;
+            foreach ($lotIdArray as $lotId) {
+                $lot = $this->warehouseModel->getLotById($lotId);
+                if (!$lot) continue;
+                $remaining = $this->warehouseModel->getLotRemaining($lotId);
+                if ($remaining <= 0) continue;
+                $poiId = $lot['poi_id'] ?? null;
+                $item = $this->warehouseModel->getItemByPoiId($poiId);
+                $lotItems[] = [
+                    'lot_id' => $lotId,
+                    'poi_id' => $poiId,
+                    'lot_number' => $lot['lot_number'] ?? '',
+                    'item_code' => $item['item_code'] ?? '',
+                    'item_description' => $item['item_description'] ?? '',
+                    'qty' => $remaining,
+                    'unit_price' => $item['unit_price'] ?? 0,
+                    'item_uom' => $item['item_uom'] ?? '',
+                    'uom_conversion' => $item['uom_conversion'] ?? null,
+                    'item_id' => $item['item_id'] ?? null,
+                ];
+                $totalQty += $remaining;
+                if (!$firstPoiId) $firstPoiId = $poiId;
+            }
+            if (empty($lotItems)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'No available lots found']);
+                exit;
+            }
+            $this->warehouseModel->createDelivery([
+                'po_id' => $po_id,
+                'poi_id' => $firstPoiId,
+                'delivered_by' => $_SESSION['user_id'],
+                'delivery_date' => date('Y-m-d'),
+                'delivery_quantity' => $totalQty,
+                'dr_number' => $dr_number,
+                'lot_items' => json_encode($lotItems),
+                'remarks' => ''
+            ]);
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Saved DR number ' . $dr_number . ' for ' . count($lotIdArray) . ' lot(s) on PO #' . $po_id, null, ['dr_number' => $dr_number, 'lot_ids' => $lotIdArray], 'delivery', null);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            error_log('saveDRNumberForLots error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to save DR number']);
         }
-        $lotIds = $_POST['lot_ids'] ?? '';
-        $dr_number = trim($_POST['dr_number'] ?? '');
-        $po_id = $_POST['po_id'] ?? null;
-        if (empty($lotIds) || empty($dr_number) || empty($po_id)) {
-            echo json_encode(['success' => false, 'message' => 'Missing parameters']);
-            exit;
-        }
-        $lotIdArray = array_map('intval', explode(',', $lotIds));
-        $lotIdArray = array_filter($lotIdArray);
-        $lotItems = [];
-        $totalQty = 0;
-        $firstPoiId = null;
-        foreach ($lotIdArray as $lotId) {
-            $lot = $this->warehouseModel->getLotById($lotId);
-            if (!$lot) continue;
-            $remaining = $this->warehouseModel->getLotRemaining($lotId);
-            if ($remaining <= 0) continue;
-            $poiId = $lot['poi_id'] ?? null;
-            $item = $this->warehouseModel->getItemByPoiId($poiId);
-            $lotItems[] = [
-                'lot_id' => $lotId,
-                'poi_id' => $poiId,
-                'lot_number' => $lot['lot_number'] ?? '',
-                'item_code' => $item['item_code'] ?? '',
-                'item_description' => $item['item_description'] ?? '',
-                'qty' => $remaining,
-                'unit_price' => $item['unit_price'] ?? 0,
-                'item_uom' => $item['item_uom'] ?? '',
-                'uom_conversion' => $item['uom_conversion'] ?? null,
-                'item_id' => $item['item_id'] ?? null,
-            ];
-            $totalQty += $remaining;
-            if (!$firstPoiId) $firstPoiId = $poiId;
-        }
-        if (empty($lotItems)) {
-            echo json_encode(['success' => false, 'message' => 'No available lots found']);
-            exit;
-        }
-        $this->warehouseModel->createDelivery([
-            'po_id' => $po_id,
-            'poi_id' => $firstPoiId,
-            'delivered_by' => $_SESSION['user_id'],
-            'delivery_date' => date('Y-m-d'),
-            'delivery_quantity' => $totalQty,
-            'dr_number' => $dr_number,
-            'lot_items' => json_encode($lotItems),
-            'remarks' => ''
-        ]);
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Saved DR number ' . $dr_number . ' for ' . count($lotIdArray) . ' lot(s) on PO #' . $po_id, null, ['dr_number' => $dr_number, 'lot_ids' => $lotIdArray], 'delivery', null);
-        echo json_encode(['success' => true]);
         exit;
     }
 

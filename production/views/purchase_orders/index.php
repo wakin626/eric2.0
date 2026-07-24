@@ -188,6 +188,36 @@
                         </tbody>
                     </table>
                 </div>
+
+                <hr>
+                <h5 class="mb-3">Lot Tracker</h5>
+                <div class="row mb-3 align-items-center">
+                    <div class="col-md-4">
+                        <label for="lotTrackerItem" class="form-label fw-bold">Select Item</label>
+                        <select id="lotTrackerItem" class="form-select form-select-sm">
+                            <option value="">-- Select Item --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0" id="lotTrackerTable">
+                        <thead>
+                            <tr>
+                                <th>Lot No.</th>
+                                <th class="text-end">Qty Produced</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lotTrackerBody">
+                            <tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>
+                        </tbody>
+                        <tfoot id="lotTrackerFoot" style="display:none;">
+                            <tr class="table-light fw-bold">
+                                <td>Total</td>
+                                <td class="text-end" id="lotTrackerTotal">0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -197,7 +227,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Update Production - <span id="updatePONumber"></span></h5>
+                <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Stock Transfer Slip - <span id="updatePONumber"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -213,29 +243,52 @@
                         <input type="hidden" name="poi_id" id="updatePoiIdInput" value="">
                         <label class="form-label mb-2">Lot Entries</label>
                         <div id="singleLotContainer">
-                            <div class="row g-2 mb-2 align-items-end single-lot-row">
-                                <div class="col-md-3">
-                                    <label class="form-label">Item</label>
-                                    <input type="text" class="form-control" readonly value="-">
+                            <div class="lot-entry mb-2 border rounded p-2 bg-light">
+                                <div class="row g-2 align-items-end single-lot-row">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Item</label>
+                                        <input type="text" class="form-control" readonly value="-">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Produced / Required</label>
+                                        <input type="text" class="form-control" readonly value="-">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Lot Number <span class="text-danger">*</span></label>
+                                        <input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Add Quantity <span class="text-danger">*</span></label>
+                                        <input type="number" name="added_quantity[]" class="form-control" min="1" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">PCS to CASE</label>
+                                        <input type="number" name="pcs_per_case[]" class="form-control" min="1" placeholder="PCS to CASE">
+                                    </div>
+                                    <div class="col-md-1 text-end">
+                                        <button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button>
+                                    </div>
                                 </div>
-                                <div class="col-md-2">
-                                    <label class="form-label">Required / Produced</label>
-                                    <input type="text" class="form-control" readonly value="-">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label">STS Ref</label>
-                                    <input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label">Lot Number</label>
-                                    <input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required>
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label">Add Quantity</label>
-                                    <input type="number" name="added_quantity[]" class="form-control" min="1" required>
-                                </div>
-                                <div class="col-md-1 text-end">
-                                    <button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button>
+                                <div class="row g-2 mt-1">
+                                    <div class="col-md-2">
+                                        <label class="form-label small">Shift <span class="text-danger">*</span></label>
+                                        <select name="shift[]" class="form-select form-select-sm" required>
+                                            <option value="">-- Select --</option>
+                                            <option value="1st Shift">1st Shift</option>
+                                            <option value="2nd Shift">2nd Shift</option>
+                                            <option value="3rd Shift">3rd Shift</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small">Status</label>
+                                        <select name="reject_status[]" class="form-select form-select-sm">
+                                            <option value="Good">Good</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small">Remarks</label>
+                                        <input type="text" name="sts_remarks[]" class="form-control form-control-sm" placeholder="Optional remarks">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -249,6 +302,22 @@
                         <button type="button" class="btn btn-primary btn-sm mt-2" id="addBulkItemBtn"><i class="bi bi-plus"></i> Add Item</button>
                     </div>
 
+                    <hr class="my-3">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Prepared by <span class="text-danger">*</span></label>
+                            <input type="text" name="prepared_by_name" class="form-control" required placeholder="e.g. Juan Dela Cruz" value="<?= htmlspecialchars($_SESSION['full_name'] ?? '') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Checked by</label>
+                            <input type="text" name="checked_by_name" class="form-control" placeholder="Optional">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Received by</label>
+                            <input type="text" name="received_by_name" class="form-control" placeholder="Optional">
+                        </div>
+                    </div>
+
                     <div class="modal-footer px-0 pb-0">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-primary">Update</button>
@@ -259,16 +328,16 @@
     </div>
 </div>
 
-<!-- Production Update Preview Modal -->
+<!-- STS Preview Modal -->
 <div class="modal fade" id="updatePreviewModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Confirm Production Update</h5>
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Confirm Stock Transfer Slip</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted mb-3">Please review the production update before saving.</p>
+                <p class="text-muted mb-3">Please review the stock transfer details before saving.</p>
                 <table class="table table-bordered mb-2">
                     <tr><th style="width:35%">PO Number</th><td id="prevUPONumber"></td></tr>
                     <tr><th>Customer</th><td id="prevUCustomer"></td></tr>
@@ -360,7 +429,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No items found</td></tr>';
                     }
-                    
+
+                    var lotSelect = document.getElementById('lotTrackerItem');
+                    lotSelect.innerHTML = '<option value="">-- Select Item --</option>';
+                    if (items && items.length > 0) {
+                        items.forEach(function(item) {
+                            lotSelect.innerHTML += '<option value="' + item.poi_id + '">' +
+                                (item.item_code || '') + ' - ' + (item.item_description || '-') +
+                                '</option>';
+                        });
+                    }
+                    document.getElementById('lotTrackerBody').innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>';
+                    document.getElementById('lotTrackerFoot').style.display = 'none';
+
                     const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
                     modal.show();
                 })
@@ -371,36 +452,103 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    document.getElementById('lotTrackerItem').addEventListener('change', function() {
+        var poiId = this.value;
+        var tbody = document.getElementById('lotTrackerBody');
+        var foot = document.getElementById('lotTrackerFoot');
+        var totalEl = document.getElementById('lotTrackerTotal');
+        if (!poiId) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>';
+            foot.style.display = 'none';
+            return;
+        }
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Loading...</td></tr>';
+        foot.style.display = 'none';
+        fetch('?controller=production&action=getLotsByPOItem&poi_id=' + poiId)
+            .then(function(r) { return r.json(); })
+            .then(function(lots) {
+                tbody.innerHTML = '';
+                if (lots && lots.length > 0) {
+                    var total = 0;
+                    lots.forEach(function(lot) {
+                        var qty = parseInt(lot.quantity_produced) || 0;
+                        total += qty;
+                        tbody.innerHTML += '<tr>' +
+                            '<td><strong>' + (lot.lot_number || '-') + '</strong></td>' +
+                            '<td class="text-end">' + qty.toLocaleString() + '</td>' +
+                            '</tr>';
+                    });
+                    totalEl.textContent = total.toLocaleString();
+                    foot.style.display = '';
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">No lots created</td></tr>';
+                    foot.style.display = 'none';
+                }
+            })
+            .catch(function() {
+                tbody.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-3">Failed to load lots</td></tr>';
+                foot.style.display = 'none';
+            });
+    });
+
+    function getStsSubRowHtml() {
+        return '<div class="row g-2 mt-1">' +
+            '<div class="col-md-2">' +
+                '<label class="form-label small">Shift <span class="text-danger">*</span></label>' +
+                '<select name="shift[]" class="form-select form-select-sm" required>' +
+                    '<option value="">-- Select --</option>' +
+                    '<option value="1st Shift">1st Shift</option>' +
+                    '<option value="2nd Shift">2nd Shift</option>' +
+                    '<option value="3rd Shift">3rd Shift</option>' +
+                '</select>' +
+            '</div>' +
+            '<div class="col-md-2">' +
+                '<label class="form-label small">Status</label>' +
+                '<select name="reject_status[]" class="form-select form-select-sm">' +
+                    '<option value="Good">Good</option>' +
+                '</select>' +
+            '</div>' +
+            '<div class="col-md-3">' +
+                '<label class="form-label small">Remarks</label>' +
+                '<input type="text" name="sts_remarks[]" class="form-control form-control-sm" placeholder="Optional remarks">' +
+            '</div>' +
+        '</div>';
+    }
+
     function createBulkRow() {
+        const entry = document.createElement('div');
+        entry.className = 'lot-entry mb-2 border rounded p-2 bg-light';
         const row = document.createElement('div');
-        row.className = 'row g-2 mb-2 align-items-end bulk-item-row';
+        row.className = 'row g-2 align-items-end bulk-item-row';
         row.innerHTML =
-            '<div class="col-md-4">' +
+            '<div class="col-md-3">' +
                 '<label class="form-label">Item</label>' +
                 '<select name="poi_id[]" class="form-select bulk-item-select" required>' +
                     '<option value="">-- Select Item --</option>' +
                 '</select>' +
             '</div>' +
             '<div class="col-md-2">' +
-                '<label class="form-label">Required / Produced</label>' +
+                '<label class="form-label">Produced / Required</label>' +
                 '<input type="text" class="form-control" readonly>' +
             '</div>' +
             '<div class="col-md-2">' +
-                '<label class="form-label">STS Ref</label>' +
-                '<input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference">' +
-            '</div>' +
-            '<div class="col-md-2">' +
-                '<label class="form-label">Lot Number</label>' +
+                '<label class="form-label">Lot Number <span class="text-danger">*</span></label>' +
                 '<input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required>' +
             '</div>' +
             '<div class="col-md-2">' +
-                '<label class="form-label">Add Quantity</label>' +
+                '<label class="form-label">Add Quantity <span class="text-danger">*</span></label>' +
                 '<input type="number" name="added_quantity[]" class="form-control bulk-qty" min="0" required>' +
+            '</div>' +
+            '<div class="col-md-2">' +
+                '<label class="form-label">PCS to CASE</label>' +
+                '<input type="number" name="pcs_per_case[]" class="form-control" min="1" placeholder="PCS to CASE">' +
             '</div>' +
             '<div class="col-md-1 text-end">' +
                 '<button type="button" class="btn btn-danger btn-sm mt-4 remove-bulk-item"><i class="bi bi-trash"></i></button>' +
             '</div>';
-        return row;
+        entry.appendChild(row);
+        entry.insertAdjacentHTML('beforeend', getStsSubRowHtml());
+        return entry;
     }
 
     function populateBulkSelect(selectEl, items) {
@@ -411,62 +559,91 @@ document.addEventListener('DOMContentLoaded', function() {
             opt.textContent = item.item_description + ' (' + (item.produced_quantity || 0) + '/' + item.quantity + ')';
             opt.setAttribute('data-qty', item.quantity);
             opt.setAttribute('data-produced', item.produced_quantity || 0);
+            opt.setAttribute('data-conv', item.uom_conversion || '');
             selectEl.appendChild(opt);
         });
     }
 
     function updateBulkRowInfo(selectEl) {
+        const entry = selectEl.closest('.lot-entry');
         const row = selectEl.closest('.bulk-item-row');
         const infoInput = row.querySelector('input[readonly]');
         const selected = selectEl.options[selectEl.selectedIndex];
         if (selectEl.value && selected) {
-            infoInput.value = selected.getAttribute('data-qty') + ' / ' + selected.getAttribute('data-produced');
+            infoInput.value = selected.getAttribute('data-produced') + ' / ' + selected.getAttribute('data-qty');
+            var conv = selected.getAttribute('data-conv') || '';
+            var pcsInput = entry.querySelector('input[name="pcs_per_case[]"]');
+            if (pcsInput) pcsInput.value = conv;
         } else {
             infoInput.value = '';
         }
     }
 
     function updateBulkRemoveButtons() {
-        const rows = document.querySelectorAll('.bulk-item-row');
-        rows.forEach(function(row) {
-            const btn = row.querySelector('.remove-bulk-item');
+        const entries = document.querySelectorAll('#bulkItemsContainer .lot-entry');
+        entries.forEach(function(entry) {
+            const btn = entry.querySelector('.remove-bulk-item');
             if (btn) {
-                btn.style.display = rows.length > 1 ? 'inline-flex' : 'none';
+                btn.style.display = entries.length > 1 ? 'inline-flex' : 'none';
             }
         });
+        updateStsSequence();
     }
 
     document.getElementById('addSingleLotBtn').addEventListener('click', function() {
         const container = document.getElementById('singleLotContainer');
-        const row = document.createElement('div');
-        row.className = 'row g-2 mb-2 align-items-end single-lot-row';
-        row.innerHTML =
-            '<div class="col-md-3"></div>' +
-            '<div class="col-md-2"></div>' +
-            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
-            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
-            '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
-            '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot"><i class="bi bi-trash"></i></button></div>';
-        container.appendChild(row);
+        const item = window._currentSingleItem || {};
+        const entry = document.createElement('div');
+        entry.className = 'lot-entry mb-2 border rounded p-2 bg-light';
+        entry.innerHTML =
+            '<div class="row g-2 align-items-end single-lot-row">' +
+                '<div class="col-md-3"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="' + (item.item_description || '-') + '"></div>' +
+                '<div class="col-md-2"><label class="form-label">Produced / Required</label><input type="text" class="form-control" readonly value="' + (item.produced_quantity || 0) + ' / ' + (item.quantity || 0) + '"></div>' +
+                '<div class="col-md-2"><label class="form-label">Lot Number <span class="text-danger">*</span></label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                '<div class="col-md-2"><label class="form-label">Add Quantity <span class="text-danger">*</span></label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+                '<div class="col-md-2"><label class="form-label">PCS to CASE</label><input type="number" name="pcs_per_case[]" class="form-control" min="1" placeholder="PCS to CASE" value="' + (item.uom_conversion || '') + '"></div>' +
+                '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot"><i class="bi bi-trash"></i></button></div>' +
+            '</div>' +
+            getStsSubRowHtml();
+        container.appendChild(entry);
         updateSingleLotRemoveButtons();
     });
 
     document.addEventListener('click', function(e) {
         if (e.target.closest('.remove-single-lot')) {
-            const row = e.target.closest('.single-lot-row');
+            const entry = e.target.closest('.lot-entry');
             const container = document.getElementById('singleLotContainer');
-            if (container.querySelectorAll('.single-lot-row').length > 1) {
-                row.remove();
+            if (container.querySelectorAll('.lot-entry').length > 1) {
+                entry.remove();
                 updateSingleLotRemoveButtons();
             }
         }
     });
 
     function updateSingleLotRemoveButtons() {
-        const rows = document.querySelectorAll('#singleLotContainer .single-lot-row');
-        rows.forEach(function(row) {
-            const btn = row.querySelector('.remove-single-lot');
-            if (btn) btn.style.display = rows.length > 1 ? '' : 'none';
+        const entries = document.querySelectorAll('#singleLotContainer .lot-entry');
+        entries.forEach(function(entry) {
+            const btn = entry.querySelector('.remove-single-lot');
+            if (btn) btn.style.display = entries.length > 1 ? '' : 'none';
+        });
+        updateStsSequence();
+    }
+
+    function updateStsSequence() {
+        var base = window._nextStsBase || 1;
+        var isSingle = !document.getElementById('singleItemGroup').classList.contains('d-none');
+        var entries = isSingle
+            ? document.querySelectorAll('#singleLotContainer .lot-entry')
+            : document.querySelectorAll('#bulkItemsContainer .lot-entry');
+        entries.forEach(function(entry, i) {
+            var existing = entry.querySelector('.sts-ref-badge');
+            if (!existing) {
+                var badge = document.createElement('div');
+                badge.className = 'sts-ref-badge mb-1';
+                entry.insertBefore(badge, entry.firstChild);
+            }
+            var badge = entry.querySelector('.sts-ref-badge');
+            badge.innerHTML = '<small class="text-primary fw-bold"><i class="bi bi-hash"></i> STS-' + String(base + i).padStart(4, '0') + '</small>';
         });
     }
 
@@ -509,6 +686,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         bulkGroup.classList.remove('d-none');
                         bulkContainer.innerHTML = '';
                         window._currentBulkItems = items;
+                        window._currentSingleItem = null;
 
                         document.getElementById('updatePoiIdInput').disabled = true;
                         singleLotContainer.querySelectorAll('input').forEach(function(el) { el.disabled = true; });
@@ -531,18 +709,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         bulkContainer.innerHTML = '';
                         window._currentBulkItems = [];
                         const item = items[0];
+                        window._currentSingleItem = item;
                         document.getElementById('updatePoiIdInput').disabled = false;
                         document.getElementById('updatePoiIdInput').value = item.poi_id;
                         document.getElementById('updateItemName').textContent = item.item_description || '-';
                         document.getElementById('updateItemNameRow').style.display = '';
 
-                        singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
+                        singleLotContainer.innerHTML = '<div class="lot-entry mb-2 border rounded p-2 bg-light">' +
+                            '<div class="row g-2 align-items-end single-lot-row">' +
                             '<div class="col-md-3"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="' + (item.item_description || '-') + '"></div>' +
-                            '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="' + (item.quantity || 0) + ' / ' + (item.produced_quantity || 0) + '"></div>' +
-                            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
-                            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
-                            '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">Produced / Required</label><input type="text" class="form-control" readonly value="' + (item.produced_quantity || 0) + ' / ' + (item.quantity || 0) + '"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Lot Number <span class="text-danger">*</span></label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">Add Quantity <span class="text-danger">*</span></label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">PCS to CASE</label><input type="number" name="pcs_per_case[]" class="form-control" min="1" placeholder="PCS to CASE" value="' + (item.uom_conversion || '') + '"></div>' +
                             '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
+                            '</div>' +
+                            getStsSubRowHtml() +
                             '</div>';
                         updateSingleLotRemoveButtons();
                     } else {
@@ -550,19 +732,35 @@ document.addEventListener('DOMContentLoaded', function() {
                         bulkGroup.classList.add('d-none');
                         bulkContainer.innerHTML = '';
                         window._currentBulkItems = [];
+                        window._currentSingleItem = null;
                         document.getElementById('updatePoiIdInput').disabled = false;
-                        singleLotContainer.innerHTML = '<div class="row g-2 mb-2 align-items-end single-lot-row">' +
+                        singleLotContainer.innerHTML = '<div class="lot-entry mb-2 border rounded p-2 bg-light">' +
+                            '<div class="row g-2 align-items-end single-lot-row">' +
                             '<div class="col-md-3"><label class="form-label">Item</label><input type="text" class="form-control" readonly value="-"></div>' +
-                            '<div class="col-md-2"><label class="form-label">Required / Produced</label><input type="text" class="form-control" readonly value="-"></div>' +
-                            '<div class="col-md-2"><label class="form-label">STS Ref</label><input type="text" name="sts_ref[]" class="form-control" placeholder="STS reference"></div>' +
-                            '<div class="col-md-2"><label class="form-label">Lot Number</label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
-                            '<div class="col-md-2"><label class="form-label">Add Quantity</label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">Produced / Required</label><input type="text" class="form-control" readonly value="-"></div>' +
+                            '<div class="col-md-2"><label class="form-label">Lot Number <span class="text-danger">*</span></label><input type="text" name="lot_number[]" class="form-control" placeholder="e.g. LOT-001" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">Add Quantity <span class="text-danger">*</span></label><input type="number" name="added_quantity[]" class="form-control" min="1" required></div>' +
+                            '<div class="col-md-2"><label class="form-label">PCS to CASE</label><input type="number" name="pcs_per_case[]" class="form-control" min="1" placeholder="PCS to CASE"></div>' +
                             '<div class="col-md-1 text-end"><button type="button" class="btn btn-danger btn-sm mt-4 remove-single-lot" style="display:none;"><i class="bi bi-trash"></i></button></div>' +
+                            '</div>' +
+                            getStsSubRowHtml() +
                             '</div>';
                         updateSingleLotRemoveButtons();
                     }
                     
                     const modal = new bootstrap.Modal(document.getElementById('updatePOModal'));
+                    fetch('?controller=production&action=getNextStsRef')
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            var ref = data.sts_ref || 'N/A';
+                            var num = parseInt(ref.replace('STS-', '')) || 1;
+                            window._nextStsBase = num;
+                            updateStsSequence();
+                        })
+                        .catch(function() {
+                            window._nextStsBase = 1;
+                            updateStsSequence();
+                        });
                     modal.show();
                 })
                 .catch(function(error) {
@@ -588,9 +786,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         if (e.target.closest('.remove-bulk-item')) {
             const container = document.getElementById('bulkItemsContainer');
-            const rows = container.querySelectorAll('.bulk-item-row');
-            if (rows.length > 1) {
-                e.target.closest('.bulk-item-row').remove();
+            const entries = container.querySelectorAll('.lot-entry');
+            if (entries.length > 1) {
+                e.target.closest('.lot-entry').remove();
                 updateBulkRemoveButtons();
             }
         }
@@ -619,17 +817,27 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!hasSelection) { alert('Please select at least one item.'); return; }
             if (!allLotsFilled) { alert('Please enter a lot number for every row.'); return; }
             if (!hasQuantity) { alert('Please enter an add quantity for at least one item.'); return; }
+            var allShiftsFilled = true;
+            document.querySelectorAll('#bulkItemsContainer select[name="shift[]"]').forEach(function(sel) {
+                if (!sel.value) allShiftsFilled = false;
+            });
+            if (!allShiftsFilled) { alert('Please select a shift for every row.'); return; }
         } else {
             let hasLot = true;
             let hasQty = false;
+            let hasShift = true;
             document.querySelectorAll('#singleLotContainer input[name="lot_number[]"]').forEach(function(inp) {
                 if (!inp.value.trim()) hasLot = false;
             });
             document.querySelectorAll('#singleLotContainer input[name="added_quantity[]"]').forEach(function(inp) {
                 if (inp.value && parseInt(inp.value) > 0) hasQty = true;
             });
+            document.querySelectorAll('#singleLotContainer select[name="shift[]"]').forEach(function(sel) {
+                if (!sel.value) hasShift = false;
+            });
             if (!hasLot) { alert('Please enter a lot number for every row.'); return; }
             if (!hasQty) { alert('Please enter an add quantity.'); return; }
+            if (!hasShift) { alert('Please select a shift for every row.'); return; }
         }
 
         // Build preview
@@ -680,7 +888,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('prevUExistingLots').innerHTML = existingHtml;
 
             // Updating/adding lots
-            var lotsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item</th><th>Lot No.</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
+            var lotsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item</th><th>Lot No.</th><th>Qty</th><th>Shift</th><th>Status</th></tr></thead><tbody>';
             document.querySelectorAll('.bulk-item-row').forEach(function(row) {
                 var sel = row.querySelector('.bulk-item-select');
                 var poiId = sel ? sel.value : '';
@@ -688,6 +896,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 var qty = parseInt(row.querySelector('.bulk-qty').value) || 0;
                 var lotInput = row.querySelector('input[name="lot_number[]"]');
                 var lot = lotInput ? lotInput.value.trim() : '';
+                var entry = row.closest('.lot-entry');
+                var shift = entry ? (entry.querySelector('select[name="shift[]"]').value || '-') : '-';
+                var rejectStatus = entry ? (entry.querySelector('select[name="reject_status[]"]').value || '-') : '-';
                 if (lot && qty > 0) {
                     // Check if lot exists for THIS item
                     var item = itemMap[poiId];
@@ -696,7 +907,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     var badge = isNew
                         ? '<span class="badge bg-success">NEW</span>'
                         : '<span class="badge bg-warning text-dark">UPDATE</span>';
-                    lotsHtml += '<tr><td>' + itemText + '</td><td>' + lot + '</td><td>' + qty + '</td><td>' + badge + '</td></tr>';
+                    lotsHtml += '<tr><td>' + itemText + '</td><td>' + lot + '</td><td>' + qty + '</td><td>' + shift + '</td><td>' + badge + ' ' + rejectStatus + '</td></tr>';
                 }
             });
             lotsHtml += '</tbody></table>';
@@ -729,17 +940,20 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('prevUExistingLots').innerHTML = existingHtml;
 
             // Updating/adding lots
-            var lotsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Lot No.</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
+            var lotsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Lot No.</th><th>Qty</th><th>Shift</th><th>Status</th></tr></thead><tbody>';
             var totalAdd = 0;
-            document.querySelectorAll('#singleLotContainer .single-lot-row').forEach(function(row) {
+            document.querySelectorAll('#singleLotContainer .lot-entry').forEach(function(entry) {
+                var row = entry.querySelector('.single-lot-row');
                 var lot = row.querySelector('input[name="lot_number[]"]').value.trim();
                 var qty = parseInt(row.querySelector('input[name="added_quantity[]"]').value) || 0;
+                var shift = entry.querySelector('select[name="shift[]"]').value || '-';
+                var rejectStatus = entry.querySelector('select[name="reject_status[]"]').value || '-';
                 if (lot && qty > 0) {
                     var isNew = existingLotNumbers.indexOf(lot) === -1;
                     var badge = isNew
                         ? '<span class="badge bg-success">NEW</span>'
                         : '<span class="badge bg-warning text-dark">UPDATE</span>';
-                    lotsHtml += '<tr><td>' + lot + '</td><td>' + qty + '</td><td>' + badge + '</td></tr>';
+                    lotsHtml += '<tr><td>' + lot + '</td><td>' + qty + '</td><td>' + shift + '</td><td>' + badge + ' ' + rejectStatus + '</td></tr>';
                     totalAdd += qty;
                 }
             });
@@ -761,7 +975,36 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('updatePOModal').addEventListener('hidden.bs.modal', function() {
         document.getElementById('updatePoiIdInput').disabled = false;
         window._currentBulkItems = [];
+        window._currentSingleItem = null;
         window._updateFormConfirmed = false;
+        window._nextStsBase = 1;
+
+        var form = document.getElementById('updatePOForm');
+        if (form) form.reset();
+
+        var lotContainer = document.getElementById('singleLotContainer');
+        if (lotContainer) {
+            var entries = lotContainer.querySelectorAll('.lot-entry');
+            entries.forEach(function(entry, i) {
+                var badge = entry.querySelector('.sts-ref-badge');
+                if (badge) badge.remove();
+                if (i === 0) {
+                    entry.querySelectorAll('input, select').forEach(function(el) {
+                        el.value = '';
+                    });
+                    var removeBtn = entry.querySelector('.remove-single-lot');
+                    if (removeBtn) removeBtn.style.display = 'none';
+                } else {
+                    entry.remove();
+                }
+            });
+        }
+
+        var bulkContainer = document.getElementById('bulkItemsContainer');
+        if (bulkContainer) bulkContainer.innerHTML = '';
+
+        var itemNameRow = document.getElementById('updateItemNameRow');
+        if (itemNameRow) itemNameRow.style.display = 'none';
     });
 });
 

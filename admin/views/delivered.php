@@ -163,7 +163,8 @@
                                 $key = $li['item_description'] ?? $li['item_code'] ?? 'Item';
                                 if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'conv' => null, 'uom' => ''];
                                 $grouped[$key]['qty'] += $li['qty'] ?? 0;
-                                if (!empty($li['uom_conversion'])) $grouped[$key]['conv'] = $li['uom_conversion'];
+                                if (!empty($li['actual_uom_conversion'])) $grouped[$key]['conv'] = $li['actual_uom_conversion'];
+                                elseif (empty($grouped[$key]['conv']) && !empty($li['uom_conversion'])) $grouped[$key]['conv'] = $li['uom_conversion'];
                                 if (!empty($li['item_uom'])) $grouped[$key]['uom'] = $li['item_uom'];
                             }
                             $caseParts = [];
@@ -176,7 +177,7 @@
                             }
                             echo !empty($caseParts) ? implode('<br>', $caseParts) : '<span class="text-muted">—</span>';
                         } else {
-                            $conv = $d['uom_conversion'] ?? null;
+                            $conv = $d['actual_uom_conversion'] ?? $d['uom_conversion'] ?? null;
                             $itemUom = $d['item_uom'] ?? '';
                             $desc = $d['item_description'] ?? '';
                             if ($conv && $itemUom !== 'CS') {
@@ -222,6 +223,7 @@
                             data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>"
                             data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
                             data-delivery-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>"
+                            data-receipts="<?= htmlspecialchars(json_encode($receipts_map[$d['delivery_id']] ?? [])) ?>"
                             title="View PO Details">
                             <i class="bi bi-eye"></i>
                         </button>
@@ -308,8 +310,7 @@ foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 
                             <div class="row mb-1">
                                 <div class="col-md-4"><small class="text-muted fw-bold">Item</small></div>
                                 <div class="col-md-3"><small class="text-muted fw-bold">Lot Number</small></div>
-                                <div class="col-md-3"><small class="text-muted fw-bold">Quantity</small></div>
-                                <div class="col-md-2"><small class="text-muted fw-bold">Cases</small></div>
+                                <div class="col-md-5"><small class="text-muted fw-bold">Quantity</small></div>
                             </div>
                             <div id="editLotItemsContainer"></div>
                         </div>
@@ -367,6 +368,11 @@ foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 
                         <tbody id="viewPOItems"></tbody>
                     </table>
                 </div>
+                <hr>
+                <h6 class="mb-2"><i class="bi bi-paperclip me-1"></i>DR Attachments</h6>
+                <div id="viewDRPhotoSection">
+                    <div id="viewDRPhotoContainer" class="d-flex flex-wrap gap-2"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -380,6 +386,8 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             const poId = this.getAttribute('data-po-id');
             const drNumber = this.getAttribute('data-dr') || '-';
+            var receipts = [];
+            try { receipts = JSON.parse(this.getAttribute('data-receipts') || '[]'); } catch(e) {}
             const lotItemsRaw = this.getAttribute('data-lot-items') || '[]';
             const lotItemsRawArr = JSON.parse(lotItemsRaw);
             const mergedLI = {};
@@ -407,7 +415,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (hasLotItems) {
                         lotItems.forEach(function(li) {
                             var qty = li.qty || 0;
-                            var conv = li.uom_conversion || null;
+                            var conv = li.actual_uom_conversion || li.uom_conversion || null;
                             var uom = li.item_uom || '';
                             var cases = (conv && uom !== 'CS') ? Math.floor(qty / conv) : 0;
 
@@ -427,6 +435,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
                     modal.show();
+
+                    var photoContainer = document.getElementById('viewDRPhotoContainer');
+                    photoContainer.innerHTML = '';
+                    if (receipts.length > 0) {
+                        receipts.forEach(function(r) {
+                            var path = r.file_path || '';
+                            var wrapper = document.createElement('div');
+                            wrapper.className = 'position-relative d-inline-block';
+                            if (path.toLowerCase().endsWith('.pdf')) {
+                                wrapper.innerHTML = '<a href="' + path + '" target="_blank" class="btn btn-outline-danger btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</a>';
+                            } else {
+                                wrapper.innerHTML = '<a href="' + path + '" target="_blank"><img src="' + path + '" alt="DR Attachment" style="max-height:120px;border-radius:6px;border:1px solid #ddd;" onerror="this.parentElement.innerHTML=\'<span class=text-muted>File not found</span>\'"></a>';
+                            }
+                            photoContainer.appendChild(wrapper);
+                        });
+                    } else {
+                        photoContainer.innerHTML = '<span class="text-muted">No attachments attached for this DR</span>';
+                    }
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
@@ -456,18 +482,26 @@ document.querySelectorAll('.editDeliveryBtn').forEach(function(btn) {
         if (lotItems.length > 0) {
             document.getElementById('editLotItemsRow').style.display = 'block';
             lotItems.forEach(function(li, idx) {
-                var conv = li.uom_conversion || null;
+                var uomConv = li.uom_conversion || '';
+                var actualConv = li.actual_uom_conversion || '';
                 var uom = li.item_uom || '';
-                var cases = (conv && uom !== 'CS') ? Math.floor((li.qty || 0) / conv) : 0;
+                var displayConv = actualConv || uomConv;
 
                 var row = document.createElement('div');
                 row.className = 'row mb-2 align-items-center';
-                row.innerHTML = '<div class="col-md-4"><small class="fw-bold">' + (li.item_description || '-') + '</small></div>' +
-                    '<div class="col-md-3"><small class="text-muted">' + (li.lot_number || '-') + '</small></div>' +
-                    '<div class="col-md-3"><input type="number" class="form-control form-control-sm edit-lot-qty" ' +
-                    'data-lot-id="' + li.lot_id + '" data-poi-id="' + li.poi_id + '" ' +
-                    'data-old-qty="' + (li.qty || 0) + '" value="' + (li.qty || 0) + '" min="1"></div>' +
-                    '<div class="col-md-2"><small class="text-muted">' + (cases > 0 ? cases + ' CS' : '') + '</small></div>';
+                if (uom === 'CS') {
+                    row.innerHTML = '<div class="col-md-4"><small class="fw-bold">' + (li.item_description || '-') + '</small></div>' +
+                        '<div class="col-md-3"><small class="text-muted">' + (li.lot_number || '-') + '</small></div>' +
+                        '<div class="col-md-5"><input type="number" class="form-control form-control-sm edit-lot-qty" ' +
+                        'data-lot-id="' + li.lot_id + '" data-poi-id="' + li.poi_id + '" ' +
+                        'data-old-qty="' + (li.qty || 0) + '" value="' + (li.qty || 0) + '" min="1"></div>';
+                } else {
+                    row.innerHTML = '<div class="col-md-4"><small class="fw-bold">' + (li.item_description || '-') + '</small></div>' +
+                        '<div class="col-md-3"><small class="text-muted">' + (li.lot_number || '-') + '</small></div>' +
+                        '<div class="col-md-5"><input type="number" class="form-control form-control-sm edit-lot-qty" ' +
+                        'data-lot-id="' + li.lot_id + '" data-poi-id="' + li.poi_id + '" ' +
+                        'data-old-qty="' + (li.qty || 0) + '" value="' + (li.qty || 0) + '" min="1"></div>';
+                }
                 container.appendChild(row);
             });
         } else {
@@ -487,9 +521,10 @@ document.getElementById('editDeliveryForm').addEventListener('submit', function(
     document.querySelectorAll('.edit-lot-qty').forEach(function(input) {
         var oldQty = parseInt(input.dataset.oldQty) || 0;
         var newQty = parseInt(input.value) || 0;
+        var lotId = input.dataset.lotId;
         if (newQty !== oldQty) {
             lotChanges.push({
-                lot_id: input.dataset.lotId,
+                lot_id: lotId,
                 poi_id: input.dataset.poiId,
                 old_qty: oldQty,
                 new_qty: newQty

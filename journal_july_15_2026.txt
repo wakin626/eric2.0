@@ -1,0 +1,76 @@
+Development Journal - July 15, 2026
+=====================================
+
+1. PRODUCTION HISTORY - ADMIN SORT ORDER FIX
+--------------------------------------------
+Issue: Admin production history showed oldest entries first while production side showed newest first.
+Fix: Reversed the usort comparator in AdminController.php (line 708) to sort descending by date_created so newest entries appear at top.
+File: admin/controllers/AdminController.php
+
+
+2. PRODUCTION HISTORY - SEARCH ACCURACY FIX
+--------------------------------------------
+Issue: Searching "212" in the search box matched numeric fields (quantities like 2120, history IDs, etc.) causing too many irrelevant results.
+Fix: Removed numeric field matching from Pagination::filterBySearch() so it only searches string fields (lot_number, customer_name, item_description, PO number, etc.).
+File: app/helpers/Pagination.php
+
+
+3. PRODUCTION HISTORY - LOT DROPDOWN EXACT MATCH
+-------------------------------------------------
+Issue: The lot filter dropdown used stripos() (partial match), so selecting lot "212" also matched "1212", "2120", etc.
+Fix: Changed to strict equality (===) in both admin and production controllers.
+Files: admin/controllers/AdminController.php, production/controllers/ProductionController.php
+
+
+4. PRODUCTION HISTORY - COMPUTED PO QTY BUG FIX
+-------------------------------------------------
+Issue: The Total PO Qty column double-counted edited records. The old_added_quantity delta logic added the edited amount twice, making totals wrong (e.g., editing 100 to 80 showed 60 instead of 80).
+Fix: Removed the old_added_quantity delta block in getProductionHistory(). Now simply sums added_quantity per lot.
+File: warehouse/models/WarehouseModel.php
+
+
+5. PRODUCTION HISTORY - PER-LOT QUANTITY TRACKING
+-------------------------------------------------
+Issue: Previous Lot Qty and New Lot Qty were per PO line item (poi_id) from the database, while Total PO Qty was per lot, causing inconsistent data. The same lot used for different items showed confusing numbers.
+Fix: Added computed_prev_lot_qty and computed_new_lot_qty fields that track per lot+item combination. Total PO Qty tracks per poi_id (PO line item). All three columns now show consistent data for lot movement tracking.
+Files: warehouse/models/WarehouseModel.php, admin/views/production_history/index.php, production/views/history/index.php
+
+
+6. PRODUCTION HISTORY - COLUMN HEADER Rename
+---------------------------------------------
+Issue: "Total Lot Produced" header was confusing.
+Fix: Renamed back to "Total PO Qty" to indicate total produced for that PO line item.
+Files: admin/views/production_history/index.php, production/views/history/index.php
+
+
+7. LOT TRACKER - NEW FEATURE IN ADMIN PO MODAL
+-----------------------------------------------
+Issue: No way to overview lots used for each item from the admin PO view. Had to navigate elsewhere to check lot breakdown.
+Fix: Added a "Lot Tracker" section below the items table in the admin PO modal:
+- Item dropdown to select which item to view lots for
+- Lot table showing Lot No. and Qty Produced
+- Total row at the bottom to verify against produced quantity
+- "No lots created" message when empty
+- "Select an item to view lots" default state
+Files: admin/controllers/AdminController.php (new getLotsByPOItem endpoint), admin/views/purchase_orders/index.php
+
+
+8. DELETE PRODUCTION HISTORY - LOT CLEANUP FIX
+-----------------------------------------------
+Issue: When admin deleted a production history record, the production_lots quantity was decremented but the lot record stayed with 0 quantity, still showing in lot previews and the new Lot Tracker.
+Fix: After decrementing production_lots.quantity_produced, if the result is 0, soft-delete the lot record by setting is_removed = 1. The getLotsByPOItem() query already filters on is_removed = 0, so zero-quantity lots no longer appear.
+File: warehouse/models/WarehouseModel.php
+
+
+FILES MODIFIED TODAY
+====================
+1. app/helpers/Pagination.php
+2. admin/controllers/AdminController.php
+3. production/controllers/ProductionController.php
+4. warehouse/models/WarehouseModel.php
+5. admin/views/production_history/index.php
+6. production/views/history/index.php
+7. admin/views/purchase_orders/index.php
+
+NO NEW SQL TABLES OR COLUMNS WERE ADDED.
+All changes use existing database structure.

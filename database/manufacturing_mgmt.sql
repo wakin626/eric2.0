@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jul 07, 2026 at 05:09 AM
+-- Generation Time: Jul 20, 2026 at 02:28 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.1.25
 
@@ -20,6 +20,219 @@ SET time_zone = "+00:00";
 --
 -- Database: `manufacturing_mgmt`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `advance_production_consumption`
+--
+
+CREATE TABLE `advance_production_consumption` (
+  `id` int(11) NOT NULL,
+  `advance_poi_id` int(11) NOT NULL,
+  `advance_po_id` int(11) NOT NULL,
+  `normal_poi_id` int(11) NOT NULL,
+  `normal_po_id` int(11) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `date_allocated` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `advance_production_consumption`
+--
+
+INSERT INTO `advance_production_consumption` (`id`, `advance_poi_id`, `advance_po_id`, `normal_poi_id`, `normal_po_id`, `quantity`, `date_allocated`) VALUES
+(1, 66, 33, 68, 35, 100680, '2026-07-10 23:42:06');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `audit_logs`
+--
+
+CREATE TABLE `audit_logs` (
+  `log_id` int(11) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `username` varchar(50) NOT NULL,
+  `department` varchar(50) NOT NULL,
+  `action` varchar(20) NOT NULL COMMENT 'LOGIN, LOGOUT, CREATE, UPDATE, DELETE',
+  `module` varchar(50) NOT NULL COMMENT 'auth, admin, warehouse, production, finance',
+  `target_type` varchar(50) NOT NULL COMMENT 'user, customer, item, po, delivery, production, excess, receipt, price_list',
+  `target_id` int(11) DEFAULT NULL,
+  `description` text NOT NULL,
+  `old_values` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`old_values`)),
+  `new_values` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`new_values`)),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `audit_logs`
+--
+
+INSERT INTO `audit_logs` (`log_id`, `user_id`, `username`, `department`, `action`, `module`, `target_type`, `target_id`, `description`, `old_values`, `new_values`, `created_at`) VALUES
+(1, 4, 'testwh', 'warehouse', 'UPDATE', 'warehouse', 'purchase_order', 25, 'Edited PO PO-00000014', '{\"customer_po_number\":\"PO-00000014\",\"customer_po_date\":\"2026-07-01\",\"production_type\":\"normal\",\"items\":[{\"poi_id\":null,\"item_id\":24,\"quantity\":584352},{\"poi_id\":null,\"item_id\":232,\"quantity\":352800},{\"poi_id\":null,\"item_id\":25,\"quantity\":581472},{\"poi_id\":null,\"item_id\":230,\"quantity\":134784},{\"poi_id\":null,\"item_id\":22,\"quantity\":219456},{\"poi_id\":null,\"item_id\":181,\"quantity\":6359040},{\"poi_id\":null,\"item_id\":78,\"quantity\":4447872},{\"poi_id\":null,\"item_id\":18,\"quantity\":526464},{\"poi_id\":null,\"item_id\":79,\"quantity\":21960},{\"poi_id\":null,\"item_id\":74,\"quantity\":5136},{\"poi_id\":null,\"item_id\":70,\"quantity\":1620},{\"poi_id\":null,\"item_id\":62,\"quantity\":2087856},{\"poi_id\":null,\"item_id\":72,\"quantity\":3744},{\"poi_id\":null,\"item_id\":71,\"quantity\":3816},{\"poi_id\":null,\"item_id\":93,\"quantity\":7056},{\"poi_id\":null,\"item_id\":96,\"quantity\":10512},{\"poi_id\":null,\"item_id\":141,\"quantity\":9456},{\"poi_id\":null,\"item_id\":143,\"quantity\":28128},{\"poi_id\":null,\"item_id\":145,\"quantity\":11784},{\"poi_id\":null,\"item_id\":34,\"quantity\":404352},{\"poi_id\":null,\"item_id\":231,\"quantity\":220032},{\"poi_id\":null,\"item_id\":26,\"quantity\":48000}]}', '{\"customer_po_number\":\"PO-00000014\",\"customer_po_date\":\"2026-07-01\",\"production_type\":\"normal\",\"items\":[{\"poi_id\":null,\"item_id\":24,\"quantity\":584352},{\"poi_id\":null,\"item_id\":232,\"quantity\":352800},{\"poi_id\":null,\"item_id\":25,\"quantity\":581472},{\"poi_id\":null,\"item_id\":230,\"quantity\":134784},{\"poi_id\":null,\"item_id\":22,\"quantity\":219456},{\"poi_id\":null,\"item_id\":181,\"quantity\":6359040},{\"poi_id\":null,\"item_id\":78,\"quantity\":4447872},{\"poi_id\":null,\"item_id\":18,\"quantity\":526464},{\"poi_id\":null,\"item_id\":79,\"quantity\":21960},{\"poi_id\":null,\"item_id\":74,\"quantity\":5136},{\"poi_id\":null,\"item_id\":70,\"quantity\":1620},{\"poi_id\":null,\"item_id\":62,\"quantity\":2087856},{\"poi_id\":null,\"item_id\":72,\"quantity\":3744},{\"poi_id\":null,\"item_id\":71,\"quantity\":3816},{\"poi_id\":null,\"item_id\":93,\"quantity\":7056},{\"poi_id\":null,\"item_id\":96,\"quantity\":10512},{\"poi_id\":null,\"item_id\":141,\"quantity\":9456},{\"poi_id\":null,\"item_id\":143,\"quantity\":28128},{\"poi_id\":null,\"item_id\":145,\"quantity\":11784},{\"poi_id\":null,\"item_id\":34,\"quantity\":404352},{\"poi_id\":null,\"item_id\":231,\"quantity\":220032},{\"poi_id\":null,\"item_id\":26,\"quantity\":48000}]}', '2026-07-10 04:05:53'),
+(2, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 31, 'Updated production quantity for PO-00000014', NULL, '{\"produced_quantity\":\"12672\"}', '2026-07-10 04:52:27'),
+(3, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 31, 'Updated production quantity for PO-00000014', NULL, '{\"produced_quantity\":\"5760\"}', '2026-07-10 04:53:58'),
+(4, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 31, 'Updated production quantity for PO-00000014', NULL, '{\"produced_quantity\":\"12672\"}', '2026-07-10 04:55:17'),
+(5, 11, 'Cath', 'production', 'CREATE', 'production', 'production_history', NULL, 'Reported production history', NULL, '{\"history_id\":\"73\",\"report_type\":\"lot_number\",\"reason\":\"pacancel po ako nito mali po ang input ko \\r\\n\\r\\nThanks po\"}', '2026-07-10 04:55:57'),
+(6, 11, 'Cath', 'production', 'CREATE', 'production', 'production_history', NULL, 'Reported production history', NULL, '{\"history_id\":\"56\",\"report_type\":\"lot_number\",\"reason\":\"Good Day po Makikisuyo po ako papalitan po ang Item Code Imbis na Barelab Sleek dapat Barelab Anti Hairfall QTY 12962pcs\\r\\n\\r\\nThank you \\r\\n\"}', '2026-07-10 05:01:39'),
+(7, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014', NULL, '{\"produced_quantity\":\"7200\"}', '2026-07-10 05:07:05'),
+(8, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 66, 'Updated production quantity for ADV253', NULL, '{\"produced_quantity\":\"12672\"}', '2026-07-10 05:15:34'),
+(9, 11, 'Cath', 'production', 'CREATE', 'production', 'production_history', NULL, 'Reported production history', NULL, '{\"history_id\":\"76\",\"report_type\":\"lot_number\",\"reason\":\"Double input \\r\\n\\r\\nThank you\\r\\n\"}', '2026-07-10 05:18:15'),
+(10, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-10 05:19:51'),
+(11, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-10 05:19:55'),
+(12, 1, 'admin', 'admin', 'UPDATE', 'admin', 'production_history', 76, 'Edited production history #76', NULL, '{\"added_quantity\":7200,\"lot_number\":\"151-306\"}', '2026-07-10 05:21:53'),
+(13, 6, 'testprod', 'production', 'LOGOUT', 'auth', 'user', 6, 'User logged out: testprod', NULL, NULL, '2026-07-10 05:26:01'),
+(14, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-10 05:26:14'),
+(15, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-10 05:32:13'),
+(16, 6, 'testprod', 'production', 'LOGOUT', 'auth', 'user', 6, 'User logged out: testprod', NULL, NULL, '2026-07-10 05:32:26'),
+(17, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-10 05:32:30'),
+(18, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-10 05:43:41'),
+(19, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-10 05:43:45'),
+(20, 1, 'admin', 'admin', 'UPDATE', 'admin', 'production_history', 56, 'Edited production history #56', NULL, '{\"added_quantity\":12672,\"lot_number\":\"151-313\"}', '2026-07-10 06:06:14'),
+(21, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-10 06:47:02'),
+(22, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-10 06:47:09'),
+(23, 14, 'QUEENSEE', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created deliveries for PO-00000014 (DR: DR17259)', NULL, '{\"lot_ids\":\"25:32544,37:12672,32:31104\"}', '2026-07-10 07:19:54'),
+(24, 14, 'QUEENSEE', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created deliveries for PO-00000014 (DR: DR17262)', NULL, '{\"lot_ids\":\"40:5760,29:19296,34:25344\"}', '2026-07-10 07:31:03'),
+(25, 6, 'testprod', 'production', 'DELETE', 'admin', 'production_history', 73, 'Deleted production history #73', NULL, '{\"history_id\":\"73\"}', '2026-07-10 07:43:32'),
+(26, 6, 'testprod', 'production', 'DELETE', 'admin', 'production_history', 56, 'Deleted production history #56', NULL, '{\"history_id\":\"56\"}', '2026-07-10 07:44:23'),
+(27, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 32, 'Updated production quantity for PO-00000014: added 12962 pcs for lot 151-313 (previous 38016 → new 50978)', '{\"previous_quantity\":38016,\"added_quantity\":0,\"new_quantity\":38016,\"lot_number\":\"151-313\"}', '{\"previous_quantity\":38016,\"added_quantity\":12962,\"new_quantity\":50978,\"lot_number\":\"151-313\"}', '2026-07-10 09:06:17'),
+(28, 11, 'Cath', 'production', 'LOGIN', 'auth', 'user', 11, 'User logged in: Cath', NULL, '{\"username\":\"Cath\"}', '2026-07-10 22:22:57'),
+(29, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 31, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 159-112 (previous 69120 → new 81792)', '{\"previous_quantity\":69120,\"added_quantity\":0,\"new_quantity\":69120,\"lot_number\":\"159-112\"}', '{\"previous_quantity\":69120,\"added_quantity\":12672,\"new_quantity\":81792,\"lot_number\":\"159-112\"}', '2026-07-10 22:24:01'),
+(30, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014: added 6336 pcs for lot 151-308 (previous 63648 → new 69984)', '{\"previous_quantity\":63648,\"added_quantity\":0,\"new_quantity\":63648,\"lot_number\":\"151-308\"}', '{\"previous_quantity\":63648,\"added_quantity\":6336,\"new_quantity\":69984,\"lot_number\":\"151-308\"}', '2026-07-10 22:25:09'),
+(31, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 151-309 (previous 69984 → new 82656)', '{\"previous_quantity\":69984,\"added_quantity\":0,\"new_quantity\":69984,\"lot_number\":\"151-309\"}', '{\"previous_quantity\":69984,\"added_quantity\":12672,\"new_quantity\":82656,\"lot_number\":\"151-309\"}', '2026-07-10 22:26:36'),
+(32, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 37, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 124-550 (previous 0 → new 12672)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"124-550\"}', '{\"previous_quantity\":0,\"added_quantity\":12672,\"new_quantity\":12672,\"lot_number\":\"124-550\"}', '2026-07-10 22:27:27'),
+(33, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 151-308 (previous 82656 → new 95328)', '{\"previous_quantity\":82656,\"added_quantity\":0,\"new_quantity\":82656,\"lot_number\":\"151-308\"}', '{\"previous_quantity\":82656,\"added_quantity\":12672,\"new_quantity\":95328,\"lot_number\":\"151-308\"}', '2026-07-10 22:30:58'),
+(34, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 28, 'Updated production quantity for PO-00000062: added 12672 pcs for lot 152-204 (previous 145728 → new 158400)', '{\"previous_quantity\":145728,\"added_quantity\":0,\"new_quantity\":145728,\"lot_number\":\"152-204\"}', '{\"previous_quantity\":145728,\"added_quantity\":12672,\"new_quantity\":158400,\"lot_number\":\"152-204\"}', '2026-07-10 22:31:34'),
+(35, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014: added 6912 pcs for lot 151-307 (previous 95328 → new 102240)', '{\"previous_quantity\":95328,\"added_quantity\":0,\"new_quantity\":95328,\"lot_number\":\"151-307\"}', '{\"previous_quantity\":95328,\"added_quantity\":6912,\"new_quantity\":102240,\"lot_number\":\"151-307\"}', '2026-07-10 22:33:08'),
+(36, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 37, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 124-549 (previous 12672 → new 25344)', '{\"previous_quantity\":12672,\"added_quantity\":0,\"new_quantity\":12672,\"lot_number\":\"124-549\"}', '{\"previous_quantity\":12672,\"added_quantity\":12672,\"new_quantity\":25344,\"lot_number\":\"124-549\"}', '2026-07-10 22:33:47'),
+(37, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 151-307 (previous 102240 → new 114912)', '{\"previous_quantity\":102240,\"added_quantity\":0,\"new_quantity\":102240,\"lot_number\":\"151-307\"}', '{\"previous_quantity\":102240,\"added_quantity\":12672,\"new_quantity\":114912,\"lot_number\":\"151-307\"}', '2026-07-10 22:34:28'),
+(38, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 151-308 (previous 114912 → new 127584)', '{\"previous_quantity\":114912,\"added_quantity\":0,\"new_quantity\":114912,\"lot_number\":\"151-308\"}', '{\"previous_quantity\":114912,\"added_quantity\":12672,\"new_quantity\":127584,\"lot_number\":\"151-308\"}', '2026-07-10 22:34:59'),
+(39, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 31, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 15229 (previous 81792 → new 94464)', '{\"previous_quantity\":81792,\"added_quantity\":0,\"new_quantity\":81792,\"lot_number\":\"15229\"}', '{\"previous_quantity\":81792,\"added_quantity\":12672,\"new_quantity\":94464,\"lot_number\":\"15229\"}', '2026-07-10 22:35:47'),
+(40, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 28, 'Updated production quantity for PO-00000062: added 12672 pcs for lot 152-204 (previous 158400 → new 171072)', '{\"previous_quantity\":158400,\"added_quantity\":0,\"new_quantity\":158400,\"lot_number\":\"152-204\"}', '{\"previous_quantity\":158400,\"added_quantity\":12672,\"new_quantity\":171072,\"lot_number\":\"152-204\"}', '2026-07-10 22:36:09'),
+(41, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 32, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 157-159 (previous 50978 → new 63650)', '{\"previous_quantity\":50978,\"added_quantity\":0,\"new_quantity\":50978,\"lot_number\":\"157-159\"}', '{\"previous_quantity\":50978,\"added_quantity\":12672,\"new_quantity\":63650,\"lot_number\":\"157-159\"}', '2026-07-10 22:36:51'),
+(42, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 28, 'Updated production quantity for PO-00000062: added 12672 pcs for lot 152-204 (previous 171072 → new 183744)', '{\"previous_quantity\":171072,\"added_quantity\":0,\"new_quantity\":171072,\"lot_number\":\"152-204\"}', '{\"previous_quantity\":171072,\"added_quantity\":12672,\"new_quantity\":183744,\"lot_number\":\"152-204\"}', '2026-07-10 22:37:14'),
+(43, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 66, 'Updated production quantity for ADV253: added 12672 pcs for lot 118-856 (previous 82944 → new 95616)', '{\"previous_quantity\":82944,\"added_quantity\":0,\"new_quantity\":82944,\"lot_number\":\"118-856\"}', '{\"previous_quantity\":82944,\"added_quantity\":12672,\"new_quantity\":95616,\"lot_number\":\"118-856\"}', '2026-07-10 22:38:39'),
+(44, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 67, 'Updated production quantity for ADV252: added 12672 pcs for lot 133-854 (previous 32832 → new 45504)', '{\"previous_quantity\":32832,\"added_quantity\":0,\"new_quantity\":32832,\"lot_number\":\"133-854\"}', '{\"previous_quantity\":32832,\"added_quantity\":12672,\"new_quantity\":45504,\"lot_number\":\"133-854\"}', '2026-07-10 22:41:46'),
+(45, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 66, 'Updated production quantity for ADV253: added 4032 pcs for lot 118-856 (previous 95616 → new 99648)', '{\"previous_quantity\":95616,\"added_quantity\":0,\"new_quantity\":95616,\"lot_number\":\"118-856\"}', '{\"previous_quantity\":95616,\"added_quantity\":4032,\"new_quantity\":99648,\"lot_number\":\"118-856\"}', '2026-07-10 22:45:18'),
+(46, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 66, 'Updated production quantity for ADV253: added 1032 pcs for lot 118-856 (previous 99648 → new 100680)', '{\"previous_quantity\":99648,\"added_quantity\":0,\"new_quantity\":99648,\"lot_number\":\"118-856\"}', '{\"previous_quantity\":99648,\"added_quantity\":1032,\"new_quantity\":100680,\"lot_number\":\"118-856\"}', '2026-07-10 22:46:00'),
+(47, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 28, 'Updated production quantity for PO-00000062: added 12672 pcs for lot 152-204 (previous 183744 → new 196416)', '{\"previous_quantity\":183744,\"added_quantity\":0,\"new_quantity\":183744,\"lot_number\":\"152-204\"}', '{\"previous_quantity\":183744,\"added_quantity\":12672,\"new_quantity\":196416,\"lot_number\":\"152-204\"}', '2026-07-10 22:58:52'),
+(48, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 32, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 157-160 (previous 63650 → new 76322)', '{\"previous_quantity\":63650,\"added_quantity\":0,\"new_quantity\":63650,\"lot_number\":\"157-160\"}', '{\"previous_quantity\":63650,\"added_quantity\":12672,\"new_quantity\":76322,\"lot_number\":\"157-160\"}', '2026-07-10 23:05:59'),
+(49, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 28, 'Updated production quantity for PO-00000062: added 12384 pcs for lot 152-204 (previous 196416 → new 208800)', '{\"previous_quantity\":196416,\"added_quantity\":0,\"new_quantity\":196416,\"lot_number\":\"152-204\"}', '{\"previous_quantity\":196416,\"added_quantity\":12384,\"new_quantity\":208800,\"lot_number\":\"152-204\"}', '2026-07-10 23:26:09'),
+(50, 12, 'ELMEI', 'warehouse', 'LOGIN', 'auth', 'user', 12, 'User logged in: ELMEI', NULL, '{\"username\":\"ELMEI\"}', '2026-07-10 23:33:42'),
+(51, 12, 'ELMEI', 'warehouse', 'CREATE', 'warehouse', 'purchase_order', 35, 'Created PO PO-00000111 for S BRANDS CONSUMER CARE INC.', NULL, '{\"customer_po_number\":\"PO-00000111\",\"customer_po_date\":\"2026-07-08\",\"production_type\":\"normal\"}', '2026-07-10 23:42:06'),
+(52, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-10 23:51:57'),
+(53, 1, 'admin', 'admin', 'UPDATE', 'admin', 'item', 26, 'Updated item (inline): ', '{\"item_id\":26,\"item_code\":\"FG0672-BLKERTRCON180\",\"item_description\":\"BareLab Keratin Treatment Conditioner 180g\",\"customer_id\":19,\"item_uom\":\"PCS\",\"uom_conversion\":24,\"item_size\":null,\"item_amount\":\"0.00\",\"date_created\":\"2026-07-03 14:28:38\",\"status\":1,\"remove\":0,\"last_update\":\"2026-07-06 15:29:22\"}', '{\"item_name\":\"\",\"item_code\":\"FG0672-BLKERTRCON180\",\"description\":\"\"}', '2026-07-11 00:27:34'),
+(54, 14, 'QUEENSEE', 'warehouse', 'LOGIN', 'auth', 'user', 14, 'User logged in: QUEENSEE', NULL, '{\"username\":\"QUEENSEE\"}', '2026-07-11 00:43:25'),
+(55, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 51, 'Updated production quantity for PO-00000014: added 1140 pcs for lot 163-001 (previous 0 → new 1140)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"163-001\"}', '{\"previous_quantity\":0,\"added_quantity\":1140,\"new_quantity\":1140,\"lot_number\":\"163-001\"}', '2026-07-11 00:46:02'),
+(56, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 37, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 124-550 (previous 25344 → new 38016)', '{\"previous_quantity\":25344,\"added_quantity\":0,\"new_quantity\":25344,\"lot_number\":\"124-550\"}', '{\"previous_quantity\":25344,\"added_quantity\":12672,\"new_quantity\":38016,\"lot_number\":\"124-550\"}', '2026-07-11 00:46:56'),
+(57, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 30, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 151-310 (previous 127584 → new 140256)', '{\"previous_quantity\":127584,\"added_quantity\":0,\"new_quantity\":127584,\"lot_number\":\"151-310\"}', '{\"previous_quantity\":127584,\"added_quantity\":12672,\"new_quantity\":140256,\"lot_number\":\"151-310\"}', '2026-07-11 00:47:20'),
+(58, 12, 'ELMEI', 'warehouse', 'UPDATE', 'warehouse', 'purchase_order', 23, 'Edited PO PO-00000062', '{\"customer_po_number\":\"PO-00000062\",\"customer_po_date\":\"2026-07-01\",\"production_type\":\"normal\",\"items\":[{\"poi_id\":null,\"item_id\":39,\"quantity\":672768}]}', '{\"customer_po_number\":\"PO-00000062\",\"customer_po_date\":\"2026-07-01\",\"production_type\":\"normal\",\"items\":[{\"action\":\"quantity_changed\",\"poi_id\":\"28\",\"item_id\":39,\"old_quantity\":672768,\"new_quantity\":1762560}]}', '2026-07-11 00:51:32'),
+(59, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-11 00:54:21'),
+(60, 12, 'ELMEI', 'warehouse', 'UPDATE', 'warehouse', 'purchase_order', 23, 'Edited PO PO-00000062', '{\"customer_po_number\":\"PO-00000062\",\"customer_po_date\":\"2026-07-01\",\"production_type\":\"normal\",\"items\":[{\"poi_id\":null,\"item_id\":39,\"quantity\":1762560},{\"poi_id\":null,\"item_id\":30,\"quantity\":146880}]}', '{\"customer_po_number\":\"PO-00000062\",\"customer_po_date\":\"2026-07-01\",\"production_type\":\"normal\",\"items\":[{\"action\":\"quantity_changed\",\"poi_id\":\"28\",\"item_id\":39,\"old_quantity\":1762560,\"new_quantity\":1615680}]}', '2026-07-11 00:57:58'),
+(61, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 68, 'Updated production quantity for PO-00000111: added 12672 pcs for lot 118-854 (previous 100680 → new 113352)', '{\"previous_quantity\":100680,\"added_quantity\":0,\"new_quantity\":100680,\"lot_number\":\"118-854\"}', '{\"previous_quantity\":100680,\"added_quantity\":12672,\"new_quantity\":113352,\"lot_number\":\"118-854\"}', '2026-07-11 01:12:26'),
+(62, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 69, 'Updated production quantity for PO-00000062: added 5256 pcs for lot 152-204 (previous 0 → new 5256)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"152-204\"}', '{\"previous_quantity\":0,\"added_quantity\":5256,\"new_quantity\":5256,\"lot_number\":\"152-204\"}', '2026-07-11 01:39:02'),
+(63, 1, 'admin', 'admin', 'UPDATE', 'admin', 'item', 54, 'Updated item (inline): ', '{\"item_id\":54,\"item_code\":\"FG0263-KPSS22x11+1\",\"item_description\":\"Keratin Plus Shampoo Soft Smooth 22mlx11+1 Promo\",\"customer_id\":19,\"item_uom\":\"PCS\",\"uom_conversion\":288,\"item_size\":null,\"item_amount\":\"0.00\",\"date_created\":\"2026-07-03 15:35:54\",\"status\":1,\"remove\":0,\"last_update\":\"2026-07-03 15:35:54\"}', '{\"item_name\":\"\",\"item_code\":\"FG0263-KPSS22x11+1\",\"description\":\"\"}', '2026-07-11 01:39:13'),
+(64, 1, 'admin', 'admin', 'UPDATE', 'admin', 'item', 39, 'Updated item (inline): ', '{\"item_id\":39,\"item_code\":\"FG0633-EMPSHAM11+1\",\"item_description\":\"Empress Shampoo Long & Healthy 21mlx24pck (11+1)\",\"customer_id\":19,\"item_uom\":\"PCS\",\"uom_conversion\":288,\"item_size\":null,\"item_amount\":\"0.00\",\"date_created\":\"2026-07-03 15:11:48\",\"status\":1,\"remove\":0,\"last_update\":\"2026-07-03 15:11:48\"}', '{\"item_name\":\"\",\"item_code\":\"FG0633-EMPSHAM11+1\",\"description\":\"\"}', '2026-07-11 01:39:47'),
+(65, 14, 'QUEENSEE', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created deliveries for PO-00000014 (DR: DR17263)', NULL, '{\"lot_ids\":\"37:19584,44:31680,45:12672,53:12672\"}', '2026-07-11 01:59:05'),
+(66, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 37, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 124-550 (previous 38016 → new 50688)', '{\"previous_quantity\":38016,\"added_quantity\":0,\"new_quantity\":38016,\"lot_number\":\"124-550\"}', '{\"previous_quantity\":38016,\"added_quantity\":12672,\"new_quantity\":50688,\"lot_number\":\"124-550\"}', '2026-07-11 02:28:14'),
+(67, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-11 02:31:12'),
+(68, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-11 02:31:21'),
+(69, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-11 02:31:49'),
+(70, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 37, 'Updated production quantity for PO-00000014: added 29664 pcs for lot 549 (previous 50688 → new 80352)', '{\"previous_quantity\":50688,\"added_quantity\":0,\"new_quantity\":50688,\"lot_number\":\"549\"}', '{\"previous_quantity\":50688,\"added_quantity\":29664,\"new_quantity\":80352,\"lot_number\":\"549\"}', '2026-07-11 02:34:55'),
+(71, 6, 'testprod', 'production', 'LOGOUT', 'auth', 'user', 6, 'User logged out: testprod', NULL, NULL, '2026-07-11 02:40:17'),
+(72, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-11 02:40:30'),
+(73, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-11 02:42:52'),
+(74, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-11 02:43:00'),
+(75, 6, 'testprod', 'production', 'LOGOUT', 'auth', 'user', 6, 'User logged out: testprod', NULL, NULL, '2026-07-11 02:44:08'),
+(76, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-11 02:44:58'),
+(77, 1, 'admin', 'admin', 'UPDATE', 'admin', 'production_history', 106, 'Updated production quantity and lot for history #106', '{\"previous_quantity\":50688,\"added_quantity\":29664,\"new_quantity\":80352,\"lot_number\":\"549\",\"old_added_quantity\":null,\"old_lot_number\":null}', '{\"previous_quantity\":50688,\"added_quantity\":29664,\"new_quantity\":80352,\"lot_number\":\"124-549\",\"old_added_quantity\":29664,\"old_lot_number\":\"549\"}', '2026-07-11 02:45:16'),
+(78, 11, 'Cath', 'production', 'LOGIN', 'auth', 'user', 11, 'User logged in: Cath', NULL, '{\"username\":\"cath\"}', '2026-07-11 02:49:51'),
+(79, 11, 'Cath', 'production', 'UPDATE', 'production', 'purchase_order_item', 37, 'Updated production quantity for PO-00000014: added 12672 pcs for lot 124-550 (previous 80352 → new 93024)', '{\"previous_quantity\":80352,\"added_quantity\":0,\"new_quantity\":80352,\"lot_number\":\"124-550\"}', '{\"previous_quantity\":80352,\"added_quantity\":12672,\"new_quantity\":93024,\"lot_number\":\"124-550\"}', '2026-07-11 02:51:53'),
+(80, 14, 'QUEENSEE', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created deliveries for PO-00000014 (DR: DR17264)', NULL, '{\"lot_ids\":\"48:29664,46:50688\"}', '2026-07-11 02:54:18'),
+(81, 1, 'admin', 'admin', 'DELETE', 'admin', 'delivery', 23, 'Deleted delivery #23', NULL, '{\"delivery_id\":\"23\"}', '2026-07-11 03:00:12'),
+(82, 14, 'QUEENSEE', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created deliveries for PO-00000014 (DR: DR17265)', NULL, '{\"lot_ids\":\"48:29664,46:50688\"}', '2026-07-11 03:02:36'),
+(83, 11, 'Cath', 'production', 'LOGOUT', 'auth', 'user', 11, 'User logged out: Cath', NULL, NULL, '2026-07-11 03:03:51'),
+(84, 11, 'Cath', 'production', 'LOGIN', 'auth', 'user', 11, 'User logged in: Cath', NULL, '{\"username\":\"cath\"}', '2026-07-11 03:10:10'),
+(85, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-11 03:24:37'),
+(86, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-11 03:48:29'),
+(87, 1, 'admin', 'admin', 'DELETE', 'admin', 'delivery', 24, 'Deleted delivery #24', NULL, '{\"delivery_id\":\"24\"}', '2026-07-11 03:49:02'),
+(88, 4, 'testwh', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created delivery records for PO-00000014 with DR 11111', NULL, '{\"lot_ids\":\"48:29664,46:50688\"}', '2026-07-11 03:50:40'),
+(89, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-11 03:52:51'),
+(90, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-11 05:06:42'),
+(91, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-11 05:18:53'),
+(92, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-11 05:19:06'),
+(93, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-11 05:33:30'),
+(94, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-11 05:33:39'),
+(95, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-11 05:46:50'),
+(96, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-11 05:46:54'),
+(97, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-13 01:41:34'),
+(98, 4, 'testwh', 'warehouse', 'CREATE', 'warehouse', 'purchase_order', 36, 'Created purchase order TEST-0000001 for CALM SANDS INC. (normal production)', NULL, '{\"customer_po_number\":\"TEST-0000001\",\"customer_po_date\":\"2026-07-13\",\"production_type\":\"normal\"}', '2026-07-13 01:59:15'),
+(99, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-13 02:02:31'),
+(100, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 70, 'Updated production quantity for TEST-0000001: added 1999 pcs for lot 123-456 (previous 0 → new 1999) (lot quantity 0 → 1999)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"123-456\"}', '{\"previous_quantity\":0,\"added_quantity\":1999,\"new_quantity\":1999,\"lot_number\":\"123-456\"}', '2026-07-13 02:06:04'),
+(101, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 71, 'Updated production quantity for TEST-0000001: added 1899 pcs for lot 123-789 (previous 0 → new 1899) (lot quantity 0 → 1899)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"123-789\"}', '{\"previous_quantity\":0,\"added_quantity\":1899,\"new_quantity\":1899,\"lot_number\":\"123-789\"}', '2026-07-13 02:06:05'),
+(102, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 72, 'Updated production quantity for TEST-0000001: added 1799 pcs for lot 123-101 (previous 0 → new 1799) (lot quantity 0 → 1799)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"123-101\"}', '{\"previous_quantity\":0,\"added_quantity\":1799,\"new_quantity\":1799,\"lot_number\":\"123-101\"}', '2026-07-13 02:06:05'),
+(103, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 70, 'Updated production quantity for TEST-0000001: added 101 pcs for lot 123-456 (previous 1999 → new 2100) (lot quantity 1999 → 2100)', '{\"previous_quantity\":1999,\"added_quantity\":0,\"new_quantity\":1999,\"lot_number\":\"123-456\"}', '{\"previous_quantity\":1999,\"added_quantity\":101,\"new_quantity\":2100,\"lot_number\":\"123-456\"}', '2026-07-13 02:12:32'),
+(104, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 71, 'Updated production quantity for TEST-0000001: added 101 pcs for lot 123-789 (previous 1899 → new 2000) (lot quantity 1899 → 2000)', '{\"previous_quantity\":1899,\"added_quantity\":0,\"new_quantity\":1899,\"lot_number\":\"123-789\"}', '{\"previous_quantity\":1899,\"added_quantity\":101,\"new_quantity\":2000,\"lot_number\":\"123-789\"}', '2026-07-13 02:12:33'),
+(105, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 71, 'Updated production quantity for TEST-0000001: added 101 pcs for lot 123-789 (previous 2000 → new 2101) (lot quantity 2000 → 2101)', '{\"previous_quantity\":2000,\"added_quantity\":0,\"new_quantity\":2000,\"lot_number\":\"123-789\"}', '{\"previous_quantity\":2000,\"added_quantity\":101,\"new_quantity\":2101,\"lot_number\":\"123-789\"}', '2026-07-13 02:12:33'),
+(106, 4, 'testwh', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created delivery records for TEST-0000001 with DR DR-003', NULL, '{\"lot_ids\":\"57:2100,58:2101,59:1799\"}', '2026-07-13 02:15:57'),
+(107, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-14 00:08:00'),
+(108, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-14 00:08:32'),
+(109, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-14 00:08:41'),
+(110, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-14 00:15:46'),
+(111, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 52, 'Updated production quantity for PO-00000096: added 2000 pcs for lot 194-168 (previous 0 → new 2000) (lot quantity 0 → 2000)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"194-168\"}', '{\"previous_quantity\":0,\"added_quantity\":2000,\"new_quantity\":2000,\"lot_number\":\"194-168\"}', '2026-07-14 00:17:13'),
+(112, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 53, 'Updated production quantity for PO-00000096: added 2000 pcs for lot 168-194 (previous 0 → new 2000) (lot quantity 0 → 2000)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"168-194\"}', '{\"previous_quantity\":0,\"added_quantity\":2000,\"new_quantity\":2000,\"lot_number\":\"168-194\"}', '2026-07-14 00:17:13'),
+(113, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-14 00:18:22'),
+(114, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 52, 'Updated production quantity for PO-00000096: added 2000 pcs for lot 168 (previous 2000 → new 4000) (lot quantity 0 → 2000)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"168\"}', '{\"previous_quantity\":0,\"added_quantity\":2000,\"new_quantity\":2000,\"lot_number\":\"168\"}', '2026-07-14 00:19:43'),
+(115, 1, 'admin', 'admin', 'UPDATE', 'admin', 'production_history', 116, 'Updated production quantity and lot for history #116', '{\"previous_quantity\":2000,\"added_quantity\":2000,\"new_quantity\":4000,\"lot_number\":\"168\",\"old_added_quantity\":null,\"old_lot_number\":null}', '{\"previous_quantity\":2000,\"added_quantity\":2000,\"new_quantity\":4000,\"lot_number\":\"194-168\",\"old_added_quantity\":2000,\"old_lot_number\":\"168\"}', '2026-07-14 00:22:29'),
+(116, 4, 'testwh', 'warehouse', 'CREATE', 'warehouse', 'delivery', NULL, 'Created delivery records for PO-00000096 with DR 2424', NULL, '{\"lot_ids\":\"60:4000,61:2000\"}', '2026-07-14 00:23:21'),
+(117, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-15 05:48:22'),
+(118, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-15 05:54:08'),
+(119, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-15 06:09:56'),
+(120, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-15 06:42:14'),
+(121, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-15 06:42:23'),
+(122, 6, 'testprod', 'production', 'LOGOUT', 'auth', 'user', 6, 'User logged out: testprod', NULL, NULL, '2026-07-15 07:02:57'),
+(123, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-15 07:03:04'),
+(124, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-16 00:01:11'),
+(125, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-16 05:30:12'),
+(126, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-16 05:30:32'),
+(127, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-16 05:30:45'),
+(128, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 70, 'Updated production quantity for TEST-0000001: added 1000 pcs for lot lotnegative (previous 2100 → new 3100) (lot quantity 0 → 1000)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"lotnegative\"}', '{\"previous_quantity\":0,\"added_quantity\":1000,\"new_quantity\":1000,\"lot_number\":\"lotnegative\"}', '2026-07-16 05:31:59'),
+(129, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-16 06:56:46'),
+(130, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-16 06:56:51'),
+(131, 6, 'testprod', 'production', 'LOGOUT', 'auth', 'user', 6, 'User logged out: testprod', NULL, NULL, '2026-07-16 07:01:39'),
+(132, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-16 07:01:45'),
+(133, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-16 07:02:11'),
+(134, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-16 07:02:31'),
+(135, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-16 23:41:28'),
+(136, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-17 03:10:22'),
+(137, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-17 03:20:05'),
+(138, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-17 03:20:23'),
+(139, 6, 'testprod', 'production', 'CREATE', 'production', 'production_history', NULL, 'Reported production history entry #117 with reason: wrong qty', NULL, '{\"history_id\":\"117\",\"report_type\":\"lot_number\",\"reason\":\"wrong qty\\r\\n\"}', '2026-07-17 03:20:51'),
+(140, 1, 'admin', 'admin', 'DELETE', 'admin', 'production_history', 117, 'Deleted production history #117', NULL, '{\"history_id\":\"117\"}', '2026-07-17 03:21:12'),
+(141, 6, 'testprod', 'production', 'UPDATE', 'production', 'purchase_order_item', 70, 'Updated production quantity for TEST-0000001: added 1000 pcs for lot 10 (previous 2100 → new 3100) (lot quantity 0 → 1000)', '{\"previous_quantity\":0,\"added_quantity\":0,\"new_quantity\":0,\"lot_number\":\"10\"}', '{\"previous_quantity\":0,\"added_quantity\":1000,\"new_quantity\":1000,\"lot_number\":\"10\"}', '2026-07-17 03:55:36'),
+(142, 1, 'admin', 'admin', 'DELETE', 'admin', 'delivery', 27, 'Deleted delivery #27', NULL, '{\"delivery_id\":\"27\"}', '2026-07-17 03:56:15'),
+(143, 1, 'admin', 'admin', 'DELETE', 'admin', 'production_history', 118, 'Deleted production history #118', NULL, '{\"history_id\":\"118\"}', '2026-07-17 03:56:43'),
+(144, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-17 05:24:24'),
+(145, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-17 05:24:50'),
+(146, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-17 05:25:14'),
+(147, 1, 'admin', 'admin', 'UPDATE', 'admin', 'item', 540, 'Updated item (inline): ', '{\"item_id\":540,\"item_code\":\"FG0402-ADV500+2KGCON\",\"item_description\":\"AP Advance 500mL + 2 K Gold Promo\",\"customer_id\":27,\"item_uom\":\"PCS\",\"uom_conversion\":24,\"item_size\":null,\"item_amount\":\"0.00\",\"date_created\":\"2026-07-08 15:36:25\",\"status\":1,\"remove\":0,\"last_update\":\"2026-07-08 15:36:25\"}', '{\"item_name\":\"\",\"item_code\":\"FG0402-ADV500+2KGCON\",\"description\":\"\"}', '2026-07-17 05:56:15'),
+(148, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-17 05:56:17'),
+(149, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-17 23:40:21'),
+(150, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-17 23:45:31'),
+(151, 1, 'admin', 'admin', 'UPDATE', 'admin', 'delivery', 26, 'Updated delivery #26', NULL, '{\"dr_number\":\"DR-003\",\"delivery_date\":\"2026-07-13\"}', '2026-07-18 00:25:01'),
+(152, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-18 01:18:02'),
+(153, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-18 01:18:08'),
+(154, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-18 02:31:29'),
+(155, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-18 02:31:37'),
+(156, 4, 'testwh', 'warehouse', 'LOGOUT', 'auth', 'user', 4, 'User logged out: testwh', NULL, NULL, '2026-07-18 05:16:33'),
+(157, 1, 'admin', 'admin', 'LOGIN', 'auth', 'user', 1, 'User logged in: admin', NULL, '{\"username\":\"admin\"}', '2026-07-18 05:16:38'),
+(158, 1, 'admin', 'admin', 'LOGOUT', 'auth', 'user', 1, 'User logged out: admin', NULL, NULL, '2026-07-18 06:00:36'),
+(159, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-18 06:00:44'),
+(160, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-20 00:12:44'),
+(161, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-20 00:15:39'),
+(162, 6, 'testprod', 'production', 'LOGIN', 'auth', 'user', 6, 'User logged in: testprod', NULL, '{\"username\":\"testprod\"}', '2026-07-20 00:21:30'),
+(163, 4, 'testwh', 'warehouse', 'LOGIN', 'auth', 'user', 4, 'User logged in: testwh', NULL, '{\"username\":\"testwh\"}', '2026-07-20 00:24:27');
 
 -- --------------------------------------------------------
 
@@ -63,7 +276,8 @@ INSERT INTO `customers` (`customer_id`, `customer_code`, `customer_name`, `custo
 (23, 'UNIMART', 'UNIMART INCORPORATED', 'GF Mckinley Arcade Plaza Bldg. Greenhills Shopping Center', 'vat', '000-062-391-00000', '30', '2026-07-03 11:27:29', 1, 0, '2026-07-03 03:41:44'),
 (24, 'WILCON', 'WILCON DEPOT, INC.', '#90 E RODRIGUEZ JR. AVE  UGONG NORTE NCR  SECOND DISTRICT', 'vat', '009-192-878-000', 'Undefined Credit Term', '2026-07-03 11:28:06', 1, 0, '2026-07-03 03:48:02'),
 (25, 'WATSON', 'WILLIS TOWERS WATSON PHILIPPINES INC', '23F W City Center 7th Ave. Cor 30th St., BGC Taguig City', 'vat', '000-171-259-000', '30', '2026-07-03 11:29:11', 1, 0, '2026-07-03 03:41:52'),
-(26, 'MSYBSY', 'MESSY BESSY CLEANERS INC.', 'Natividad Building #2308 Chino Roces Avenue, Ext. 1232 Magallanes Village Makati City\r\n', 'vat', '006-935-228-000', '30', '2026-07-04 09:31:40', 1, 0, '2026-07-04 01:31:40');
+(26, 'MSYBSY', 'MESSY BESSY CLEANERS INC.', 'Natividad Building #2308 Chino Roces Avenue, Ext. 1232 Magallanes Village Makati City\r\n', 'vat', '006-935-228-000', '30', '2026-07-04 09:31:40', 1, 0, '2026-07-04 01:31:40'),
+(27, 'SKNTEC', 'SKINTEC ADVANCE INC', 'BYPASS ROAD BULIHAN PLARIDEL BULACAN 3004', 'vat', '008-434-783-000', '90', '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25');
 
 -- --------------------------------------------------------
 
@@ -90,6 +304,20 @@ CREATE TABLE `deliveries` (
   `lot_items` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'JSON array of lot details [{lot_id, poi_id, qty}]' CHECK (json_valid(`lot_items`)),
   `remove` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `deliveries`
+--
+
+INSERT INTO `deliveries` (`delivery_id`, `po_id`, `poi_id`, `lot_id`, `delivered_by`, `delivery_date`, `remarks`, `report_remarks`, `remarks_type`, `active_status`, `date_created`, `delivery_quantity`, `old_quantity`, `dr_number`, `old_dr_number`, `lot_items`, `remove`) VALUES
+(20, 25, 30, NULL, 14, '2026-07-10', '', NULL, NULL, 1, '2026-07-10 15:19:54', 76320, NULL, 'DR17259', NULL, '[{\"lot_id\":25,\"poi_id\":30,\"lot_number\":\"151-306\",\"item_code\":\"FG0670-BLSLEEK13X12\",\"item_description\":\"BareLab Sleek and Straight 13mlx12sx24packs\",\"qty\":32544,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":37,\"poi_id\":30,\"lot_number\":\"151-307\",\"item_code\":\"FG0670-BLSLEEK13X12\",\"item_description\":\"BareLab Sleek and Straight 13mlx12sx24packs\",\"qty\":12672,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":32,\"poi_id\":30,\"lot_number\":\"151-313\",\"item_code\":\"FG0670-BLSLEEK13X12\",\"item_description\":\"BareLab Sleek and Straight 13mlx12sx24packs\",\"qty\":31104,\"item_uom\":\"PCS\",\"uom_conversion\":288}]', 0),
+(21, 25, 31, NULL, 14, '2026-07-10', '', NULL, NULL, 1, '2026-07-10 15:31:03', 50400, NULL, 'DR17262', NULL, '[{\"lot_id\":40,\"poi_id\":31,\"lot_number\":\"159-109\",\"item_code\":\"FG0648-BLANTDNFSHA12\",\"item_description\":\"BareLab Anti-Dandruff Shampoo 12mLx12sx24pck\",\"qty\":5760,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":29,\"poi_id\":31,\"lot_number\":\"159-110\",\"item_code\":\"FG0648-BLANTDNFSHA12\",\"item_description\":\"BareLab Anti-Dandruff Shampoo 12mLx12sx24pck\",\"qty\":19296,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":34,\"poi_id\":31,\"lot_number\":\"159-111\",\"item_code\":\"FG0648-BLANTDNFSHA12\",\"item_description\":\"BareLab Anti-Dandruff Shampoo 12mLx12sx24pck\",\"qty\":25344,\"item_uom\":\"PCS\",\"uom_conversion\":288}]', 0),
+(22, 25, 30, NULL, 14, '2026-07-11', '', NULL, NULL, 1, '2026-07-11 09:59:05', 76608, NULL, 'DR17263', NULL, '[{\"lot_id\":37,\"poi_id\":30,\"lot_number\":\"151-307\",\"item_code\":\"FG0670-BLSLEEK13X12\",\"item_description\":\"BareLab Sleek and Straight 13mlx12sx24packs\",\"qty\":19584,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":44,\"poi_id\":30,\"lot_number\":\"151-308\",\"item_code\":\"FG0670-BLSLEEK13X12\",\"item_description\":\"BareLab Sleek and Straight 13mlx12sx24packs\",\"qty\":31680,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":45,\"poi_id\":30,\"lot_number\":\"151-309\",\"item_code\":\"FG0670-BLSLEEK13X12\",\"item_description\":\"BareLab Sleek and Straight 13mlx12sx24packs\",\"qty\":12672,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":53,\"poi_id\":30,\"lot_number\":\"151-310\",\"item_code\":\"FG0670-BLSLEEK13X12\",\"item_description\":\"BareLab Sleek and Straight 13mlx12sx24packs\",\"qty\":12672,\"item_uom\":\"PCS\",\"uom_conversion\":288}]', 0),
+(23, 25, 37, NULL, 14, '2026-07-11', '', NULL, NULL, 1, '2026-07-11 10:54:18', 63360, NULL, 'DR17264', NULL, '[{\"lot_id\":48,\"poi_id\":37,\"lot_number\":\"124-549\",\"item_code\":\"FG0311-EMPRSSHAMPx12\",\"item_description\":\"Empress Shampoo x 12\",\"qty\":12672,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":46,\"poi_id\":37,\"lot_number\":\"124-550\",\"item_code\":\"FG0311-EMPRSSHAMPx12\",\"item_description\":\"Empress Shampoo x 12\",\"qty\":50688,\"item_uom\":\"PCS\",\"uom_conversion\":288}]', 1),
+(24, 25, 37, NULL, 14, '2026-07-11', '', NULL, NULL, 1, '2026-07-11 11:02:36', 63360, NULL, 'DR17265', NULL, '[{\"lot_id\":48,\"poi_id\":37,\"lot_number\":\"124-549\",\"item_code\":\"FG0311-EMPRSSHAMPx12\",\"item_description\":\"Empress Shampoo x 12\",\"qty\":12672,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":46,\"poi_id\":37,\"lot_number\":\"124-550\",\"item_code\":\"FG0311-EMPRSSHAMPx12\",\"item_description\":\"Empress Shampoo x 12\",\"qty\":50688,\"item_uom\":\"PCS\",\"uom_conversion\":288}]', 1),
+(25, 25, 37, NULL, 4, '2026-07-11', '', NULL, NULL, 1, '2026-07-11 11:50:40', 80352, NULL, '11111', NULL, '[{\"lot_id\":48,\"poi_id\":37,\"lot_number\":\"124-549\",\"item_code\":\"FG0311-EMPRSSHAMPx12\",\"item_description\":\"Empress Shampoo x 12\",\"qty\":8879,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":56,\"poi_id\":37,\"lot_number\":\"124-549\",\"item_code\":\"FG0311-EMPRSSHAMPx12\",\"item_description\":\"Empress Shampoo x 12\",\"qty\":20785,\"item_uom\":\"PCS\",\"uom_conversion\":288},{\"lot_id\":46,\"poi_id\":37,\"lot_number\":\"124-550\",\"item_code\":\"FG0311-EMPRSSHAMPx12\",\"item_description\":\"Empress Shampoo x 12\",\"qty\":50688,\"item_uom\":\"PCS\",\"uom_conversion\":288}]', 0),
+(26, 36, 70, NULL, 4, '2026-07-13', 'partial', NULL, 'edited', 1, '2026-07-13 10:15:57', 6000, NULL, 'DR-003', NULL, '[{\"lot_id\":57,\"poi_id\":70,\"lot_number\":\"123-456\",\"item_code\":\"FG0650-MBLAGT300mL\",\"item_description\":\"MB Hand & Body Lotion Aloe Green Tea 300mLx12\",\"qty\":2100,\"item_uom\":\"PCS\",\"uom_conversion\":12,\"actual_uom_conversion\":100},{\"lot_id\":58,\"poi_id\":71,\"lot_number\":\"123-789\",\"item_code\":\"FG0565-DWSAMORNHSGAL\",\"item_description\":\"Dwellbeing Sampaguita n Orange Liquid Hand Soap Gal\",\"qty\":2101,\"item_uom\":\"PCS\",\"uom_conversion\":null},{\"lot_id\":59,\"poi_id\":72,\"lot_number\":\"123-101\",\"item_code\":\"FG0605-HBWAGT50\",\"item_description\":\"Messy Bessy Hand & Body Wash Aloe Green Tea 50mL\",\"qty\":1799,\"item_uom\":\"PCS\",\"uom_conversion\":16,\"actual_uom_conversion\":16}]', 0),
+(27, 26, 52, NULL, 4, '2026-07-14', '', NULL, NULL, 1, '2026-07-14 08:23:21', 6000, NULL, '2424', NULL, '[{\"lot_id\":60,\"poi_id\":52,\"lot_number\":\"194-168\",\"item_code\":\"FG0267-APISO70CLS150\",\"item_description\":\"AlcoPlus Iso 70 Alcohol Classic 150mL\",\"qty\":2000,\"item_uom\":\"PCS\",\"uom_conversion\":48},{\"lot_id\":62,\"poi_id\":52,\"lot_number\":\"194-168\",\"item_code\":\"FG0267-APISO70CLS150\",\"item_description\":\"AlcoPlus Iso 70 Alcohol Classic 150mL\",\"qty\":2000,\"item_uom\":\"PCS\",\"uom_conversion\":48},{\"lot_id\":61,\"poi_id\":53,\"lot_number\":\"168-194\",\"item_code\":\"FG0268-APISO70CLS250\",\"item_description\":\"AlcoPlus Iso 70 Alcohol Classic 250mL\",\"qty\":2000,\"item_uom\":\"PCS\",\"uom_conversion\":48}]', 1);
 
 -- --------------------------------------------------------
 
@@ -136,6 +364,27 @@ CREATE TABLE `delivery_reports` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `excess_production`
+--
+
+CREATE TABLE `excess_production` (
+  `excess_id` int(11) NOT NULL,
+  `customer_id` int(11) NOT NULL,
+  `item_id` int(11) NOT NULL,
+  `source_po_id` int(11) NOT NULL,
+  `source_poi_id` int(11) NOT NULL,
+  `excess_quantity` int(11) NOT NULL,
+  `consumed_quantity` int(11) DEFAULT 0,
+  `remaining_quantity` int(11) GENERATED ALWAYS AS (`excess_quantity` - `consumed_quantity`) STORED,
+  `status` enum('pending','partial','consumed') DEFAULT 'pending',
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `items`
 --
 
@@ -168,7 +417,7 @@ INSERT INTO `items` (`item_id`, `item_code`, `item_description`, `customer_id`, 
 (23, 'FG0665-BLSSOFnSHIN15', 'Barelab Shampoo Soft and Shiny 15mL', 19, 'PCS', 288, NULL, 0.00, '2026-07-03 14:24:21', 1, 0, '2026-07-03 06:24:21'),
 (24, 'FG0670-BLSLEEK13X12', 'BareLab Sleek and Straight 13mlx12sx24packs', 19, 'PCS', 288, NULL, 0.00, '2026-07-03 14:26:44', 1, 0, '2026-07-03 06:26:44'),
 (25, 'FG0671-BLAFALCON13', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', 19, 'PCS', 288, NULL, 0.00, '2026-07-03 14:28:03', 1, 0, '2026-07-03 06:28:03'),
-(26, 'FG0672-BLKERTRCON180', 'BareLab Keratin Treatment Conditioner 180g', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 14:28:38', 1, 0, '2026-07-06 07:29:22'),
+(26, 'FG0672-BLKERTRCON180', 'BareLab Keratin Intense Deluxe 180g', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 14:28:38', 1, 0, '2026-07-11 00:27:34'),
 (27, 'FG0187-EDTSUN60', 'Pure Basic EDT Sunny 60ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 14:56:33', 1, 0, '2026-07-03 06:56:33'),
 (28, 'FG0188-EDTROM60', 'Pure Basic EDT Romantic 60ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 14:57:19', 1, 0, '2026-07-03 06:57:19'),
 (29, 'FG0189-EDTFRESH60', 'Pure Basic EDT Fresh 60ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 14:58:07', 1, 0, '2026-07-03 06:58:07'),
@@ -181,14 +430,14 @@ INSERT INTO `items` (`item_id`, `item_code`, `item_description`, `customer_id`, 
 (36, 'FG0570-KERSHA12+2KDN', 'Keratin Shampoo Daily Nourishing 12+2 Keratin DN', 19, 'PCS', 312, NULL, 0.00, '2026-07-03 15:09:36', 1, 0, '2026-07-06 06:45:14'),
 (37, 'FG0575-EMPSHAx4', 'Empress Shampoo Long n Healthy x4', 19, 'PCS', 400, NULL, 0.00, '2026-07-03 15:10:19', 1, 0, '2026-07-03 07:10:19'),
 (38, 'FG0589-EMPx6+2KGOLD', 'Empress Shampoo Long n Heathy 6 + 2 Keratin Gold', 19, 'PCS', 288, NULL, 0.00, '2026-07-03 15:11:12', 1, 0, '2026-07-03 07:11:12'),
-(39, 'FG0633-EMPSHAM11+1', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', 19, 'PCS', 288, NULL, 0.00, '2026-07-03 15:11:48', 1, 0, '2026-07-03 07:11:48'),
+(39, 'FG0633-EMPSHAM11+1', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', 19, 'PCS', 264, NULL, 0.00, '2026-07-03 15:11:48', 1, 0, '2026-07-11 01:39:47'),
 (40, 'FG0664-EMPSHAx2', 'Empress Shampoo Long n Healthy x2', 19, 'PCS', 500, NULL, 0.00, '2026-07-03 15:12:44', 1, 0, '2026-07-03 07:12:44'),
 (43, 'FG0190-EDTACT60', 'Pure Basic EDT Active 60ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 15:19:04', 1, 0, '2026-07-03 07:19:04'),
 (44, 'FG0191-EDTCOOL60', 'Pure Basic EDT Cool 60ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 15:19:53', 1, 0, '2026-07-03 07:19:53'),
 (45, 'FG0192-EDTAQUA60', 'Pure Basic EDT Aqua 60ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 15:21:50', 1, 0, '2026-07-03 07:21:50'),
 (52, 'FG0235-EDTBLOOM100', 'Pure Basic EDT Bloom 100ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 15:34:15', 0, 0, '2026-07-06 05:37:18'),
 (53, 'FG0236-EDTINTENSE100', 'Pure Bacic EDT Intense 100ml', 19, 'PCS', 24, NULL, 0.00, '2026-07-03 15:35:07', 0, 0, '2026-07-06 05:37:25'),
-(54, 'FG0263-KPSS22x11+1', 'Keratin Plus Shampoo Soft Smooth 22mlx11+1 Promo', 19, 'PCS', 288, NULL, 0.00, '2026-07-03 15:35:54', 1, 0, '2026-07-03 07:35:54'),
+(54, 'FG0263-KPSS22x11+1', 'Keratin Plus Shampoo Soft Smooth 22mlx11+1 Promo', 19, 'PCS', 264, NULL, 0.00, '2026-07-03 15:35:54', 1, 0, '2026-07-11 01:39:13'),
 (55, 'FG0011-GGC14', 'Grips Gel (Clear) 14g', 19, 'PCS', 576, NULL, 0.00, '2026-07-03 15:38:10', 0, 0, '2026-07-06 03:11:17'),
 (56, 'FG0012-GGY14', 'Grips Gel (Yellow) 14g', 19, 'PCS', 576, NULL, 0.00, '2026-07-03 15:42:20', 0, 0, '2026-07-06 03:11:07'),
 (58, 'FG0013-GGG14', 'Grips Gel (Green) 14g', 19, 'PCS', 576, NULL, 0.00, '2026-07-03 15:52:45', 0, 0, '2026-07-06 03:10:40'),
@@ -497,9 +746,9 @@ INSERT INTO `items` (`item_id`, `item_code`, `item_description`, `customer_id`, 
 (365, 'FG0639-RSGPSCHERP5', 'True Ready Scent, Go! Cherry Pop Perfume Stick 5g', 11, 'PCS', 84, NULL, 0.00, '2026-07-06 14:55:57', 1, 0, '2026-07-06 06:57:06'),
 (366, 'FG0640-RSGPSPHAN5', 'True Ready Scent, Go! Phantom Perfume Stick 5g', 11, 'PCS', 84, NULL, 0.00, '2026-07-06 14:56:21', 1, 0, '2026-07-06 06:57:01'),
 (367, 'FG0641-RSGPSHORIZ5', 'True Ready Scent, Go! Horizon Perfume Stick 5g', 11, 'PCS', 84, NULL, 0.00, '2026-07-06 14:56:53', 1, 0, '2026-07-06 06:56:53'),
-(368, 'FG0642-RSGPSBLUSH5', 'True Ready Scent, Go! Blush Perfume Stick 5g', 11, 'PCS', 84, NULL, 0.00, '2026-07-06 14:58:03', 1, 0, '2026-07-06 06:58:03');
+(368, 'FG0642-RSGPSBLUSH5', 'True Ready Scent, Go! Blush Perfume Stick 5g', 11, 'PCS', 84, NULL, 0.00, '2026-07-06 14:58:03', 1, 0, '2026-07-06 06:58:03'),
+(369, 'FG0643-RSGPSGLAM5', 'True Ready Scent, Go! Glam Perfume Stick 5g', 11, 'PCS', 84, NULL, 0.00, '2026-07-06 14:58:24', 1, 0, '2026-07-06 06:58:24');
 INSERT INTO `items` (`item_id`, `item_code`, `item_description`, `customer_id`, `item_uom`, `uom_conversion`, `item_size`, `item_amount`, `date_created`, `status`, `remove`, `last_update`) VALUES
-(369, 'FG0643-RSGPSGLAM5', 'True Ready Scent, Go! Glam Perfume Stick 5g', 11, 'PCS', 84, NULL, 0.00, '2026-07-06 14:58:24', 1, 0, '2026-07-06 06:58:24'),
 (370, 'FG0644-ETYL500+2KER', 'Promo Ethyl Classic 500mL + 2 Keratin Shampoo 22mL', 19, 'PCS', 24, NULL, 0.00, '2026-07-06 14:58:46', 1, 0, '2026-07-06 06:58:46'),
 (371, 'FG0645-ISO500+2KER', 'Promo Isopropyl Classic 500mL + 2 Keratin Shampoo 22mL', 19, 'PCS', 24, NULL, 0.00, '2026-07-06 14:59:11', 1, 0, '2026-07-06 06:59:11'),
 (372, 'FG0649-MBLAGT50mL', 'MB Hand & Body Lotion Aloe Green Tea 50mLx36', 10, 'PCS', 36, NULL, 0.00, '2026-07-06 15:15:05', 1, 0, '2026-07-06 07:15:05'),
@@ -534,7 +783,151 @@ INSERT INTO `items` (`item_id`, `item_code`, `item_description`, `customer_id`, 
 (401, 'FG0685-TRSGAMETH120', 'True Ready Soap, Go! Amethyst 120mL Refill', 11, 'PCS', 9, NULL, 0.00, '2026-07-06 15:39:30', 1, 0, '2026-07-06 07:39:30'),
 (402, 'FG0686-TRSGVERDE120', 'True Ready Soap, Go! Verde 120mL Refill', 11, 'PCS', 9, NULL, 0.00, '2026-07-06 15:39:53', 1, 0, '2026-07-06 07:39:53'),
 (403, 'FG0687-GCNSTNGSAN40', 'Green Cross Gentle Protect No-Sting Sanitizer 40mL', 15, 'PCS', 24, NULL, 0.00, '2026-07-06 15:41:43', 1, 0, '2026-07-06 07:41:43'),
-(404, 'FG0688-GCNSTNGSAN250', 'Green Cross Gentle Protect No-Sting Sanitizer 250mL', 15, 'PCS', 48, NULL, 0.00, '2026-07-06 15:42:00', 1, 0, '2026-07-06 07:42:00');
+(404, 'FG0688-GCNSTNGSAN250', 'Green Cross Gentle Protect No-Sting Sanitizer 250mL', 15, 'PCS', 48, NULL, 0.00, '2026-07-06 15:42:00', 1, 0, '2026-07-06 07:42:00'),
+(405, 'FG0186-KPSS22x6', 'Keratin Plus Shampoo Daily Nourishing 22mlx6', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(406, 'FG0311-EMPRSSHAMPx12', 'Empress Shampoo x 12', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(407, 'FG0337-EMPRSSHAMPx6', 'Empress Shampoo Long and Healthy 21ml x6pcs x48', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(408, 'FG0564-BLHCONDI15x6', 'BareLab Hair Conditioner 15mL x 6', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(409, 'FG0573-BLHCONDI15x12', 'BareLab Sleek and Straight 15ml x 12s x 24packs', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(410, 'FG0662-BLSHAMLONG15', 'Barelab Shampoo Long and Nourished 15mL', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(411, 'FG0665-BLSSOFnSHIN15', 'Barelab Shampoo Soft and Shiny 15mL', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(412, 'FG0670-BLSLEEK13X12', 'BareLab Sleek and Straight 13mlx12sx24packs', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(413, 'FG0671-BLAFALCON13', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(414, 'FG0672-BLKERTRCON180', 'BareLab Keratin Treatment Conditioner 180g', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(415, 'FG0187-EDTSUN60', 'Pure Basic EDT Sunny 60ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(416, 'FG0188-EDTROM60', 'Pure Basic EDT Romantic 60ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(417, 'FG0189-EDTFRESH60', 'Pure Basic EDT Fresh 60ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(418, 'FG0338-EMPRSSHAMPx1', 'Empress Shampoo x 1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(419, 'FG0382-PROKP12+2KGLD', 'Keratin Shampoo 12+2 Keratin Gold Promo', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(420, 'FG0383-PROEM12+2KGLD', 'Empress Shampoo 12+2 Keratin Gold Promo', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(421, 'FG0553-KSHAM6+1PROMO', 'Keratin Shampoo 22mL 6 + 1 PROMO', 27, 'PCS', 312, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(422, 'FG0563-COATCLAS50x12', 'Pure Basics Hair Cuticle Coat Classic 50mL x 12', 27, 'PCS', 144, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(423, 'FG0568-EMPSHA12+2ELH', 'Empress Shampoo Long n Healthy 12+2 Empress LH', 27, 'PCS', 312, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(424, 'FG0570-KERSHA12+2KDN', 'Keratin Shampoo Daily Nourishing 12+2 Keratin DN', 27, 'PCS', 312, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(425, 'FG0575-EMPSHAx4', 'Empress Shampoo Long n Healthy x4', 27, 'PCS', 400, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(426, 'FG0589-EMPx6+2KGOLD', 'Empress Shampoo Long n Heathy 6 + 2 Keratin Gold', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(427, 'FG0633-EMPSHAM11+1', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(428, 'FG0664-EMPSHAx2', 'Empress Shampoo Long n Healthy x2', 27, 'PCS', 500, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(429, 'FG0190-EDTACT60', 'Pure Basic EDT Active 60ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(430, 'FG0191-EDTCOOL60', 'Pure Basic EDT Cool 60ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(431, 'FG0192-EDTAQUA60', 'Pure Basic EDT Aqua 60ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(432, 'FG0235-EDTBLOOM100', 'Pure Basic EDT Bloom 100ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(433, 'FG0236-EDTINTENSE100', 'Pure Bacic EDT Intense 100ml', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(434, 'FG0263-KPSS22x11+1', 'Keratin Plus Shampoo Soft Smooth 22mlx11+1 Promo', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(435, 'FG0011-GGC14', 'Grips Gel (Clear) 14g', 27, 'PCS', 576, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(436, 'FG0012-GGY14', 'Grips Gel (Yellow) 14g', 27, 'PCS', 576, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(437, 'FG0013-GGG14', 'Grips Gel (Green) 14g', 27, 'PCS', 576, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(438, 'FG0014-GGASOR14', 'Grips Gel Assorted 14gx12x48', 27, 'PCS', 1728, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(439, 'FG0021-GWM5x12', 'Grips Wax Hard&Mat 5gx12x36', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(440, 'FG0022-GWS5x12', 'Grips Wax Hard&Shiny 5gx12x36', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(441, 'FG0023-GWX5x12', 'Grips Wax Xtreme Mat 5Gx12x36', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(442, 'FG0024-GWM5x6', 'Grips Wax Hard&Mat 5gx6x72', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(443, 'FG0025-GWS5x6', 'Grips Wax Hard&Shiny 5gx6xx72', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(444, 'FG0026-GWX5x6', 'Grips Wax Xtreme Hard&Mat 5gx6x72', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(445, 'FG0027-GWM5x1', 'Grips Wax Hard&Mat 5gx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(446, 'FG0028-GWS5x1', 'Grips Wax Hard&Shiny 5gx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(447, 'FG0029-GWX5x1', 'Grips Wax Xtreme Hard&Mat 5gx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(448, 'FG0030-GWM75', 'Grips Wax Hard&Mat 75gx36', 27, 'PCS', 36, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(449, 'FG0031-GWS75', 'Grips Wax Hard&Shiny 75gx36', 27, 'PCS', 36, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(450, 'FG0032-GWX75', 'Grips Wax Xtreme Hard&Mat 75gx36', 27, 'PCS', 36, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(451, 'FG0034-GCLAY5x1', 'Grips Clay 5gx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(452, 'FG0045-GCLAY25x48', 'Grips Clay 25gx48', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(453, 'FG0046-GWHM25x48', 'Grips Wax Hard&Mat 25gx48', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(454, 'FG0047-GWS25x48', 'Grips Wax Hard&Shiny 25gx48', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(455, 'FG0048-GWX25x48', 'Grips Wax Xtreme Hard&Mat 25gx48', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(456, 'FG0049-GCLAY5x6x72', 'Grips Clay 5gx6x72', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(457, 'FG0050-GCLAY75x36', 'Grips Hair Clay 75gx36', 27, 'PCS', 36, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(458, 'FG0052-GWM75stkr', 'Grips Wax Mat(stkr)75gx36', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(459, 'FG0053-GWS75stkr', 'Grips Wax Shiny(Stkr)75gx36', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(460, 'FG0054-GWX75stkr', 'Grips Wax Xtreme(stkr) 75gx36', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(461, 'FG0055-GWMstkr25x48', 'Grips Wax Mat(stkr) 25gx48', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(462, 'FG0056-GWSstkr25x48', 'Grips Wax Shiny(stkr) 25gx48', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(463, 'FG0057-GWXstkr25x48', 'Grips Wax Xtreme(stkr) 25gx48', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(464, 'FG0058-GGAsfly14x48', 'Grips Gel Assorted (flier) 14gx12x48', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(465, 'FG0067-GWM5x12x2', 'Grips Hair Wax Hard and Mat 5g Promo 12+2', 27, 'PCS', 504, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(466, 'FG0101-TITANIUM75x36', 'Grips Hair Clay Titanium 75gx36', 27, 'PCS', 36, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(467, 'FG0120-GPOMADE75', 'Grips Pomade 75gx36', 27, 'PCS', 36, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(468, 'FG0121-GPOMADE5x6', 'Grips Pomade 5gx6x72', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(469, 'FG0185-KPSS22x12', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(470, 'FG0226-GWM5x24+KGOL', 'Promo Grips Wax Hard&Mat 5gx24+KplusGoldx6', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(471, 'FG0239-SANGELRED60', 'AlcoPlus Hand Sanitizer Gel with Moisturizer 60mL', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(472, 'FG0240-SANGELRED150', 'AlcoPlus Hand Sanitizer Gel with Moisturizer 150mL', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(473, 'FG0241-SANGELBLUE60', 'AlcoPlus Hand Sanitizer Gel with Vit E Beads 60mL', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(474, 'FG0242-SANGELBLUE150', 'Sanitizer Gel Blue 150mL', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(475, 'FG0264-ETYL70CLS150', 'AlcoPlus Ethyl 70 Alcohol Classic 150mL', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(476, 'FG0265-ETYL70CLS250', 'AlcoPlus Ethyl 70 Alcohol Classic 250mL', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(477, 'FG0266-ETYL70CLS500', 'AlcoPlus Ethyl 70 Alcohol Classic 500mL', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(478, 'FG0267-APISO70CLS150', 'AlcoPlus Iso 70 Alcohol Classic 150mL', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(479, 'FG0268-APISO70CLS250', 'AlcoPlus Iso 70 Alcohol Classic 250mL', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(480, 'FG0269-APISO70CLS500', 'AlcoPlus Iso 70 Alcohol Classic 500mL', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(481, 'FG0270-APADVANCE40', 'AlcoPlus Advance Antibacterial Sanitizer 40mL', 27, 'PCS', 36, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(482, 'FG0271-APADVANCE250', 'AlcoPlus Advance Antibacterial Sanitizer 250mL', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(483, 'FG0272-APADVANCE500', 'AlcoPlus Advance Antibacterial Sanitizer 500mL', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(484, 'FG0273-KPSS22x1', 'Keratin Plus Shampoo Daily Nourishing 22mlx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(485, 'FG0275-APADVANCEGAL', 'AlcoPlus Advance Antibacterial Sanitizer 3785mL', 27, 'PCS', 4, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(486, 'FG0362-ADVANCPROMO50', 'AP Advance 500mL+40mL Promo', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(487, 'FG0368-KSHAMP200', 'Keratin Plus Shampoo Daily Nourishing 200mlx24', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(488, 'FG0385-ETYL250+2KGLD', 'AP Ethyl 70 Alcohol Classic 250mL+1K Gold', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(489, 'FG0386-ISO250+2KGLD', 'AP Isopropyl 70 Alcohol Classic 250mL+1K Gold', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(490, 'FG0388-ETYL150+1KGLD', 'AP Ethyl 70 Alcohol Classic 150mL+1K Gold', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(491, 'FG0389-ISO150+1KGLD', 'AP Isopropyl 70 Alcohol Classic 150mL+1K Gold', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(492, 'FG0390-ETYL500+2KGLD', 'AP Ethyl 70 Alcohol Classic 500mL+2K Gold', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(493, 'FG0391-ISO500+2KGLD', 'AP Isopropyl 70 Alcohol Classic 500mL+2K Gold', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(494, 'FG0395-GGASOR12', 'Grips Gel Assorted 12gx12x48', 27, 'PCS', 576, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(495, 'FG0424-KSHAM200+2GLD', 'Keratin Shampoo 200mL+2 Keratin Gold Promo', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(496, 'FG0425-EMPSHAx6+3GLD', 'Empress Shampoo 21mL x 6+3 Empress Gold Promo', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(497, 'FG0540-GGEL12FLYER', 'Grips Gel Assorted 12gx1 Flyer', 27, 'PCS', 576, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(498, 'FG0541-GCLAY5FLYER', 'Grips Clay 5gx1 Flyer', 27, 'PCS', 400, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(499, 'FG0542-GWSHINY5FLYER', 'Grips Wax Shiny 5gx1 Flyer', 27, 'PCS', 400, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(500, 'FG0543-GWMAT5FLYER', 'Grips Wax Mat 5gx1 Flyer', 27, 'PCS', 400, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(501, 'FG0544-GWMAT5FLYER', 'Grips Wax Mat 5gx1 Flyer', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(502, 'FG0551-MAT5X2SAMPLER', 'Sampler- Wax Hard Mat x2(for Tie up)', 27, 'PCS', 1280, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(503, 'FG0552-CLAY6+1PROMO', 'Promo- Grips Hair Clay 5gx72 packs (6+1)', 27, 'PCS', 504, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(504, 'FG0554-KSHAM200+2LUX', 'Keratin Shampoo 200mL + 2 Lux PROMO', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(505, 'FG0555-KSHAMPOO22x2', 'Sampler Keratin Daily Nourishing 22ml x 2 (Tie Up)', 27, 'PCS', 500, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(506, 'FG0558-SHINY5x2SMPLR', 'Sampler- Wax Hard and Shiny x 2 (Tie up)', 27, 'PCS', 1280, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(507, 'FG0559-ADV250+2KGOLD', 'Alcoplus Advance 250mL+2 Keratin Gold', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(508, 'FG0560-WAXMAT5g12+2', 'Promo- Grips Wax Hard n Mat 5g 12+2 Grips HM', 27, 'PCS', 504, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(509, 'FG0561-WAXEHM5g12+2', 'Promo- Grips Wax Extreme HM5g 12+2 Grips Extreme', 27, 'PCS', 504, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(510, 'FG0562-KERSHAMPFLYER', 'Sampler -Keratin Shampoo Daily Nourishing Flyer', 27, 'PCS', 250, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(511, 'FG0569-GCLAY5x2', 'Sampler- Grips Hair Clay 5gx2', 27, 'PCS', 500, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(512, 'FG0571-EMPSHAFLYERx1', 'Sampler- Empress Shampoo Long n Healthy x1 Flyer', 27, 'PCS', 400, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(513, 'FG0572-POMADE5FLYRx1', 'Sampler- Grips Pomade x1 Flyer', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(514, 'FG0574-POMADE5x1', 'Sampler - Grips Pomade x1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(515, 'FG0609-BLAFALCON15', 'BareLab Hair Conditioner 15mL x12s x24', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(516, 'FG0611-BLKERTRCON20', 'BareLab Keratin Intense Deluxe 20gx12sx24', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(517, 'FG0646-BLKERTRCON20', 'BareLab Keratin Intense Deluxe 20gx12sx24', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(518, 'FG0647-BLSHAMnCON15', 'Barelab Shampoo n Conditioner 15mLx12sx24pck', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(519, 'FG0648-BLANTDNFSHA12', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(520, 'FG0015-GGC50', 'Grips Gel (Clear) 60gx72', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(521, 'FG0016-GGY50', 'Grips Gel (Yellow) 60gx72', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(522, 'FG0017-GGG50', 'Grips Gel (Green) 60gx72', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(523, 'FG0018-GGC130', 'Grips Gel (Clear) 130gx48', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(524, 'FG0019-GGY130', 'Grips Gel (Yellow) 130gx48', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(525, 'FG0020-GGG130', 'Grips Gel (Green) 130gx48', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 0, 0, '2026-07-08 07:36:25'),
+(526, 'FG0033-GCLAY5x6', 'Grips Clay 5gx6x36', 27, 'PCS', 432, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(527, 'FG0051-GWM75x1', 'Grips Wax Hard&Mat 75gx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(528, 'FG0060-GWS75x1', 'Grips Wax Hard&Shiny 75gx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(529, 'FG0061 -GWX75x1', 'Grips Wax Xtreme Hard & mat 75gx1', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(530, 'FG0277-ADVNCPROMO500', 'AP Advance 500mL+40mL refill Promo', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(531, 'FG0362-ADVNCPROMO500', 'AP Advance 500mL+ 40mL Promo', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(532, 'FG0366-ISOPRO500+KGC', 'AP Iso Classic 500ml with Free KGold Conditioner', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(533, 'FG0367-ETHPRO500+KRC', 'AP Ethyl Classic 500ml with Free KRed Conditioner ', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(534, 'FG0387-ADV250+2KGLD', 'AP 70% Alcohol Classic 250mL + 1 K Gold', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(535, 'FG0390-ETYL500+1KGLD', 'AP Ethyl 70% Alcohol Classic 500mL + 2 K Gold', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(536, 'FG0391-ISO500+1KGLD', 'AP Isopropyl 70% Alcohol Classic 500mL + 2 K Gold', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(537, 'FG0399-GGC12', 'Grips Gel Clear 12g', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(538, 'FG0400-GGY12', 'Grips Gel Yellow 12g', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(539, 'FG0401-GGG12', 'Grips Gel Green 12g', 27, 'PCS', NULL, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(540, 'FG0402-ADV500+2KGCON', 'AP Advance 500mL + 2 K Gold Promo', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(541, 'FG0544-GWXTREM5FLYER', 'Grips Wax Xtreme 5g x 1 Flyer', 27, 'PCS', 400, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(542, 'FG0556-KSHA+KGDB12F2', 'Keratin Shampoo + Keratin Gold Promo Buy 12 Free 2', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(543, 'FG0610-BLADANSHAM12', 'BareLab Anti-dandruff Shampoo 12mL x 12s x 24 packs', 27, 'PCS', 288, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(544, 'FG0644-ETYL500+2KER', 'Promo Ethyl Classic 500mL + 2 Keratin Shampoo 22mL', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(545, 'FG0645-ISO500+2KER', 'Promo Isopropyl Classic 500mL + 2 Keratin Shampoo 22mL', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(546, 'FG0663-EMPSINGX1FLY', 'Sampler - Empress Shampoo LongnHealthy Single x1 FLY', 27, 'PCS', 500, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(547, 'FG0668-ADV250+1KGOLD', 'Promo - Alcoplus Advance 250ml + 1Keratin Gold', 27, 'PCS', 48, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25'),
+(548, 'FG0669-KDNBOT1GET50', 'Promo - Keratin DN 200mL Buy 1 Get 2nd at 50%', 27, 'PCS', 24, NULL, 0.00, '2026-07-08 15:36:25', 1, 0, '2026-07-08 07:36:25');
 
 -- --------------------------------------------------------
 
@@ -668,7 +1061,74 @@ INSERT INTO `price_list` (`price_list_id`, `item_id`, `product_name`, `net_size`
 (109, 216, 'CS Hand Cream Bamboo Fresh 50g', '50g', 0.00, 0.00, 27.78, 'vat', 0, 0, '2026-07-04 14:08:58', '2026-07-06 08:22:14'),
 (110, 218, 'CS Room and Linen Spray Bamboo Fresh 50', '50ml', 0.00, 0.00, 9.52, 'vat', 0, 0, '2026-07-04 14:09:45', '2026-07-06 08:23:00'),
 (111, 219, 'CS Room and Linen Spray Lavander Dream 50', '50ml', 0.00, 0.00, 7.78, 'vat', 0, 0, '2026-07-04 14:10:08', '2026-07-06 08:23:03'),
-(112, 221, 'hand Cream Kiwi 50g', '50g', 0.00, 0.00, 68.88, 'vat', 0, 0, '2026-07-04 14:10:35', '2026-07-06 08:30:29');
+(112, 221, 'hand Cream Kiwi 50g', '50g', 0.00, 0.00, 68.88, 'vat', 0, 0, '2026-07-04 14:10:35', '2026-07-06 08:30:29'),
+(113, 233, 'Xylogel Oral Gel Bubblegum 25gx60', '25', 0.00, 0.00, 9.50, 'vat', 1, 0, '2026-07-07 13:52:16', '2026-07-07 05:52:16'),
+(114, 294, 'TP Cherry Blossom Plant-based Hand Soap 500ml', '500', 0.00, 0.00, 70.81, 'vat', 1, 0, '2026-07-07 16:22:24', '2026-07-07 08:22:24'),
+(115, 293, 'TP Green Tea Chamomile Liquid Hand Soap 500 Pouch', '500', 0.00, 0.00, 70.81, 'vat', 1, 0, '2026-07-07 16:24:07', '2026-07-07 08:24:07'),
+(116, 60, 'Grips Gel Assorted 14gx12x48', '14', 0.00, 0.00, 13.20, 'vat', 1, 0, '2026-07-07 16:26:11', '2026-07-07 08:26:11'),
+(117, 435, 'Grips Gel (Clear) 12g', '12g', 0.00, 0.00, 1.05, 'vat', 0, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(118, 436, 'Grips Gel (Yellow) 12g', '12g', 0.00, 0.00, 1.05, 'vat', 0, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(119, 437, 'Grips Gel (Green) 12g', '12g', 0.00, 0.00, 1.05, 'vat', 0, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(120, 438, 'Grips Gel Assorted 12gx12x48', '12g', 13.20, 0.00, 1.10, 'vat', 0, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(121, 416, 'Pure Basic EDT Romantic 60ml', '60ml', 0.00, 0.00, 27.84, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(122, 405, 'Keratin Plus Shampoo Daily Nourishing 22mlx6', '22mL', 0.00, 0.00, 2.40, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(123, 415, 'Pure Basic EDT Sunny 60ml', '60mL', 0.00, 0.00, 12.60, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(124, 417, 'Pure Basic EDT Fresh 60ml', '60mL', 0.00, 0.00, 29.90, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(125, 429, 'Pure Basic EDT Active 60ml', '60mL', 0.00, 0.00, 12.60, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(126, 430, 'Pure Basic EDT Cool 60ml', '60mL', 0.00, 0.00, 27.65, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(127, 431, 'Pure Basic EDT Aqua 60ml', '60mL', 0.00, 0.00, 29.90, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(128, 434, 'Keratin Plus Shampoo Soft Smooth 22mlx11+1 Promo', '22mL', 0.00, 0.00, 2.40, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(129, 406, 'Empress Shampoo x 12', '21mL', 0.00, 0.00, 2.50, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(130, 407, 'Empress Shampoo x 6', '21mL', 0.00, 0.00, 2.50, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(131, 418, 'Empress Shampoo x 1', '21mL', 0.00, 0.00, 2.25, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(132, 419, 'Keratin Shampoo 12+2 Keratin Gold Promo', '21mL', 0.00, 0.00, 2.40, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(133, 420, 'Empress Shampoo 12+2 Keratin Gold Promo', '21mL', 0.00, 0.00, 2.50, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(134, 424, 'Keratin Shampoo Daily Nourishing 12+2 Keratin DN', '', 0.00, 0.00, 2.25, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(135, 425, 'Empress Shampoo Long n Healthy x4', '21mL', 0.00, 0.00, 2.25, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(136, 438, 'Grips Gel Assorted 14gx12x48', '14', 0.00, 0.00, 13.20, 'vat', 1, 0, '2026-07-08 15:36:25', '2026-07-08 07:36:25'),
+(148, 409, 'BareLab Sleek and Straight 15ml x 12s x 24packs', '15ml', 0.00, 0.00, 2.15, 'vat', 1, 0, '2026-07-10 09:20:39', '2026-07-10 01:20:39'),
+(149, 515, 'BareLab Hair Conditioner 15mL x12s x24', '15ml', 0.00, 0.00, 2.15, 'vat', 1, 0, '2026-07-10 09:22:16', '2026-07-10 01:22:16'),
+(150, 61, 'Grips Wax Hard&Mat 5gx12x36', '5g', 0.00, 0.00, 2.20, 'vat', 1, 0, '2026-07-10 09:25:34', '2026-07-10 01:25:34'),
+(151, 62, 'Grips Wax Hard&Shiny 5gx12x36', '5g', 0.00, 0.00, 2.07, 'vat', 1, 0, '2026-07-10 09:27:17', '2026-07-10 01:27:17'),
+(152, 63, 'Grips Wax Xtreme Mat 5Gx12x36', '5g', 0.00, 0.00, 2.25, 'vat', 1, 0, '2026-07-10 09:27:56', '2026-07-10 01:27:56'),
+(153, 64, 'Grips Wax Hard&Mat 5gx6x72', '5g', 0.00, 0.00, 2.20, 'vat', 1, 0, '2026-07-10 09:28:29', '2026-07-10 01:28:29'),
+(154, 65, 'Grips Wax Hard&Shiny 5gx6xx72', '5g', 0.00, 0.00, 2.07, 'vat', 1, 0, '2026-07-10 09:29:33', '2026-07-10 01:29:33'),
+(155, 66, 'Grips Wax Xtreme Hard&Mat 5gx6x72', '5g', 0.00, 0.00, 2.25, 'vat', 1, 0, '2026-07-10 09:30:15', '2026-07-10 01:30:15'),
+(156, 67, 'Grips Wax Hard&Mat 5gx1', '5g', 0.00, 0.00, 2.00, 'vat', 1, 0, '2026-07-10 09:33:19', '2026-07-10 01:33:19'),
+(157, 68, 'Grips Wax Hard&Shiny 5gx1', '5g', 0.00, 0.00, 1.80, 'vat', 1, 0, '2026-07-10 09:33:41', '2026-07-10 01:33:41'),
+(158, 69, 'Grips Wax Xtreme Hard&Mat 5gx1', '5g', 0.00, 0.00, 2.00, 'vat', 1, 0, '2026-07-10 09:34:06', '2026-07-10 01:34:06'),
+(159, 70, 'Grips Wax Hard&Mat 75gx36', '75g', 0.00, 0.00, 33.00, 'vat', 1, 0, '2026-07-10 09:36:31', '2026-07-10 01:36:31'),
+(160, 71, 'Grips Wax Hard&Shiny 75gx36', '75g', 0.00, 0.00, 27.55, 'vat', 1, 0, '2026-07-10 09:36:47', '2026-07-10 01:36:47'),
+(161, 72, 'Grips Wax Xtreme Hard&Mat 75gx36', '75g', 0.00, 0.00, 33.50, 'vat', 1, 0, '2026-07-10 09:41:17', '2026-07-10 01:41:17'),
+(162, 313, 'Grips Clay 5gx6x36', '5g', 0.00, 0.00, 2.40, 'vat', 1, 0, '2026-07-10 09:47:31', '2026-07-10 01:47:31'),
+(163, 73, 'Grips Clay 5gx1', '', 0.00, 0.00, 2.25, 'vat', 1, 0, '2026-07-10 09:48:57', '2026-07-10 01:48:57'),
+(164, 74, 'Grips Clay 25gx48', '', 0.00, 0.00, 16.25, 'vat', 1, 0, '2026-07-10 09:49:19', '2026-07-10 01:49:19'),
+(165, 75, 'Grips Wax Hard&Mat 25gx48', '', 0.00, 0.00, 14.90, 'vat', 1, 0, '2026-07-10 09:49:39', '2026-07-10 01:49:39'),
+(166, 76, 'Grips Wax Hard&Shiny 25gx48', '', 0.00, 0.00, 13.40, 'vat', 1, 0, '2026-07-10 09:49:55', '2026-07-10 01:49:55'),
+(167, 77, 'Grips Wax Xtreme Hard&Mat 25gx48', '', 0.00, 0.00, 15.20, 'vat', 1, 0, '2026-07-10 09:50:44', '2026-07-10 01:50:44'),
+(168, 78, 'Grips Clay 5gx6x72', '', 0.00, 0.00, 2.40, 'vat', 1, 0, '2026-07-10 09:51:01', '2026-07-10 01:51:01'),
+(169, 79, 'Grips Hair Clay 75gx36', '', 0.00, 0.00, 35.90, 'vat', 1, 0, '2026-07-10 09:51:15', '2026-07-10 01:51:15'),
+(170, 93, 'Grips Hair Clay Titanium 75gx36', '', 0.00, 0.00, 67.00, 'vat', 1, 0, '2026-07-10 09:52:49', '2026-07-10 01:52:49'),
+(171, 96, 'Grips Pomade 75gx36', '', 0.00, 0.00, 50.00, 'vat', 1, 0, '2026-07-10 09:54:59', '2026-07-10 01:54:59'),
+(172, 99, 'Grips Pomade 5gx6x72', '', 0.00, 0.00, 3.20, 'vat', 1, 0, '2026-07-10 09:55:15', '2026-07-10 01:55:15'),
+(173, 108, 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '', 0.00, 0.00, 2.40, 'vat', 1, 0, '2026-07-10 09:55:39', '2026-07-10 01:55:39'),
+(174, 131, 'AlcoPlus Ethyl 70 Alcohol Classic 150mL', '', 0.00, 0.00, 4.10, 'vat', 1, 0, '2026-07-10 10:13:15', '2026-07-10 02:13:15'),
+(175, 136, 'AlcoPlus Ethyl 70 Alcohol Classic 250mL', '', 0.00, 0.00, 4.75, 'vat', 1, 0, '2026-07-10 10:13:55', '2026-07-10 02:13:55'),
+(176, 138, 'AlcoPlus Ethyl 70 Alcohol Classic 500mL', '', 0.00, 0.00, 7.75, 'vat', 1, 0, '2026-07-10 10:14:11', '2026-07-10 02:14:11'),
+(177, 141, 'AlcoPlus Iso 70 Alcohol Classic 150mL', '', 0.00, 0.00, 4.10, 'vat', 1, 0, '2026-07-10 10:14:28', '2026-07-10 02:14:28'),
+(178, 143, 'AlcoPlus Iso 70 Alcohol Classic 250mL', '', 0.00, 0.00, 4.75, 'vat', 1, 0, '2026-07-10 10:17:22', '2026-07-10 02:17:22'),
+(179, 145, 'AlcoPlus Iso 70 Alcohol Classic 500mL', '', 0.00, 0.00, 7.75, 'vat', 1, 0, '2026-07-10 10:21:01', '2026-07-10 02:21:01'),
+(180, 146, 'AlcoPlus Advance Antibacterial Sanitizer 40mL', '', 0.00, 0.00, 4.40, 'vat', 1, 0, '2026-07-10 10:25:49', '2026-07-10 02:25:49'),
+(181, 148, 'AlcoPlus Advance Antibacterial Sanitizer 250mL', '', 0.00, 0.00, 6.00, 'vat', 1, 0, '2026-07-10 10:27:12', '2026-07-10 02:27:12'),
+(182, 150, 'AlcoPlus Advance Antibacterial Sanitizer 500mL', '', 0.00, 0.00, 9.30, 'vat', 1, 0, '2026-07-10 10:27:26', '2026-07-10 02:27:26'),
+(183, 154, 'Keratin Plus Shampoo Daily Nourishing 22mlx1', '', 0.00, 0.00, 2.10, 'vat', 1, 0, '2026-07-10 10:27:48', '2026-07-10 02:27:48'),
+(184, 157, 'AlcoPlus Advance Antibacterial Sanitizer 3785mL', '', 0.00, 0.00, 104.25, 'vat', 1, 0, '2026-07-10 10:40:11', '2026-07-10 02:40:11'),
+(185, 319, 'AP Advance 500mL+40mL refill Promo', '', 0.00, 0.00, 9.30, 'vat', 1, 0, '2026-07-10 10:45:30', '2026-07-10 02:45:30'),
+(186, 163, 'AP Advance 500mL+40mL Promo', '', 0.00, 0.00, 9.30, 'vat', 1, 0, '2026-07-10 10:46:12', '2026-07-10 02:46:12'),
+(187, 331, 'AP Advance 500mL+ 40mL Promo', '', 0.00, 0.00, 9.30, 'vat', 1, 0, '2026-07-10 10:46:25', '2026-07-10 02:46:25'),
+(188, 332, 'AP Iso Classic 500ml with Free KGold Conditioner', '', 0.00, 0.00, 7.75, 'vat', 1, 0, '2026-07-10 10:48:41', '2026-07-10 02:48:41'),
+(189, 333, 'AP Ethyl Classic 500ml with Free KRed Conditioner ', '', 0.00, 0.00, 7.75, 'vat', 1, 0, '2026-07-10 10:49:04', '2026-07-10 02:49:04'),
+(190, 168, 'Keratin Plus Shampoo Daily Nourishing 200mlx24', '', 0.00, 0.00, 25.80, 'vat', 1, 0, '2026-07-10 10:53:06', '2026-07-10 02:53:06');
 
 -- --------------------------------------------------------
 
@@ -683,6 +1143,15 @@ CREATE TABLE `production_history` (
   `lot_number` varchar(100) DEFAULT NULL,
   `item_description` varchar(255) DEFAULT NULL,
   `sts_ref` varchar(255) DEFAULT NULL,
+  `shift` varchar(50) DEFAULT NULL,
+  `mo_no` varchar(100) DEFAULT NULL,
+  `material_type` varchar(100) DEFAULT NULL,
+  `reject_status` varchar(100) DEFAULT NULL,
+  `sts_remarks` text DEFAULT NULL,
+  `pcs_per_case` int(11) DEFAULT NULL,
+  `prepared_by_name` varchar(255) DEFAULT NULL,
+  `checked_by_name` varchar(255) DEFAULT NULL,
+  `received_by_name` varchar(255) DEFAULT NULL,
   `user_id` int(11) NOT NULL,
   `edited_by` int(11) DEFAULT NULL,
   `previous_quantity` int(11) DEFAULT 0,
@@ -693,6 +1162,92 @@ CREATE TABLE `production_history` (
   `old_lot_number` varchar(100) DEFAULT NULL,
   `old_added_quantity` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `production_history`
+--
+
+INSERT INTO `production_history` (`history_id`, `po_id`, `poi_id`, `lot_number`, `item_description`, `sts_ref`, `shift`, `mo_no`, `material_type`, `reject_status`, `sts_remarks`, `pcs_per_case`, `prepared_by_name`, `checked_by_name`, `received_by_name`, `user_id`, `edited_by`, `previous_quantity`, `added_quantity`, `new_quantity`, `date_created`, `date_edited`, `old_lot_number`, `old_added_quantity`) VALUES
+(35, 23, 28, '152-202', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 5472, 5472, '2026-07-09 13:30:15', NULL, NULL, NULL),
+(36, 25, 30, '151-306', 'BareLab Sleek and Straight 13mlx12sx24packs', '15115', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 12672, 12672, '2026-07-09 13:31:53', NULL, NULL, NULL),
+(37, 25, 32, '157-158', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', '15114', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 12672, 12672, '2026-07-09 13:32:53', NULL, NULL, NULL),
+(38, 23, 28, '152-202', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 5472, 12672, 18144, '2026-07-09 13:33:51', NULL, NULL, NULL),
+(39, 34, 67, '133-853', 'Keratin Plus Shampoo Daily Nourishing 22mlx6', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 1440, 1440, '2026-07-09 13:52:05', NULL, NULL, NULL),
+(40, 33, 66, '118-850', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 9216, 9216, '2026-07-09 13:52:33', NULL, NULL, NULL),
+(41, 25, 31, '159-110', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15118', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 12672, 12672, '2026-07-09 13:56:37', NULL, NULL, NULL),
+(42, 34, 67, '133-853', 'Keratin Plus Shampoo Daily Nourishing 22mlx6', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 1440, 12672, 14112, '2026-07-09 15:28:25', NULL, NULL, NULL),
+(43, 33, 66, '118-855', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 9216, 11808, 21024, '2026-07-09 15:49:19', NULL, NULL, NULL),
+(44, 23, 28, '152-202', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 18144, 4608, 22752, '2026-07-09 16:00:05', NULL, NULL, NULL),
+(45, 23, 28, '152-201', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 22752, 12672, 35424, '2026-07-09 16:00:28', NULL, NULL, NULL),
+(46, 25, 30, '151-313', 'BareLab Sleek and Straight 13mlx12sx24packs', '15141', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 12672, 12672, 25344, '2026-07-09 16:20:24', NULL, NULL, NULL),
+(47, 23, 28, '152-201', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15175', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 35424, 12672, 48096, '2026-07-10 06:50:48', NULL, NULL, NULL),
+(48, 23, 28, '152-203', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15177', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 48096, 12672, 60768, '2026-07-10 06:52:32', NULL, NULL, NULL),
+(49, 23, 28, '152-203', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15176', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 60768, 10944, 71712, '2026-07-10 06:53:06', NULL, NULL, NULL),
+(50, 23, 28, '152-203', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15162', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 71712, 12672, 84384, '2026-07-10 06:53:51', NULL, NULL, NULL),
+(51, 23, 28, '152-201', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15160', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 84384, 12672, 97056, '2026-07-10 06:54:22', NULL, NULL, NULL),
+(52, 23, 28, '152-203', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15158', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 97056, 12672, 109728, '2026-07-10 06:54:50', NULL, NULL, NULL),
+(53, 25, 31, '159-111', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15181', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 12672, 12672, 25344, '2026-07-10 06:55:39', NULL, NULL, NULL),
+(54, 23, 28, '152-203', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15164', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 109728, 12672, 122400, '2026-07-10 06:56:19', NULL, NULL, NULL),
+(55, 33, 66, '118-855', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15165', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 21024, 11232, 32256, '2026-07-10 06:56:59', NULL, NULL, NULL),
+(57, 34, 67, '133-853', 'Keratin Plus Shampoo Daily Nourishing 22mlx6', '15163', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 14112, 12672, 26784, '2026-07-10 06:58:18', NULL, NULL, NULL),
+(58, 25, 31, '159-110', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15161', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 25344, 6624, 31968, '2026-07-10 06:58:51', NULL, NULL, NULL),
+(59, 25, 30, '151-306', 'BareLab Sleek and Straight 13mlx12sx24packs', '15159', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 38016, 12672, 50688, '2026-07-10 06:59:24', NULL, NULL, NULL),
+(60, 25, 31, '159-111', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15158', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 31968, 12672, 44640, '2026-07-10 06:59:54', NULL, NULL, NULL),
+(61, 25, 50, '160-058', 'Barelab Shampoo n Conditioner 15mLx12sx24pck', '15154', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 12672, 12672, '2026-07-10 07:02:08', NULL, NULL, NULL),
+(62, 25, 32, '157-158', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', '15153', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 12672, 12672, 25344, '2026-07-10 07:02:54', NULL, NULL, NULL),
+(63, 25, 30, '151-313', 'BareLab Sleek and Straight 13mlx12sx24packs', '15179', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 50688, 5760, 56448, '2026-07-10 07:03:48', NULL, NULL, NULL),
+(64, 25, 32, '157-159', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', '15191', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 25344, 12672, 38016, '2026-07-10 07:58:46', NULL, NULL, NULL),
+(65, 25, 30, '151-307', 'BareLab Sleek and Straight 13mlx12sx24packs', '15192', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 56448, 12672, 69120, '2026-07-10 07:59:47', NULL, NULL, NULL),
+(66, 33, 66, '118-850', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15193', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 32256, 12672, 44928, '2026-07-10 09:03:32', NULL, NULL, NULL),
+(67, 23, 28, '152-201', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15195', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 122400, 10656, 133056, '2026-07-10 09:04:48', NULL, NULL, NULL),
+(68, 23, 28, '152-203', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15196', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 133056, 12672, 145728, '2026-07-10 09:43:51', NULL, NULL, NULL),
+(69, 33, 66, '188-856', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15199', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 44928, 12672, 57600, '2026-07-10 09:44:24', NULL, NULL, NULL),
+(70, 34, 67, '133-853', 'Keratin Plus Shampoo Daily Nourishing 22mlx6', '15203', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 26784, 6048, 32832, '2026-07-10 11:12:27', NULL, NULL, NULL),
+(71, 33, 66, '118-856', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15200', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 57600, 12672, 70272, '2026-07-10 11:13:23', NULL, NULL, NULL),
+(72, 25, 31, '159-111', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15204', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 44640, 6048, 50688, '2026-07-10 11:20:12', NULL, NULL, NULL),
+(74, 25, 31, '159-109', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15042', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 63360, 5760, 69120, '2026-07-10 12:53:58', NULL, NULL, NULL),
+(75, 25, 31, '159-110', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15118', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 69120, 12672, 81792, '2026-07-10 12:55:17', NULL, NULL, NULL),
+(76, 25, 30, '151-306', 'BareLab Sleek and Straight 13mlx12sx24packs', '15169', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, 1, 69120, 7200, 76320, '2026-07-10 13:07:05', '2026-07-10 13:21:53', '151-306', 7200),
+(77, 33, 66, '118-854', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15209', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 70272, 12672, 82944, '2026-07-10 13:15:33', NULL, NULL, NULL),
+(78, 25, 32, '151-313', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', '15168', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 38016, 12962, 50978, '2026-07-10 17:06:17', NULL, NULL, NULL),
+(79, 25, 31, '159-112', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15288', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 69120, 12672, 81792, '2026-07-11 06:24:01', NULL, NULL, NULL),
+(80, 25, 30, '151-308', 'BareLab Sleek and Straight 13mlx12sx24packs', '15278', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 63648, 6336, 69984, '2026-07-11 06:25:08', NULL, NULL, NULL),
+(81, 25, 30, '151-309', 'BareLab Sleek and Straight 13mlx12sx24packs', '15281', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 69984, 12672, 82656, '2026-07-11 06:26:36', NULL, NULL, NULL),
+(82, 25, 37, '124-550', 'Empress Shampoo x 12', '15259', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 12672, 12672, '2026-07-11 06:27:27', NULL, NULL, NULL),
+(83, 25, 30, '151-308', 'BareLab Sleek and Straight 13mlx12sx24packs', '15231', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 82656, 12672, 95328, '2026-07-11 06:30:58', NULL, NULL, NULL),
+(84, 23, 28, '152-204', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15257', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 145728, 12672, 158400, '2026-07-11 06:31:34', NULL, NULL, NULL),
+(85, 25, 30, '151-307', 'BareLab Sleek and Straight 13mlx12sx24packs', '15247', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 95328, 6912, 102240, '2026-07-11 06:33:08', NULL, NULL, NULL),
+(86, 25, 37, '124-549', 'Empress Shampoo x 12', '15233', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 12672, 12672, 25344, '2026-07-11 06:33:46', NULL, NULL, NULL),
+(87, 25, 30, '151-307', 'BareLab Sleek and Straight 13mlx12sx24packs', '15232', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 102240, 12672, 114912, '2026-07-11 06:34:28', NULL, NULL, NULL),
+(88, 25, 30, '151-308', 'BareLab Sleek and Straight 13mlx12sx24packs', '15230', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 114912, 12672, 127584, '2026-07-11 06:34:58', NULL, NULL, NULL),
+(89, 25, 31, '15229', 'BareLab Anti-Dandruff Shampoo 12mLx12sx24pck', '15229', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 81792, 12672, 94464, '2026-07-11 06:35:47', NULL, NULL, NULL),
+(90, 23, 28, '152-204', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15225', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 158400, 12672, 171072, '2026-07-11 06:36:09', NULL, NULL, NULL),
+(91, 25, 32, '157-159', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', '15223', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 50978, 12672, 63650, '2026-07-11 06:36:51', NULL, NULL, NULL),
+(92, 23, 28, '152-204', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15224', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 171072, 12672, 183744, '2026-07-11 06:37:14', NULL, NULL, NULL),
+(93, 33, 66, '118-856', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15235', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 82944, 12672, 95616, '2026-07-11 06:38:39', NULL, NULL, NULL),
+(94, 34, 67, '133-854', 'Keratin Plus Shampoo Daily Nourishing 22mlx6', '15246', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 32832, 12672, 45504, '2026-07-11 06:41:46', NULL, NULL, NULL),
+(95, 33, 66, '118-856', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15277', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 95616, 4032, 99648, '2026-07-11 06:45:18', NULL, NULL, NULL),
+(96, 33, 66, '118-856', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15282', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 99648, 1032, 100680, '2026-07-11 06:46:00', NULL, NULL, NULL),
+(97, 23, 28, '152-204', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15224', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 183744, 12672, 196416, '2026-07-11 06:58:52', NULL, NULL, NULL),
+(98, 25, 32, '157-160', 'BareLab Anti-Hairfall Conditioner 13mLx12sx24', '15292', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 63650, 12672, 76322, '2026-07-11 07:05:59', NULL, NULL, NULL),
+(99, 23, 28, '152-204', 'Empress Shampoo Long & Healthy 21mlx24pck (11+1)', '15293', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 196416, 12384, 208800, '2026-07-11 07:26:09', NULL, NULL, NULL),
+(100, 25, 51, '163-001', 'BareLab Keratin Intense Deluxe 180g', '15297', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 1140, 1140, '2026-07-11 08:46:02', NULL, NULL, NULL),
+(101, 25, 37, '124-550', 'Empress Shampoo x 12', '15299', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 25344, 12672, 38016, '2026-07-11 08:46:55', NULL, NULL, NULL),
+(102, 25, 30, '151-310', 'BareLab Sleek and Straight 13mlx12sx24packs', '15300', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 127584, 12672, 140256, '2026-07-11 08:47:20', NULL, NULL, NULL),
+(103, 35, 68, '118-854', 'Keratin Plus Shampoo Daily Nourishing 22mlx12', '15302', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 100680, 12672, 113352, '2026-07-11 09:12:26', NULL, NULL, NULL),
+(104, 23, 69, '152-204', 'Empress Shampoo x 1', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 0, 5256, 5256, '2026-07-11 09:39:01', NULL, NULL, NULL),
+(105, 25, 37, '124-550', 'Empress Shampoo x 12', '15291', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 38016, 12672, 50688, '2026-07-11 10:28:14', NULL, NULL, NULL),
+(106, 25, 37, '124-549', 'Empress Shampoo x 12', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, 1, 50688, 29664, 80352, '2026-07-11 10:34:55', '2026-07-11 10:45:16', '549', 29664),
+(107, 25, 37, '124-550', 'Empress Shampoo x 12', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 11, NULL, 80352, 12672, 93024, '2026-07-11 10:51:53', NULL, NULL, NULL),
+(108, 36, 70, '123-456', 'MB Hand & Body Lotion Aloe Green Tea 300mLx12', '123', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 0, 1999, 1999, '2026-07-13 10:06:04', NULL, NULL, NULL),
+(109, 36, 71, '123-789', 'Dwellbeing Sampaguita n Orange Liquid Hand Soap Gal', '124', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 0, 1899, 1899, '2026-07-13 10:06:04', NULL, NULL, NULL),
+(110, 36, 72, '123-101', 'Messy Bessy Hand & Body Wash Aloe Green Tea 50mL', '125', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 0, 1799, 1799, '2026-07-13 10:06:05', NULL, NULL, NULL),
+(111, 36, 70, '123-456', 'MB Hand & Body Lotion Aloe Green Tea 300mLx12', '987', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 1999, 101, 2100, '2026-07-13 10:12:32', NULL, NULL, NULL),
+(112, 36, 71, '123-789', 'Dwellbeing Sampaguita n Orange Liquid Hand Soap Gal', '654', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 1899, 101, 2000, '2026-07-13 10:12:33', NULL, NULL, NULL),
+(113, 36, 71, '123-789', 'Dwellbeing Sampaguita n Orange Liquid Hand Soap Gal', '321', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 2000, 101, 2101, '2026-07-13 10:12:33', NULL, NULL, NULL),
+(114, 26, 52, '194-168', 'AlcoPlus Iso 70 Alcohol Classic 150mL', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 0, 2000, 2000, '2026-07-14 08:17:13', NULL, NULL, NULL),
+(115, 26, 53, '168-194', 'AlcoPlus Iso 70 Alcohol Classic 250mL', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, NULL, 0, 2000, 2000, '2026-07-14 08:17:13', NULL, NULL, NULL),
+(116, 26, 52, '194-168', 'AlcoPlus Iso 70 Alcohol Classic 150mL', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 6, 1, 2000, 2000, 4000, '2026-07-14 08:19:43', '2026-07-14 08:22:29', '168', 2000);
 
 -- --------------------------------------------------------
 
@@ -706,12 +1261,60 @@ CREATE TABLE `production_lots` (
   `poi_id` int(11) NOT NULL,
   `lot_number` varchar(100) NOT NULL,
   `quantity_produced` int(11) NOT NULL DEFAULT 0,
+  `pcs_per_case` int(11) DEFAULT NULL,
   `lot_date` date DEFAULT NULL,
   `created_by` int(11) DEFAULT NULL,
   `date_created` datetime DEFAULT current_timestamp(),
   `is_removed` tinyint(1) DEFAULT 0 COMMENT '0=active, 1=soft deleted',
   `last_update` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `production_lots`
+--
+
+INSERT INTO `production_lots` (`lot_id`, `po_id`, `poi_id`, `lot_number`, `quantity_produced`, `pcs_per_case`, `lot_date`, `created_by`, `date_created`, `is_removed`, `last_update`) VALUES
+(24, 23, 28, '152-202', 22752, NULL, '2026-07-09', 11, '2026-07-09 13:30:15', 0, '2026-07-09 08:00:05'),
+(25, 25, 30, '151-306', 32544, NULL, '2026-07-09', 11, '2026-07-09 13:31:53', 0, '2026-07-10 05:07:05'),
+(26, 25, 32, '157-158', 25344, NULL, '2026-07-09', 11, '2026-07-09 13:32:53', 0, '2026-07-09 23:02:54'),
+(27, 34, 67, '133-853', 32832, NULL, '2026-07-09', 11, '2026-07-09 13:52:05', 0, '2026-07-10 03:12:27'),
+(28, 33, 66, '118-850', 21888, NULL, '2026-07-09', 11, '2026-07-09 13:52:33', 0, '2026-07-10 01:03:32'),
+(29, 25, 31, '159-110', 31968, NULL, '2026-07-09', 11, '2026-07-09 13:56:37', 0, '2026-07-10 04:55:17'),
+(30, 33, 66, '118-855', 23040, NULL, '2026-07-09', 11, '2026-07-09 15:49:19', 0, '2026-07-09 22:56:59'),
+(31, 23, 28, '152-201', 48672, NULL, '2026-07-09', 11, '2026-07-09 16:00:28', 0, '2026-07-10 01:04:48'),
+(32, 25, 30, '151-313', 18432, NULL, '2026-07-09', 11, '2026-07-09 16:20:24', 0, '2026-07-10 07:44:23'),
+(33, 23, 28, '152-203', 74304, NULL, '2026-07-10', 11, '2026-07-10 06:52:32', 0, '2026-07-10 01:43:51'),
+(34, 25, 31, '159-111', 31392, NULL, '2026-07-10', 11, '2026-07-10 06:55:39', 0, '2026-07-10 03:20:12'),
+(35, 25, 50, '160-058', 12672, NULL, '2026-07-10', 11, '2026-07-10 07:02:08', 0, '2026-07-09 23:02:08'),
+(36, 25, 32, '157-159', 25344, NULL, '2026-07-10', 11, '2026-07-10 07:58:46', 0, '2026-07-10 22:36:51'),
+(37, 25, 30, '151-307', 32256, NULL, '2026-07-10', 11, '2026-07-10 07:59:47', 0, '2026-07-10 22:34:28'),
+(38, 33, 66, '188-856', 12672, NULL, '2026-07-10', 11, '2026-07-10 09:44:24', 0, '2026-07-10 01:44:24'),
+(39, 33, 66, '118-856', 30408, NULL, '2026-07-10', 11, '2026-07-10 11:13:23', 0, '2026-07-10 22:46:00'),
+(40, 25, 31, '159-109', 5760, NULL, '2026-07-10', 11, '2026-07-10 12:52:27', 0, '2026-07-10 07:43:32'),
+(41, 33, 66, '118-854', 12672, NULL, '2026-07-10', 11, '2026-07-10 13:15:34', 0, '2026-07-10 05:15:34'),
+(42, 25, 32, '151-313', 12962, NULL, '2026-07-10', 11, '2026-07-10 17:06:17', 0, '2026-07-10 09:06:17'),
+(43, 25, 31, '159-112', 12672, NULL, '2026-07-11', 11, '2026-07-11 06:24:01', 0, '2026-07-10 22:24:01'),
+(44, 25, 30, '151-308', 31680, NULL, '2026-07-11', 11, '2026-07-11 06:25:09', 0, '2026-07-10 22:34:58'),
+(45, 25, 30, '151-309', 12672, NULL, '2026-07-11', 11, '2026-07-11 06:26:36', 0, '2026-07-10 22:26:36'),
+(46, 25, 37, '124-550', 50688, NULL, '2026-07-11', 11, '2026-07-11 06:27:27', 0, '2026-07-11 02:51:53'),
+(47, 23, 28, '152-204', 63072, NULL, '2026-07-11', 11, '2026-07-11 06:31:34', 0, '2026-07-10 23:26:09'),
+(48, 25, 37, '124-549', 42336, NULL, '2026-07-11', 11, '2026-07-11 06:33:47', 0, '2026-07-14 00:33:09'),
+(49, 25, 31, '15229', 12672, NULL, '2026-07-11', 11, '2026-07-11 06:35:47', 0, '2026-07-10 22:35:47'),
+(50, 34, 67, '133-854', 12672, NULL, '2026-07-11', 11, '2026-07-11 06:41:46', 0, '2026-07-10 22:41:46'),
+(51, 25, 32, '157-160', 12672, NULL, '2026-07-11', 11, '2026-07-11 07:05:59', 0, '2026-07-10 23:05:59'),
+(52, 25, 51, '163-001', 1140, NULL, '2026-07-11', 11, '2026-07-11 08:46:02', 0, '2026-07-11 00:46:02'),
+(53, 25, 30, '151-310', 12672, NULL, '2026-07-11', 11, '2026-07-11 08:47:20', 0, '2026-07-11 00:47:20'),
+(54, 35, 68, '118-854', 12672, NULL, '2026-07-11', 11, '2026-07-11 09:12:26', 0, '2026-07-11 01:12:26'),
+(55, 23, 69, '152-204', 5256, NULL, '2026-07-11', 11, '2026-07-11 09:39:01', 0, '2026-07-11 01:39:01'),
+(56, 25, 37, '124-549', 29664, NULL, '2026-07-11', 11, '2026-07-11 10:34:55', 1, '2026-07-14 00:33:09'),
+(57, 36, 70, '123-456', 2100, NULL, '2026-07-13', 6, '2026-07-13 10:06:04', 0, '2026-07-13 02:12:32'),
+(58, 36, 71, '123-789', 2101, NULL, '2026-07-13', 6, '2026-07-13 10:06:04', 0, '2026-07-13 02:12:33'),
+(59, 36, 72, '123-101', 1799, NULL, '2026-07-13', 6, '2026-07-13 10:06:05', 0, '2026-07-13 02:06:05'),
+(60, 26, 52, '194-168', 2000, NULL, '2026-07-14', 6, '2026-07-14 08:17:13', 0, '2026-07-14 00:17:13'),
+(61, 26, 53, '168-194', 2000, NULL, '2026-07-14', 6, '2026-07-14 08:17:13', 0, '2026-07-14 00:17:13'),
+(62, 26, 52, '194-168', 2000, NULL, '2026-07-14', 6, '2026-07-14 08:19:43', 0, '2026-07-14 00:22:29'),
+(63, 36, 70, 'lotnegative', 0, NULL, '2026-07-16', 6, '2026-07-16 13:31:58', 1, '2026-07-17 03:21:12'),
+(64, 36, 70, '10', 0, NULL, '2026-07-17', 6, '2026-07-17 11:55:36', 1, '2026-07-17 03:56:43');
 
 -- --------------------------------------------------------
 
@@ -734,6 +1337,13 @@ CREATE TABLE `production_reports` (
   `date_reported` datetime DEFAULT current_timestamp(),
   `date_resolved` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `production_reports`
+--
+
+INSERT INTO `production_reports` (`report_id`, `history_id`, `poi_id`, `po_id`, `old_lot_number`, `reported_by`, `reason`, `report_type`, `status`, `resolved_by`, `new_lot_number`, `date_reported`, `date_resolved`) VALUES
+(5, 76, 30, 25, '151-306', 11, 'Double input \r\n\r\nThank you', 'lot_number', 'resolved', NULL, '151-306', '2026-07-10 13:18:15', '2026-07-10 13:21:53');
 
 -- --------------------------------------------------------
 
@@ -759,6 +1369,27 @@ CREATE TABLE `purchase_orders` (
   `remove` tinyint(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `purchase_orders`
+--
+
+INSERT INTO `purchase_orders` (`po_id`, `customer_po_number`, `customer_po_date`, `po_number`, `customer_id`, `requested_by`, `status`, `date_created`, `last_update`, `total_quantity`, `customer_terms`, `production_type`, `produced_quantity`, `delivered_quantity`, `remove`) VALUES
+(21, '1400027200', '2025-11-19', '', 15, 13, 'pending', '2026-07-07 12:01:19', '2026-07-07 06:56:26', 202473, 30, 'normal', 0, 0, 0),
+(22, 'PO-00000063', '2026-07-01', '', 19, 13, 'pending', '2026-07-07 15:01:41', '2026-07-07 08:43:27', 1734000, 90, 'normal', 0, 0, 0),
+(23, 'PO-00000062', '2026-07-01', '', 19, 13, 'pending', '2026-07-07 15:03:50', '2026-07-11 01:39:01', 1762560, 90, 'normal', 214056, 0, 0),
+(25, 'PO-00000014', '2026-07-01', '', 19, 13, 'pending', '2026-07-07 16:36:26', '2026-07-11 03:50:40', 16069692, 90, 'normal', 417878, 283680, 0),
+(26, 'PO-00000096', '2026-07-08', '', 19, 13, 'pending', '2026-07-09 08:11:51', '2026-07-17 03:56:15', 62400, 90, 'normal', 6000, 0, 0),
+(27, 'SKI-CC-02743', '2026-07-08', '', 27, 13, 'pending', '2026-07-09 08:29:53', '2026-07-09 00:29:53', 168000, 90, 'normal', 0, 0, 0),
+(28, '32626', '2026-05-06', '', 12, 13, 'pending', '2026-07-09 08:59:36', '2026-07-09 00:59:36', 1090, 30, 'normal', 0, 0, 0),
+(29, '32627', '2026-05-06', '', 12, 13, 'pending', '2026-07-09 09:19:48', '2026-07-09 01:19:48', 1090, 30, 'normal', 0, 0, 0),
+(30, '32628', '2026-05-06', '', 12, 13, 'pending', '2026-07-09 09:22:12', '2026-07-09 01:22:12', 1090, 30, 'normal', 0, 0, 0),
+(31, '32629', '2026-05-06', '', 12, 13, 'pending', '2026-07-09 09:26:45', '2026-07-09 01:26:45', 1090, 30, 'normal', 0, 0, 0),
+(32, '32630', '2026-05-06', '', 12, 13, 'pending', '2026-07-09 09:28:59', '2026-07-09 01:28:59', 108, 30, 'normal', 0, 0, 0),
+(33, 'ADV253', '2026-07-01', '', 19, 12, 'pending', '2026-07-09 13:43:30', '2026-07-10 22:46:00', 576000, 90, 'advance', 100680, 0, 0),
+(34, 'ADV252', '2026-07-01', '', 19, 12, 'pending', '2026-07-09 13:45:19', '2026-07-10 22:41:46', 432000, 90, 'advance', 45504, 0, 0),
+(35, 'PO-00000111', '2026-07-08', '', 19, 12, 'pending', '2026-07-11 07:42:06', '2026-07-11 01:12:26', 1728000, 90, 'normal', 113352, 0, 0),
+(36, 'TEST-0000001', '2026-07-13', '', 10, 4, 'pending', '2026-07-13 09:59:15', '2026-07-17 03:56:43', 7680, 30, 'normal', 6000, 6000, 0);
+
 -- --------------------------------------------------------
 
 --
@@ -775,6 +1406,59 @@ CREATE TABLE `purchase_order_items` (
   `delivered_quantity` int(11) DEFAULT 0 COMMENT 'Delivered quantity per item',
   `unit_price` decimal(15,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `purchase_order_items`
+--
+
+INSERT INTO `purchase_order_items` (`poi_id`, `po_id`, `item_id`, `item_uom`, `quantity`, `produced_quantity`, `delivered_quantity`, `unit_price`) VALUES
+(25, 21, 241, 'PCS', 133361, 0, 0, 0.00),
+(26, 21, 242, 'PCS', 69112, 0, 0, 0.00),
+(27, 22, 37, 'PCS', 1734000, 0, 0, 0.00),
+(28, 23, 39, 'PCS', 1615680, 208800, 0, 0.00),
+(30, 25, 24, 'PCS', 584352, 140256, 152928, 0.00),
+(31, 25, 232, 'PCS', 352800, 94464, 50400, 0.00),
+(32, 25, 25, 'PCS', 581472, 76322, 0, 0.00),
+(33, 25, 230, 'PCS', 134784, 0, 0, 0.00),
+(34, 25, 22, 'PCS', 219456, 0, 0, 0.00),
+(35, 25, 181, 'PCS', 6359040, 0, 0, 0.00),
+(36, 25, 78, 'PCS', 4447872, 0, 0, 0.00),
+(37, 25, 18, 'PCS', 526464, 93024, 80352, 0.00),
+(38, 25, 79, 'PCS', 21960, 0, 0, 0.00),
+(39, 25, 74, 'PCS', 5136, 0, 0, 0.00),
+(40, 25, 70, 'PCS', 1620, 0, 0, 0.00),
+(41, 25, 62, 'PCS', 2087856, 0, 0, 0.00),
+(42, 25, 72, 'PCS', 3744, 0, 0, 0.00),
+(43, 25, 71, 'PCS', 3816, 0, 0, 0.00),
+(44, 25, 93, 'PCS', 7056, 0, 0, 0.00),
+(45, 25, 96, 'PCS', 10512, 0, 0, 0.00),
+(46, 25, 141, 'PCS', 9456, 0, 0, 0.00),
+(47, 25, 143, 'PCS', 28128, 0, 0, 0.00),
+(48, 25, 145, 'PCS', 11784, 0, 0, 0.00),
+(49, 25, 34, 'PCS', 404352, 0, 0, 0.00),
+(50, 25, 231, 'PCS', 220032, 12672, 0, 0.00),
+(51, 25, 26, 'PCS', 48000, 1140, 0, 0.00),
+(52, 26, 141, 'PCS', 12000, 4000, 0, 0.00),
+(53, 26, 143, 'PCS', 28800, 2000, 2000, 0.00),
+(54, 26, 145, 'PCS', 21600, 0, 0, 0.00),
+(55, 27, 481, 'PCS', 36000, 0, 0, 0.00),
+(56, 27, 482, 'PCS', 28800, 0, 0, 0.00),
+(57, 27, 483, 'PCS', 21600, 0, 0, 0.00),
+(58, 27, 475, 'PCS', 24000, 0, 0, 0.00),
+(59, 27, 476, 'PCS', 28800, 0, 0, 0.00),
+(60, 27, 477, 'PCS', 28800, 0, 0, 0.00),
+(61, 28, 95, 'PCS', 1090, 0, 0, 0.00),
+(62, 29, 107, 'PCS', 1090, 0, 0, 0.00),
+(63, 30, 104, 'PCS', 1090, 0, 0, 0.00),
+(64, 31, 100, 'PCS', 1090, 0, 0, 0.00),
+(65, 32, 89, 'PCS', 108, 0, 0, 0.00),
+(66, 33, 108, 'PCS', 576000, 100680, 0, 0.00),
+(67, 34, 17, 'PCS', 432000, 45504, 0, 0.00),
+(68, 35, 108, 'PCS', 1728000, 113352, 0, 0.00),
+(69, 23, 30, 'PCS', 146880, 5256, 0, 0.00),
+(70, 36, 373, 'PCS', 2500, 2100, 6000, 0.00),
+(71, 36, 89, 'PCS', 2300, 2101, 2101, 0.00),
+(72, 36, 355, 'PCS', 2880, 1799, 1799, 0.00);
 
 -- --------------------------------------------------------
 
@@ -822,11 +1506,38 @@ INSERT INTO `users` (`user_id`, `username`, `email`, `password`, `full_name`, `d
 (7, 'finance', 'finance@email.com', 'finance', 'Test Finance', 'finance', 1, 0, '2026-06-02 10:41:41', '2026-06-02 02:41:41'),
 (8, 'wakin', 'wakin@gmail.com', 'qwerty', 'Luis Guevara', 'warehouse', 1, 0, '2026-07-03 08:46:43', '2026-07-03 00:46:43'),
 (9, 'sescultura', 'billings@cianancorp.com', 'sescultura', 'Shyrene Escultura', 'finance', 1, 0, '2026-07-07 10:59:45', '2026-07-07 02:59:45'),
-(10, 'mfrubio', 'disbursements@cianancorp.com', 'mfrubio', 'Maria Francia Rubio', 'finance', 1, 0, '2026-07-07 11:01:33', '2026-07-07 03:01:33');
+(10, 'mfrubio', 'disbursements@cianancorp.com', 'mfrubio', 'Maria Francia Rubio', 'finance', 1, 0, '2026-07-07 11:01:33', '2026-07-07 03:01:33'),
+(11, 'Cath', 'productionencoder09@gmail.com', 'carol0124', 'Cathlyn Libres', 'production', 1, 0, '2026-07-07 11:43:38', '2026-07-07 03:43:38'),
+(12, 'ELMEI', 'supplychainofficercianan@gmail.com', 'Password1234', 'ELMEI JOY HAGOS', 'warehouse', 1, 0, '2026-07-07 11:44:33', '2026-07-07 03:44:33'),
+(13, 'alezzaperdigosa', 'supplychainofficercianan1@gmail.com', 'Cianan123', 'Alezzagrace', 'warehouse', 1, 0, '2026-07-07 11:46:01', '2026-07-07 03:46:01'),
+(14, 'QUEENSEE', 'warehouse@cianancorp.com', 'queensee', 'QUEENSEE NAVAREZ', 'warehouse', 1, 0, '2026-07-07 15:30:00', '2026-07-07 07:30:00'),
+(15, 'GEMELYN', 'grrecodig@gmail.com', 'gemelyn2026!', 'Gemelyn R. Recodig', 'warehouse', 1, 0, '2026-07-10 09:03:53', '2026-07-10 01:03:53');
 
 --
 -- Indexes for dumped tables
 --
+
+--
+-- Indexes for table `advance_production_consumption`
+--
+ALTER TABLE `advance_production_consumption`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `advance_poi_id` (`advance_poi_id`),
+  ADD KEY `advance_po_id` (`advance_po_id`),
+  ADD KEY `normal_poi_id` (`normal_poi_id`),
+  ADD KEY `normal_po_id` (`normal_po_id`);
+
+--
+-- Indexes for table `audit_logs`
+--
+ALTER TABLE `audit_logs`
+  ADD PRIMARY KEY (`log_id`),
+  ADD KEY `idx_user` (`user_id`),
+  ADD KEY `idx_department` (`department`),
+  ADD KEY `idx_module` (`module`),
+  ADD KEY `idx_action` (`action`),
+  ADD KEY `idx_target` (`target_type`,`target_id`),
+  ADD KEY `idx_created` (`created_at`);
 
 --
 -- Indexes for table `customers`
@@ -863,6 +1574,16 @@ ALTER TABLE `delivery_reports`
   ADD PRIMARY KEY (`report_id`),
   ADD KEY `idx_delivery_id` (`delivery_id`),
   ADD KEY `idx_status` (`status`);
+
+--
+-- Indexes for table `excess_production`
+--
+ALTER TABLE `excess_production`
+  ADD PRIMARY KEY (`excess_id`),
+  ADD KEY `customer_id` (`customer_id`),
+  ADD KEY `item_id` (`item_id`),
+  ADD KEY `source_po_id` (`source_po_id`),
+  ADD KEY `source_poi_id` (`source_poi_id`);
 
 --
 -- Indexes for table `items`
@@ -944,16 +1665,28 @@ ALTER TABLE `users`
 --
 
 --
+-- AUTO_INCREMENT for table `advance_production_consumption`
+--
+ALTER TABLE `advance_production_consumption`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `audit_logs`
+--
+ALTER TABLE `audit_logs`
+  MODIFY `log_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=164;
+
+--
 -- AUTO_INCREMENT for table `customers`
 --
 ALTER TABLE `customers`
-  MODIFY `customer_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
+  MODIFY `customer_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
 
 --
 -- AUTO_INCREMENT for table `deliveries`
 --
 ALTER TABLE `deliveries`
-  MODIFY `delivery_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `delivery_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
 
 --
 -- AUTO_INCREMENT for table `delivery_receipts`
@@ -968,46 +1701,52 @@ ALTER TABLE `delivery_reports`
   MODIFY `report_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
+-- AUTO_INCREMENT for table `excess_production`
+--
+ALTER TABLE `excess_production`
+  MODIFY `excess_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
 -- AUTO_INCREMENT for table `items`
 --
 ALTER TABLE `items`
-  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=405;
+  MODIFY `item_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=660;
 
 --
 -- AUTO_INCREMENT for table `price_list`
 --
 ALTER TABLE `price_list`
-  MODIFY `price_list_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=113;
+  MODIFY `price_list_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=191;
 
 --
 -- AUTO_INCREMENT for table `production_history`
 --
 ALTER TABLE `production_history`
-  MODIFY `history_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
+  MODIFY `history_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=119;
 
 --
 -- AUTO_INCREMENT for table `production_lots`
 --
 ALTER TABLE `production_lots`
-  MODIFY `lot_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+  MODIFY `lot_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=65;
 
 --
 -- AUTO_INCREMENT for table `production_reports`
 --
 ALTER TABLE `production_reports`
-  MODIFY `report_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `report_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `purchase_orders`
 --
 ALTER TABLE `purchase_orders`
-  MODIFY `po_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `po_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
 
 --
 -- AUTO_INCREMENT for table `purchase_order_items`
 --
 ALTER TABLE `purchase_order_items`
-  MODIFY `poi_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+  MODIFY `poi_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=73;
 
 --
 -- AUTO_INCREMENT for table `sales_orders`
@@ -1019,11 +1758,20 @@ ALTER TABLE `sales_orders`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `advance_production_consumption`
+--
+ALTER TABLE `advance_production_consumption`
+  ADD CONSTRAINT `advance_production_consumption_ibfk_1` FOREIGN KEY (`advance_poi_id`) REFERENCES `purchase_order_items` (`poi_id`),
+  ADD CONSTRAINT `advance_production_consumption_ibfk_2` FOREIGN KEY (`advance_po_id`) REFERENCES `purchase_orders` (`po_id`),
+  ADD CONSTRAINT `advance_production_consumption_ibfk_3` FOREIGN KEY (`normal_poi_id`) REFERENCES `purchase_order_items` (`poi_id`),
+  ADD CONSTRAINT `advance_production_consumption_ibfk_4` FOREIGN KEY (`normal_po_id`) REFERENCES `purchase_orders` (`po_id`);
 
 --
 -- Constraints for table `deliveries`
@@ -1032,6 +1780,15 @@ ALTER TABLE `deliveries`
   ADD CONSTRAINT `deliveries_ibfk_1` FOREIGN KEY (`po_id`) REFERENCES `purchase_orders` (`po_id`),
   ADD CONSTRAINT `deliveries_ibfk_2` FOREIGN KEY (`delivered_by`) REFERENCES `users` (`user_id`),
   ADD CONSTRAINT `deliveries_ibfk_3` FOREIGN KEY (`lot_id`) REFERENCES `production_lots` (`lot_id`);
+
+--
+-- Constraints for table `excess_production`
+--
+ALTER TABLE `excess_production`
+  ADD CONSTRAINT `excess_production_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
+  ADD CONSTRAINT `excess_production_ibfk_2` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`),
+  ADD CONSTRAINT `excess_production_ibfk_3` FOREIGN KEY (`source_po_id`) REFERENCES `purchase_orders` (`po_id`),
+  ADD CONSTRAINT `excess_production_ibfk_4` FOREIGN KEY (`source_poi_id`) REFERENCES `purchase_order_items` (`poi_id`);
 
 --
 -- Constraints for table `price_list`

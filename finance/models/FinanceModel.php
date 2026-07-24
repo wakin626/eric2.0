@@ -35,7 +35,7 @@ class FinanceModel extends BaseModel {
         $sql = "SELECT po.*, c.customer_name, c.customer_code, c.customer_address, c.customer_tin
                 FROM purchase_orders po 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
-                WHERE po.po_id = :id";
+                WHERE po.po_id = :id AND po.`remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
         return $stmt->fetch();
@@ -45,7 +45,7 @@ class FinanceModel extends BaseModel {
         $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.item_size 
                 FROM purchase_order_items poi 
                 LEFT JOIN items i ON poi.item_id = i.item_id 
-                WHERE poi.po_id = :po_id";
+                WHERE poi.po_id = :po_id AND i.`remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
         return $stmt->fetchAll();
@@ -91,7 +91,7 @@ class FinanceModel extends BaseModel {
                 LEFT JOIN users u ON d.delivered_by = u.user_id 
                 LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
-                WHERE d.delivery_id = :id";
+                WHERE d.delivery_id = :id AND d.remove = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
         return $stmt->fetch();
@@ -153,7 +153,7 @@ class FinanceModel extends BaseModel {
     }
 
     public function getReceiptById($id) {
-        $sql = "SELECT * FROM delivery_receipts WHERE receipt_id = :id";
+        $sql = "SELECT * FROM delivery_receipts WHERE receipt_id = :id AND `remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
         return $stmt->fetch();
@@ -180,7 +180,9 @@ class FinanceModel extends BaseModel {
     public function getAllPurchaseOrderItems() {
         $sql = "SELECT poi.*, i.item_code, i.item_description, i.item_uom, i.item_size 
                 FROM purchase_order_items poi 
-                LEFT JOIN items i ON poi.item_id = i.item_id";
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE i.`remove` = 0
+                ORDER BY poi.produced_quantity DESC, poi.poi_id ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         $all = $stmt->fetchAll();
@@ -208,6 +210,117 @@ class FinanceModel extends BaseModel {
                 ORDER BY d.delivery_date DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getAllPurchaseOrdersFiltered($filters = []) {
+        $sql = "SELECT po.*, c.customer_name, c.customer_code, u.full_name as requested_by_name 
+                FROM purchase_orders po 
+                LEFT JOIN customers c ON po.customer_id = c.customer_id 
+                LEFT JOIN users u ON po.requested_by = u.user_id 
+                WHERE po.`remove` = 0";
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $like = '%' . $filters['search'] . '%';
+            $sql .= " AND (po.customer_po_number LIKE :search1 
+                       OR po.po_number LIKE :search2 
+                       OR c.customer_name LIKE :search3
+                       OR u.full_name LIKE :search4)";
+            $params['search1'] = $like;
+            $params['search2'] = $like;
+            $params['search3'] = $like;
+            $params['search4'] = $like;
+        }
+        if (!empty($filters['customer_name'])) {
+            $sql .= " AND c.customer_name LIKE :filter_customer";
+            $params['filter_customer'] = '%' . $filters['customer_name'] . '%';
+        }
+        if (!empty($filters['date'])) {
+            $sql .= " AND DATE(po.date_created) = :filter_date";
+            $params['filter_date'] = $filters['date'];
+        }
+        if (!empty($filters['item_description'])) {
+            $sql .= " AND EXISTS (
+                SELECT 1 FROM purchase_order_items poi2
+                LEFT JOIN items i2 ON poi2.item_id = i2.item_id
+                WHERE poi2.po_id = po.po_id AND i2.item_description LIKE :filter_item
+            )";
+            $params['filter_item'] = '%' . $filters['item_description'] . '%';
+        }
+
+        $sql .= " ORDER BY po.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function getPOsReadyToDeliverFiltered($filters = []) {
+        $sql = "SELECT po.*, c.customer_name, c.customer_code, u.full_name as requested_by_name,
+                (po.produced_quantity - po.delivered_quantity) as available_for_delivery
+                FROM purchase_orders po 
+                LEFT JOIN customers c ON po.customer_id = c.customer_id 
+                LEFT JOIN users u ON po.requested_by = u.user_id 
+                WHERE po.`remove` = 0 
+                AND po.produced_quantity > po.delivered_quantity";
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $like = '%' . $filters['search'] . '%';
+            $sql .= " AND (po.customer_po_number LIKE :search1 
+                       OR po.po_number LIKE :search2
+                       OR c.customer_name LIKE :search3
+                       OR u.full_name LIKE :search4)";
+            $params['search1'] = $like;
+            $params['search2'] = $like;
+            $params['search3'] = $like;
+            $params['search4'] = $like;
+        }
+
+        $sql .= " ORDER BY po.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function getAllDeliveriesFiltered($filters = []) {
+        $sql = "SELECT d.*, po.customer_po_number, po.total_quantity, po.delivered_quantity, po.production_type,
+                c.customer_name, u.full_name as delivered_by_name,
+                i.item_code, i.item_description
+                FROM deliveries d 
+                LEFT JOIN purchase_orders po ON d.po_id = po.po_id 
+                LEFT JOIN customers c ON po.customer_id = c.customer_id 
+                LEFT JOIN users u ON d.delivered_by = u.user_id 
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE d.`remove` = 0";
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $like = '%' . $filters['search'] . '%';
+            $sql .= " AND (d.dr_number LIKE :search1 
+                       OR po.customer_po_number LIKE :search2
+                       OR c.customer_name LIKE :search3
+                       OR i.item_description LIKE :search4
+                       OR u.full_name LIKE :search5)";
+            $params['search1'] = $like;
+            $params['search2'] = $like;
+            $params['search3'] = $like;
+            $params['search4'] = $like;
+            $params['search5'] = $like;
+        }
+        if (!empty($filters['customer_name'])) {
+            $sql .= " AND c.customer_name LIKE :filter_customer";
+            $params['filter_customer'] = '%' . $filters['customer_name'] . '%';
+        }
+        if (!empty($filters['item_description'])) {
+            $sql .= " AND i.item_description LIKE :filter_item";
+            $params['filter_item'] = '%' . $filters['item_description'] . '%';
+        }
+
+        $sql .= " ORDER BY d.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 }

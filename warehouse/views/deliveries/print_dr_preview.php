@@ -188,7 +188,7 @@
         <?php if (!empty($dr_deliveries)): ?>
             <?php foreach ($dr_deliveries as $d):
                 $qty = $d['delivery_quantity'] ?? 0;
-                $conv = $d['uom_conversion'] ?? null;
+                $conv = $d['actual_uom_conversion'] ?? $d['uom_conversion'] ?? null;
                 $itemUom = $d['item_uom'] ?? '';
                 $cases = ($conv && $itemUom !== 'CS') ? floor($qty / $conv) : 0;
 

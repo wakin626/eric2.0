@@ -48,8 +48,8 @@
                     <td><?= date('Y-m-d H:i', strtotime($item['last_update'])) ?></td>
                     <td>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#itemEditModal" data-id="<?= $item['item_id'] ?>" data-code="<?= htmlspecialchars($item['item_code']) ?>" data-desc="<?= htmlspecialchars($item['item_description']) ?>" data-uom="<?= $item['item_uom'] ?>" data-conversion="<?= $item['uom_conversion'] ?? '' ?>" data-customer="<?= $item['customer_id'] ?? '' ?>"><i class="bi bi-pencil"></i></button>
-                        <a href="?controller=admin&action=itemToggleStatus&id=<?= $item['item_id'] ?>" class="btn btn-sm btn-warning"><i class="bi bi-toggle-on"></i></a>
-                        <a href="?controller=admin&action=itemDelete&id=<?= $item['item_id'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
+                        <a href="?controller=admin&action=itemToggleStatus&id=<?= $item['item_id'] ?>&search=<?= urlencode($search ?? '') ?>&customer_id=<?= urlencode($customerFilter ?? '') ?>" class="btn btn-sm btn-warning" onclick="return confirm('Toggle item status?')"><i class="bi bi-toggle-on"></i></a>
+                        <a href="?controller=admin&action=itemDelete&id=<?= $item['item_id'] ?>&search=<?= urlencode($search ?? '') ?>&customer_id=<?= urlencode($customerFilter ?? '') ?>" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')"><i class="bi bi-trash"></i></a>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -87,6 +87,8 @@
             <div class="modal-header"><h5 class="modal-title">Add Item</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <form method="POST" action="?controller=admin&action=itemCreate">
                 <div class="modal-body">
+                    <input type="hidden" name="filter_search" value="<?= htmlspecialchars($search ?? '') ?>">
+                    <input type="hidden" name="filter_customer_id" value="<?= htmlspecialchars($customerFilter ?? '') ?>">
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" class="form-control" required></div>
                     <div class="mb-3">
@@ -117,6 +119,8 @@
             <form method="POST" action="?controller=admin&action=itemUpdate">
                 <div class="modal-body">
                     <input type="hidden" name="item_id" id="edit_item_id">
+                    <input type="hidden" name="filter_search" id="edit_filter_search" value="<?= htmlspecialchars($search ?? '') ?>">
+                    <input type="hidden" name="filter_customer_id" id="edit_filter_customer_id" value="<?= htmlspecialchars($customerFilter ?? '') ?>">
                     <div class="mb-3"><label class="form-label">Item Code *</label><input type="text" name="item_code" id="edit_item_code" class="form-control" required></div>
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" id="edit_item_description" class="form-control" required></div>
                     <div class="mb-3">

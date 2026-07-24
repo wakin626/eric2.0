@@ -37,3 +37,25 @@ CREATE TABLE IF NOT EXISTS `production_reports` (
   KEY `idx_history_id` (`history_id`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Add STS additional fields from Google Form
+ALTER TABLE `production_history`
+  ADD COLUMN `shift` VARCHAR(50) DEFAULT NULL AFTER `sts_ref`,
+  ADD COLUMN `mo_no` VARCHAR(100) DEFAULT NULL AFTER `shift`,
+  ADD COLUMN `material_type` VARCHAR(100) DEFAULT NULL AFTER `mo_no`,
+  ADD COLUMN `reject_status` VARCHAR(100) DEFAULT NULL AFTER `material_type`,
+  ADD COLUMN `sts_remarks` TEXT DEFAULT NULL AFTER `reject_status`;
+
+-- Add PCS per case column to production_history
+ALTER TABLE `production_history`
+  ADD COLUMN `pcs_per_case` INT(11) DEFAULT NULL AFTER `sts_remarks`;
+
+-- Add signature columns to production_history
+ALTER TABLE `production_history`
+  ADD COLUMN `prepared_by_name` VARCHAR(255) DEFAULT NULL AFTER `pcs_per_case`,
+  ADD COLUMN `checked_by_name` VARCHAR(255) DEFAULT NULL AFTER `prepared_by_name`,
+  ADD COLUMN `received_by_name` VARCHAR(255) DEFAULT NULL AFTER `checked_by_name`;
+
+-- Add pcs_per_case to production_lots for warehouse connection
+ALTER TABLE `production_lots`
+  ADD COLUMN `pcs_per_case` INT(11) DEFAULT NULL AFTER `quantity_produced`;

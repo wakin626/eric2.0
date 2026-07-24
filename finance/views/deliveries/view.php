@@ -58,7 +58,7 @@
                         if ($hasLotItems):
                             foreach ($lotItems as $li):
                                 $liQty = $li['qty'] ?? 0;
-                                $conv = $li['uom_conversion'] ?? null;
+                                $conv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;
                                 $uom = $li['item_uom'] ?? '';
                                 $cases = ($conv && $uom !== 'CS') ? floor($liQty / $conv) : 0;
                                 $totalQty += $liQty;

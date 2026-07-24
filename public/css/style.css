@@ -819,6 +819,23 @@ body.login-page {
   background: var(--accent);
   color: #fff;
 }
+.searchable-wrap .searchable-list li.has-excess,
+.searchable-list li.has-excess,
+ul li.has-excess,
+li.has-excess {
+  background-color: #fff3c4 !important;
+  background: #fff3c4 !important;
+  color: #5c4a00 !important;
+  font-weight: 700 !important;
+  border-left: 4px solid #f5c518 !important;
+}
+.searchable-wrap .searchable-list li.has-excess:hover,
+.searchable-list li.has-excess:hover,
+ul li.has-excess:hover,
+li.has-excess:hover {
+  background-color: #ffe082 !important;
+  background: #ffe082 !important;
+}
 .searchable-wrap .searchable-list li.disabled {
   opacity: 0.4;
   color: #e6a817;

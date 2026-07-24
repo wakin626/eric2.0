@@ -233,7 +233,7 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
         var total = 0;
         lotItems.forEach(function(item) {
             total += item.qty || 0;
-            var conv = item.uom_conversion || null;
+            var conv = item.actual_uom_conversion || item.uom_conversion || null;
             var uom = item.item_uom || '';
             var cases = (conv && uom !== 'CS') ? Math.floor((item.qty || 0) / conv) : 0;
             var tr = document.createElement('tr');

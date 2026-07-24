@@ -48,36 +48,24 @@ class FinanceController {
     }
 
     public function purchaseOrders() {
-        $allPOs = $this->financeModel->getAllPurchaseOrders();
         $search = $_GET['search'] ?? '';
         $filterCustomer = $_GET['filter_customer'] ?? '';
         $filterItem = $_GET['filter_item'] ?? '';
         $filterDate = $_GET['filter_date'] ?? '';
 
-        if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
-
-        $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
-
-        if ($filterCustomer) {
-            $allPOs = array_values(array_filter($allPOs, fn($po) => stripos($po['customer_name'] ?? '', $filterCustomer) !== false));
-        }
-        if ($filterItem) {
-            $allPOs = array_values(array_filter($allPOs, function($po) use ($filterItem) {
-                $items = $this->warehouseModel->getPurchaseOrderItemsByPOIds([$po['po_id']]);
-                foreach (($items[$po['po_id']] ?? []) as $item) {
-                    if (stripos($item['item_description'] ?? '', $filterItem) !== false) return true;
-                }
-                return false;
-            }));
-        }
-        if ($filterDate) {
-            $allPOs = array_values(array_filter($allPOs, fn($po) => substr($po['date_created'] ?? '', 0, 10) === $filterDate));
-        }
-
         $hasFilter = $search || $filterCustomer || $filterItem || $filterDate;
         if ($hasFilter) {
+            $filters = [];
+            if ($search) $filters['search'] = $search;
+            if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
+            if ($filterItem) $filters['item_description'] = $filterItem;
+            if ($filterDate) $filters['date'] = $filterDate;
+            $allPOs = $this->financeModel->getAllPurchaseOrdersFiltered($filters);
+            $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
             $pagination = ['items' => $allPOs, 'page' => 1, 'perPage' => count($allPOs), 'total' => count($allPOs), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
         } else {
+            $allPOs = $this->financeModel->getAllPurchaseOrders();
+            $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
             $pagination = Pagination::paginate($allPOs, 10);
         }
 
@@ -106,9 +94,12 @@ class FinanceController {
     }
 
     public function readyToDeliver() {
-        $readyPOs = $this->financeModel->getPOsReadyToDeliver();
         $search = $_GET['search'] ?? '';
-        if ($search) $readyPOs = Pagination::filterBySearch($readyPOs, $search);
+        if ($search) {
+            $readyPOs = $this->financeModel->getPOsReadyToDeliverFiltered(['search' => $search]);
+        } else {
+            $readyPOs = $this->financeModel->getPOsReadyToDeliver();
+        }
         $pagination = Pagination::paginate($readyPOs, 10);
         $data['purchase_orders'] = $pagination['items'];
         $data['page'] = $pagination['page'];
@@ -131,26 +122,22 @@ class FinanceController {
     }
 
     public function deliveries() {
-        $allDeliveries = $this->financeModel->getAllDeliveries();
         $search = $_GET['search'] ?? '';
         $filterCustomer = $_GET['filter_customer'] ?? '';
         $filterItem = $_GET['filter_item'] ?? '';
 
-        if ($search) $allDeliveries = Pagination::filterBySearch($allDeliveries, $search);
-
-        $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
-
-        if ($filterCustomer) {
-            $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['customer_name'] ?? '', $filterCustomer) !== false));
-        }
-        if ($filterItem) {
-            $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['item_description'] ?? '', $filterItem) !== false));
-        }
-
         $hasFilter = $search || $filterCustomer || $filterItem;
         if ($hasFilter) {
+            $filters = [];
+            if ($search) $filters['search'] = $search;
+            if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
+            if ($filterItem) $filters['item_description'] = $filterItem;
+            $allDeliveries = $this->financeModel->getAllDeliveriesFiltered($filters);
+            $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
             $pagination = ['items' => $allDeliveries, 'page' => 1, 'perPage' => count($allDeliveries), 'total' => count($allDeliveries), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
         } else {
+            $allDeliveries = $this->financeModel->getAllDeliveries();
+            $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
             $pagination = Pagination::paginate($allDeliveries, 10);
         }
 
@@ -176,9 +163,17 @@ class FinanceController {
 
     public function viewDelivery() {
         $id = $_GET['id'] ?? null;
-        $data['delivery'] = $this->financeModel->getDeliveryById($id);
+        $delivery = $this->financeModel->getDeliveryById($id);
+
+        if (!$delivery) {
+            $_SESSION['error'] = 'Delivery not found';
+            header('Location: ?controller=finance&action=deliveries');
+            exit;
+        }
+
+        $data['delivery'] = $delivery;
         $data['receipts'] = $this->financeModel->getReceiptsByDelivery($id);
-        $data['poi_item'] = $this->financeModel->getDeliveryPoiItem($data['delivery']['poi_id'] ?? 0);
+        $data['poi_item'] = $this->financeModel->getDeliveryPoiItem($delivery['poi_id'] ?? 0);
         $data['price_list'] = !empty($data['poi_item']['item_id']) ? $this->priceListModel->getByItemId($data['poi_item']['item_id']) : null;
         $data['page_title'] = 'Delivery Details';
         $this->render('deliveries/view', $data);
@@ -186,72 +181,79 @@ class FinanceController {
 
     public function uploadReceipt() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $delivery_id = $_POST['delivery_id'] ?? null;
-            $po_id = $_POST['po_id'] ?? null;
+            try {
+                $delivery_id = $_POST['delivery_id'] ?? null;
+                $po_id = $_POST['po_id'] ?? null;
 
-            if (!$delivery_id || !$po_id) {
-                $_SESSION['error'] = 'Invalid delivery or PO ID';
-                header('Location: ?controller=finance&action=deliveries');
-                exit;
-            }
+                if (!$delivery_id || !$po_id) {
+                    $_SESSION['error'] = 'Invalid delivery or PO ID';
+                    header('Location: ?controller=finance&action=deliveries');
+                    exit;
+                }
 
-            if (!isset($_FILES['receipt_file']) || $_FILES['receipt_file']['error'] !== UPLOAD_ERR_OK) {
-                $_SESSION['error'] = 'Please select a file to upload';
+                if (!isset($_FILES['receipt_file']) || $_FILES['receipt_file']['error'] !== UPLOAD_ERR_OK) {
+                    $_SESSION['error'] = 'Please select a file to upload';
+                    header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+                    exit;
+                }
+
+                $file = $_FILES['receipt_file'];
+                $allowedTypes = [
+                    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                    'application/pdf',
+                    'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                ];
+
+                if (!in_array($file['type'], $allowedTypes)) {
+                    $_SESSION['error'] = 'Invalid file type. Allowed: JPG, PNG, GIF, WebP, PDF, DOC, DOCX';
+                    header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+                    exit;
+                }
+
+                $maxSize = 10 * 1024 * 1024;
+                if ($file['size'] > $maxSize) {
+                    $_SESSION['error'] = 'File size must be less than 10MB';
+                    header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+                    exit;
+                }
+
+                $uploadDir = __DIR__ . '/../../uploads/receipts/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+
+                $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                $fileName = 'receipt_' . $delivery_id . '_' . time() . '.' . $extension;
+                $filePath = $uploadDir . $fileName;
+
+                if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+                    $_SESSION['error'] = 'Failed to upload file';
+                    header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+                    exit;
+                }
+
+                $this->financeModel->attachReceipt([
+                    'delivery_id' => $delivery_id,
+                    'po_id' => $po_id,
+                    'file_name' => $file['name'],
+                    'file_path' => 'uploads/receipts/' . $fileName,
+                    'file_type' => $file['type'],
+                    'file_size' => $file['size'],
+                    'uploaded_by' => $_SESSION['user_id']
+                ]);
+                $poFinance = (new \App\Models\FinanceModel())->getPurchaseOrderById($po_id);
+                AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Uploaded receipt ' . $fileName . ' for ' . ($poFinance['customer_po_number'] ?? $poFinance['po_number'] ?? 'PO #' . $po_id) . ' on delivery #' . $delivery_id, null, ['file' => $fileName], 'receipt', $po_id);
+
+                $_SESSION['success'] = 'Receipt uploaded successfully';
                 header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
                 exit;
-            }
-
-            $file = $_FILES['receipt_file'];
-            $allowedTypes = [
-                'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-                'application/pdf',
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            ];
-
-            if (!in_array($file['type'], $allowedTypes)) {
-                $_SESSION['error'] = 'Invalid file type. Allowed: JPG, PNG, GIF, WebP, PDF, DOC, DOCX';
-                header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+            } catch (\Exception $e) {
+                error_log('uploadReceipt error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Failed to save receipt to database';
+                header("Location: ?controller=finance&action=viewDelivery&id={$_POST['delivery_id']}");
                 exit;
             }
-
-            $maxSize = 10 * 1024 * 1024; // 10MB
-            if ($file['size'] > $maxSize) {
-                $_SESSION['error'] = 'File size must be less than 10MB';
-                header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
-                exit;
-            }
-
-            $uploadDir = __DIR__ . '/../../uploads/receipts/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-
-            $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-            $fileName = 'receipt_' . $delivery_id . '_' . time() . '.' . $extension;
-            $filePath = $uploadDir . $fileName;
-
-            if (!move_uploaded_file($file['tmp_name'], $filePath)) {
-                $_SESSION['error'] = 'Failed to upload file';
-                header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
-                exit;
-            }
-
-            $this->financeModel->attachReceipt([
-                'delivery_id' => $delivery_id,
-                'po_id' => $po_id,
-                'file_name' => $file['name'],
-                'file_path' => 'uploads/receipts/' . $fileName,
-                'file_type' => $file['type'],
-                'file_size' => $file['size'],
-                'uploaded_by' => $_SESSION['user_id']
-            ]);
-            $poFinance = (new \App\Models\FinanceModel())->getPurchaseOrderById($po_id);
-            AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Uploaded receipt ' . $fileName . ' for ' . ($poFinance['customer_po_number'] ?? $poFinance['po_number'] ?? 'PO #' . $po_id) . ' on delivery #' . $delivery_id, null, ['file' => $fileName], 'receipt', $po_id);
-
-            $_SESSION['success'] = 'Receipt uploaded successfully';
-            header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
-            exit;
         }
     }
 
@@ -259,14 +261,19 @@ class FinanceController {
         $receipt_id = $_GET['id'] ?? null;
         $delivery_id = $_GET['delivery_id'] ?? null;
 
-        if ($receipt_id) {
-            $receipt = $this->financeModel->getReceiptById($receipt_id);
-            if ($receipt && file_exists(__DIR__ . '/../../' . $receipt['file_path'])) {
-                unlink(__DIR__ . '/../../' . $receipt['file_path']);
+        try {
+            if ($receipt_id) {
+                $receipt = $this->financeModel->getReceiptById($receipt_id);
+                if ($receipt && file_exists(__DIR__ . '/../../' . $receipt['file_path'])) {
+                    unlink(__DIR__ . '/../../' . $receipt['file_path']);
+                }
+                $this->financeModel->deleteReceipt($receipt_id);
+                AuditModel::log($_SESSION['user_id'], 'DELETE', 'finance', 'Deleted receipt ' . basename($receipt['file_path'] ?? '') . ' from delivery #' . $delivery_id, ['path' => $receipt['file_path'] ?? ''], null, 'receipt', $receipt_id);
+                $_SESSION['success'] = 'Receipt deleted';
             }
-            $this->financeModel->deleteReceipt($receipt_id);
-            AuditModel::log($_SESSION['user_id'], 'DELETE', 'finance', 'Deleted receipt ' . basename($receipt['file_path'] ?? '') . ' from delivery #' . $delivery_id, ['path' => $receipt['file_path'] ?? ''], null, 'receipt', $receipt_id);
-            $_SESSION['success'] = 'Receipt deleted';
+        } catch (\Exception $e) {
+            error_log('deleteReceipt error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to delete receipt';
         }
 
         header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
@@ -275,53 +282,53 @@ class FinanceController {
 
     public function getPODetails() {
         header('Content-Type: application/json');
-        $id = $_GET['id'] ?? null;
-        $po = $this->financeModel->getPurchaseOrderById($id);
-        $po_items = $this->financeModel->getPurchaseOrderItems($id);
-        $deliveries = $this->financeModel->getDeliveriesByPOWithItems($id);
-        $receipts = $this->financeModel->getReceiptsByPO($id);
-        echo json_encode([
-            'po' => $po, 
-            'po_items' => $po_items,
-            'deliveries' => $deliveries,
-            'receipts' => $receipts
-        ]);
+        try {
+            $id = $_GET['id'] ?? null;
+            $po = $this->financeModel->getPurchaseOrderById($id);
+            $po_items = $this->financeModel->getPurchaseOrderItems($id);
+            $deliveries = $this->financeModel->getDeliveriesByPOWithItems($id);
+            $receipts = $this->financeModel->getReceiptsByPO($id);
+            echo json_encode([
+                'po' => $po, 
+                'po_items' => $po_items,
+                'deliveries' => $deliveries,
+                'receipts' => $receipts
+            ]);
+        } catch (\Exception $e) {
+            error_log('getPODetails error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to load PO details']);
+        }
         exit;
     }
 
     public function getDeliveryDetails() {
         header('Content-Type: application/json');
-        $id = $_GET['id'] ?? null;
-        $delivery = $this->financeModel->getDeliveryById($id);
-        $receipts = $this->financeModel->getReceiptsByDelivery($id);
-        echo json_encode(['delivery' => $delivery, 'receipts' => $receipts]);
+        try {
+            $id = $_GET['id'] ?? null;
+            $delivery = $this->financeModel->getDeliveryById($id);
+            $receipts = $this->financeModel->getReceiptsByDelivery($id);
+            echo json_encode(['delivery' => $delivery, 'receipts' => $receipts]);
+        } catch (\Exception $e) {
+            error_log('getDeliveryDetails error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to load delivery details']);
+        }
         exit;
     }
 
     public function priceList() {
-        $allItems = $this->priceListModel->getAll();
         $search = $_GET['search'] ?? '';
         $filterStatus = $_GET['status'] ?? '';
         $filterCustomer = $_GET['customer'] ?? '';
 
-        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
-
-        if ($filterStatus !== '') {
-            $allItems = array_filter($allItems, function($item) use ($filterStatus) {
-                return $item['status'] == $filterStatus;
-            });
-        }
-
-        if ($filterCustomer !== '') {
-            $allItems = array_filter($allItems, function($item) use ($filterCustomer) {
-                return ($item['customer_name'] ?? '') === $filterCustomer;
-            });
-        }
-
-        $allItems = array_values($allItems);
-
         $hasFilters = ($search !== '' || $filterStatus !== '' || $filterCustomer !== '');
         if ($hasFilters) {
+            $filters = [];
+            if ($search) $filters['search'] = $search;
+            if ($filterStatus !== '') $filters['status'] = $filterStatus;
+            if ($filterCustomer !== '') $filters['customer_name'] = $filterCustomer;
+            $allItems = $this->priceListModel->getAllFiltered($filters);
             $data['price_items'] = $allItems;
             $data['page'] = 1;
             $data['perPage'] = count($allItems);
@@ -330,6 +337,7 @@ class FinanceController {
             $data['hasNext'] = false;
             $data['hasPrev'] = false;
         } else {
+            $allItems = $this->priceListModel->getAll();
             $pagination = Pagination::paginate($allItems, 10);
             $data['price_items'] = $pagination['items'];
             $data['page'] = $pagination['page'];
@@ -349,23 +357,15 @@ class FinanceController {
     }
 
     private function getFilteredPriceItems() {
-        $allItems = $this->priceListModel->getAll();
         $search = $_GET['search'] ?? '';
         $filterStatus = $_GET['status'] ?? '';
         $filterCustomer = $_GET['customer'] ?? '';
 
-        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
-        if ($filterStatus !== '') {
-            $allItems = array_filter($allItems, function($item) use ($filterStatus) {
-                return $item['status'] == $filterStatus;
-            });
-        }
-        if ($filterCustomer !== '') {
-            $allItems = array_filter($allItems, function($item) use ($filterCustomer) {
-                return ($item['customer_name'] ?? '') === $filterCustomer;
-            });
-        }
-        return array_values($allItems);
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($filterStatus !== '') $filters['status'] = $filterStatus;
+        if ($filterCustomer !== '') $filters['customer_name'] = $filterCustomer;
+        return $this->priceListModel->getAllFiltered($filters);
     }
 
     public function priceListExport() {
@@ -401,29 +401,8 @@ class FinanceController {
 
     public function priceListCreate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->priceListModel->create([
-                'item_id' => $_POST['item_id'] ?? null,
-                'product_name' => $_POST['product_name'] ?? '',
-                'net_size' => $_POST['net_size'] ?? null,
-                'price_per_pack' => $_POST['price_per_pack'] ?? 0,
-                'price_per_case' => $_POST['price_per_case'] ?? 0,
-                'price_per_piece' => $_POST['price_per_piece'] ?? 0,
-                'vat_type' => $_POST['vat_type'] ?? 'vat'
-            ]);
-            $productLabel = trim((string)($_POST['product_name'] ?? '')) ?: 'price list item';
-            $itemCodeLabel = trim((string)($_POST['item_code'] ?? '')) ?: 'unknown item';
-            AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Created price list entry for ' . $productLabel . ' (' . $itemCodeLabel . ')', null, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? '', 'price_per_piece' => $_POST['price_per_piece'] ?? 0, 'vat_type' => $_POST['vat_type'] ?? 'vat'], 'price_list', null);
-            $_SESSION['success'] = 'Price list item added successfully';
-        }
-        header('Location: ?controller=finance&action=priceList');
-        exit;
-    }
-
-    public function priceListUpdate() {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $id = $_POST['price_list_id'] ?? null;
-            if ($id) {
-                $this->priceListModel->update($id, [
+            try {
+                $this->priceListModel->create([
                     'item_id' => $_POST['item_id'] ?? null,
                     'product_name' => $_POST['product_name'] ?? '',
                     'net_size' => $_POST['net_size'] ?? null,
@@ -433,8 +412,39 @@ class FinanceController {
                     'vat_type' => $_POST['vat_type'] ?? 'vat'
                 ]);
                 $productLabel = trim((string)($_POST['product_name'] ?? '')) ?: 'price list item';
-                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'finance', 'Updated price list entry for ' . $productLabel, null, $_POST, 'price_list', $id);
-                $_SESSION['success'] = 'Price list item updated successfully';
+                $itemCodeLabel = trim((string)($_POST['item_code'] ?? '')) ?: 'unknown item';
+                AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Created price list entry for ' . $productLabel . ' (' . $itemCodeLabel . ')', null, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? '', 'price_per_piece' => $_POST['price_per_piece'] ?? 0, 'vat_type' => $_POST['vat_type'] ?? 'vat'], 'price_list', null);
+                $_SESSION['success'] = 'Price list item added successfully';
+            } catch (\Exception $e) {
+                error_log('priceListCreate error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Failed to create price list item';
+            }
+        }
+        header('Location: ?controller=finance&action=priceList');
+        exit;
+    }
+
+    public function priceListUpdate() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $id = $_POST['price_list_id'] ?? null;
+                if ($id) {
+                    $this->priceListModel->update($id, [
+                        'item_id' => $_POST['item_id'] ?? null,
+                        'product_name' => $_POST['product_name'] ?? '',
+                        'net_size' => $_POST['net_size'] ?? null,
+                        'price_per_pack' => $_POST['price_per_pack'] ?? 0,
+                        'price_per_case' => $_POST['price_per_case'] ?? 0,
+                        'price_per_piece' => $_POST['price_per_piece'] ?? 0,
+                        'vat_type' => $_POST['vat_type'] ?? 'vat'
+                    ]);
+                    $productLabel = trim((string)($_POST['product_name'] ?? '')) ?: 'price list item';
+                    AuditModel::log($_SESSION['user_id'], 'UPDATE', 'finance', 'Updated price list entry for ' . $productLabel, null, $_POST, 'price_list', $id);
+                    $_SESSION['success'] = 'Price list item updated successfully';
+                }
+            } catch (\Exception $e) {
+                error_log('priceListUpdate error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Failed to update price list item';
             }
         }
         header('Location: ?controller=finance&action=priceList');
@@ -442,11 +452,16 @@ class FinanceController {
     }
 
     public function priceListToggle() {
-        $id = $_GET['id'] ?? null;
-        if ($id) {
-            $this->priceListModel->toggleStatus($id);
-            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'finance', 'Toggled price list status for entry #' . $id, null, ['price_list_id' => $id], 'price_list', $id);
-            $_SESSION['success'] = 'Status updated successfully';
+        try {
+            $id = $_GET['id'] ?? null;
+            if ($id) {
+                $this->priceListModel->toggleStatus($id);
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'finance', 'Toggled price list status for entry #' . $id, null, ['price_list_id' => $id], 'price_list', $id);
+                $_SESSION['success'] = 'Status updated successfully';
+            }
+        } catch (\Exception $e) {
+            error_log('priceListToggle error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to update status';
         }
         header('Location: ?controller=finance&action=priceList');
         exit;
@@ -454,13 +469,19 @@ class FinanceController {
 
     public function getUnpricedItemsByCustomer() {
         header('Content-Type: application/json');
-        $customer_id = $_GET['customer_id'] ?? null;
-        if (!$customer_id) {
-            echo json_encode([]);
-            exit;
+        try {
+            $customer_id = $_GET['customer_id'] ?? null;
+            if (!$customer_id) {
+                echo json_encode([]);
+                exit;
+            }
+            $items = $this->priceListModel->getUnpricedItemsByCustomer($customer_id);
+            echo json_encode($items);
+        } catch (\Exception $e) {
+            error_log('getUnpricedItemsByCustomer error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to load items']);
         }
-        $items = $this->priceListModel->getUnpricedItemsByCustomer($customer_id);
-        echo json_encode($items);
         exit;
     }
 
@@ -484,8 +505,8 @@ class FinanceController {
         foreach ($lotItems as $li) {
             $liQty = $li['qty'] ?? 0;
             $itemPrice = $priceList['price_per_piece'] ?? 0;
-            $itemAmount = $liQty * $itemPrice;
-            $conv = $li['uom_conversion'] ?? null;
+            $itemAmount = round($liQty * $itemPrice, 2);
+            $conv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;
             $uom = $li['item_uom'] ?? '';
             $cases = ($conv && $uom !== 'CS') ? floor($liQty / $conv) : 0;
 
@@ -506,8 +527,8 @@ class FinanceController {
         if (empty($items) && $delivery) {
             $qty = $delivery['delivery_quantity'] ?? 0;
             $price = $priceList['price_per_piece'] ?? 0;
-            $amount = $qty * $price;
-            $conv = $delivery['uom_conversion'] ?? null;
+            $amount = round($qty * $price, 2);
+            $conv = $delivery['actual_uom_conversion'] ?? $delivery['uom_conversion'] ?? null;
             $itemUom = $delivery['item_uom'] ?? '';
             $cases = ($conv && $itemUom !== 'CS') ? floor($qty / $conv) : 0;
             $items[] = [
@@ -524,8 +545,8 @@ class FinanceController {
         }
 
         if ($vatType === 'vat') {
-            $subtotal = $grandTotalAmount / 1.12;
-            $vat = $grandTotalAmount - $subtotal;
+            $subtotal = round($grandTotalAmount / 1.12, 2);
+            $vat = round($grandTotalAmount - $subtotal, 2);
         } else {
             $subtotal = $grandTotalAmount;
             $vat = 0;
@@ -577,8 +598,8 @@ class FinanceController {
         foreach ($lotItems as $li) {
             $liQty = $li['qty'] ?? 0;
             $itemPrice = $priceList['price_per_piece'] ?? 0;
-            $itemAmount = $liQty * $itemPrice;
-            $conv = $li['uom_conversion'] ?? null;
+            $itemAmount = round($liQty * $itemPrice, 2);
+            $conv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;
             $uom = $li['item_uom'] ?? '';
             $cases = ($conv && $uom !== 'CS') ? floor($liQty / $conv) : 0;
 
@@ -599,8 +620,8 @@ class FinanceController {
         if (empty($items) && $delivery) {
             $qty = $delivery['delivery_quantity'] ?? 0;
             $price = $priceList['price_per_piece'] ?? 0;
-            $amount = $qty * $price;
-            $conv = $delivery['uom_conversion'] ?? null;
+            $amount = round($qty * $price, 2);
+            $conv = $delivery['actual_uom_conversion'] ?? $delivery['uom_conversion'] ?? null;
             $itemUom = $delivery['item_uom'] ?? '';
             $cases = ($conv && $itemUom !== 'CS') ? floor($qty / $conv) : 0;
             $items[] = [
@@ -617,8 +638,8 @@ class FinanceController {
         }
 
         if ($vatType === 'vat') {
-            $subtotal = $grandTotalAmount / 1.12;
-            $vat = $grandTotalAmount - $subtotal;
+            $subtotal = round($grandTotalAmount / 1.12, 2);
+            $vat = round($grandTotalAmount - $subtotal, 2);
         } else {
             $subtotal = $grandTotalAmount;
             $vat = 0;
@@ -651,30 +672,37 @@ class FinanceController {
     }
 
     public function activityLogs() {
-        $auditModel = new \App\Models\AuditModel();
-        $filters = [
-            'department' => $_SESSION['department'] ?? 'finance',
-            'user_id'    => $_GET['user_id'] ?? '',
-            'module'     => $_GET['module'] ?? '',
-            'log_action' => $_GET['log_action'] ?? '',
-            'date_from'  => $_GET['date_from'] ?? '',
-            'date_to'    => $_GET['date_to'] ?? '',
-            'search'     => $_GET['search'] ?? '',
-        ];
-        foreach ($filters as $k => $v) { if ($v === '') unset($filters[$k]); }
-        $logs = $auditModel->getLogs($filters, $_GET['page'] ?? 1, 20);
-        $data['logs'] = $logs;
-        $data['users'] = $auditModel->getAllUsers();
-        $data['filters'] = $_GET;
-        $data['logController'] = 'finance';
-        $data['departmentLocked'] = true;
-        $data['hideDeptColumn'] = true;
-        $data['stats'] = [
-            'today_count' => \App\Models\AuditModel::getLogStats('finance')['today_count'] ?? 0,
-            'by_department' => [],
-        ];
-        $data['page_title'] = 'Activity Logs';
-        $this->render('activity_logs/index', $data);
+        try {
+            $auditModel = new \App\Models\AuditModel();
+            $filters = [
+                'department' => $_SESSION['department'] ?? 'finance',
+                'user_id'    => $_GET['user_id'] ?? '',
+                'module'     => $_GET['module'] ?? '',
+                'log_action' => $_GET['log_action'] ?? '',
+                'date_from'  => $_GET['date_from'] ?? '',
+                'date_to'    => $_GET['date_to'] ?? '',
+                'search'     => $_GET['search'] ?? '',
+            ];
+            foreach ($filters as $k => $v) { if ($v === '') unset($filters[$k]); }
+            $logs = $auditModel->getLogs($filters, $_GET['page'] ?? 1, 20);
+            $data['logs'] = $logs;
+            $data['users'] = $auditModel->getAllUsers();
+            $data['filters'] = $_GET;
+            $data['logController'] = 'finance';
+            $data['departmentLocked'] = true;
+            $data['hideDeptColumn'] = true;
+            $data['stats'] = [
+                'today_count' => \App\Models\AuditModel::getLogStats('finance')['today_count'] ?? 0,
+                'by_department' => [],
+            ];
+            $data['page_title'] = 'Activity Logs';
+            $this->render('activity_logs/index', $data);
+        } catch (\Exception $e) {
+            error_log('activityLogs error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to load activity logs';
+            header('Location: ?controller=finance&action=dashboard');
+            exit;
+        }
     }
 
     private function render($view, $data = []) {

@@ -223,6 +223,36 @@
                         </tbody>
                     </table>
                 </div>
+
+                <hr>
+                <h5 class="mb-3">Lot Tracker</h5>
+                <div class="row mb-3 align-items-center">
+                    <div class="col-md-4">
+                        <label for="lotTrackerItem" class="form-label fw-bold">Select Item</label>
+                        <select id="lotTrackerItem" class="form-select form-select-sm">
+                            <option value="">-- Select Item --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0" id="lotTrackerTable">
+                        <thead>
+                            <tr>
+                                <th>Lot No.</th>
+                                <th class="text-end">Qty Produced</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lotTrackerBody">
+                            <tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>
+                        </tbody>
+                        <tfoot id="lotTrackerFoot" style="display:none;">
+                            <tr class="table-light fw-bold">
+                                <td>Total</td>
+                                <td class="text-end" id="lotTrackerTotal">0</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -230,39 +260,75 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var _currentPOItems = [];
+
+    function loadLots(poiId) {
+        var tbody = document.getElementById('lotTrackerBody');
+        var foot = document.getElementById('lotTrackerFoot');
+        var totalEl = document.getElementById('lotTrackerTotal');
+        if (!poiId) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>';
+            foot.style.display = 'none';
+            return;
+        }
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Loading...</td></tr>';
+        foot.style.display = 'none';
+        fetch('?controller=admin&action=getLotsByPOItem&poi_id=' + poiId)
+            .then(function(r) { return r.json(); })
+            .then(function(lots) {
+                tbody.innerHTML = '';
+                if (lots && lots.length > 0) {
+                    var total = 0;
+                    lots.forEach(function(lot) {
+                        var qty = parseInt(lot.quantity_produced) || 0;
+                        total += qty;
+                        tbody.innerHTML += '<tr>' +
+                            '<td><strong>' + (lot.lot_number || '-') + '</strong></td>' +
+                            '<td class="text-end">' + qty.toLocaleString() + '</td>' +
+                            '</tr>';
+                    });
+                    totalEl.textContent = total.toLocaleString();
+                    foot.style.display = '';
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">No lots created</td></tr>';
+                    foot.style.display = 'none';
+                }
+            })
+            .catch(function() {
+                tbody.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-3">Failed to load lots</td></tr>';
+                foot.style.display = 'none';
+            });
+    }
+
     document.querySelectorAll('.view-po-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             const poId = this.getAttribute('data-po-id');
-            console.log('PO ID:', poId);
             fetch('?controller=warehouse&action=getPODetails&id=' + poId)
-                .then(function(response) {
-                    console.log('Response status:', response.status);
-                    return response.json();
-                })
+                .then(function(response) { return response.json(); })
                 .then(function(data) {
-                    console.log('Data received:', data);
                     const po = data.po;
                     const items = data.po_items;
-                    
+                    _currentPOItems = items || [];
+
                     document.getElementById('viewPONumber').textContent = po.customer_po_number || '-';
                     document.getElementById('viewCustomerCode').textContent = po.customer_code || '-';
                     document.getElementById('viewCustomerName').textContent = po.customer_name || '-';
                     document.getElementById('viewCustomerTin').textContent = po.customer_tin || '-';
                     document.getElementById('viewCustomerTerms').textContent = (po.customer_terms || 0) + ' days';
-                    
-                    const tbody = document.getElementById('viewPOItems');
+
+                    var tbody = document.getElementById('viewPOItems');
                     tbody.innerHTML = '';
                     if (items && items.length > 0) {
                         items.forEach(function(item) {
-                            const qty = item.quantity || 0;
-                            const itemProduced = item.produced_quantity || 0;
-                            const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                            const isExcess = itemProduced > qty;
-                            const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
-                            const barWidth = Math.min(itemPercent, 100);
-                            const row = '<tr>' +
+                            var qty = item.quantity || 0;
+                            var itemProduced = item.produced_quantity || 0;
+                            var itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
+                            var isExcess = itemProduced > qty;
+                            var barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                            var barWidth = Math.min(itemPercent, 100);
+                            tbody.innerHTML += '<tr>' +
                                 '<td>' + (item.item_code || '-') + '</td>' +
                                 '<td>' + (item.item_description || '-') + '</td>' +
                                 '<td>' + (item.item_uom || '-') + '</td>' +
@@ -276,20 +342,35 @@ document.addEventListener('DOMContentLoaded', function() {
                                     '</div>' +
                                 '</td>' +
                                 '</tr>';
-                            tbody.innerHTML += row;
                         });
                     } else {
                         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No items found</td></tr>';
                     }
-                    
-                    const modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
+
+                    var lotSelect = document.getElementById('lotTrackerItem');
+                    lotSelect.innerHTML = '<option value="">-- Select Item --</option>';
+                    if (items && items.length > 0) {
+                        items.forEach(function(item) {
+                            lotSelect.innerHTML += '<option value="' + item.poi_id + '">' +
+                                (item.item_code || '') + ' - ' + (item.item_description || '-') +
+                                '</option>';
+                        });
+                    }
+
+                    document.getElementById('lotTrackerBody').innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Select an item to view lots</td></tr>';
+                    document.getElementById('lotTrackerFoot').style.display = 'none';
+
+                    var modal = new bootstrap.Modal(document.getElementById('viewPOModal'));
                     modal.show();
                 })
                 .catch(function(error) {
-                    console.error('Error:', error);
                     alert('Failed to load PO details: ' + error.message);
                 });
         });
+    });
+
+    document.getElementById('lotTrackerItem').addEventListener('change', function() {
+        loadLots(this.value);
     });
 });
 

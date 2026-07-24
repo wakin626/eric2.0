@@ -48,22 +48,25 @@ class AdminController {
         $data['deliveries'] = $this->warehouseModel->getDeliveries();
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['history'] = $this->warehouseModel->getProductionHistory();
         $data['page_title'] = 'Admin Dashboard';
         $this->render('dashboard', $data);
     }
 
     public function customers() {
-        $allCustomers = $this->customerModel->getAll(false);
         $search = $_GET['search'] ?? '';
-        if ($search) $allCustomers = Pagination::filterBySearch($allCustomers, $search);
+        $filters = [];
+        if ($search) $filters['search'] = $search;
 
         $hasFilters = ($search !== '');
         if ($hasFilters) {
+            $allCustomers = $this->customerModel->getAllFiltered($filters);
             $data['customers'] = $allCustomers;
             $data['page'] = 1;
             $data['totalPages'] = 1;
             $data['total'] = count($allCustomers);
         } else {
+            $allCustomers = $this->customerModel->getAll(false);
             $pagination = Pagination::paginate($allCustomers, 10);
             $data['customers'] = $pagination['items'];
             $data['page'] = $pagination['page'];
@@ -78,9 +81,10 @@ class AdminController {
     }
 
     public function customersExport() {
-        $allCustomers = $this->customerModel->getAll(false);
         $search = $_GET['search'] ?? '';
-        if ($search) $allCustomers = Pagination::filterBySearch($allCustomers, $search);
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        $allCustomers = $this->customerModel->getAllFiltered($filters);
 
         $headers = ['Code', 'Name', 'Delivery Address', 'TIN', 'Terms'];
         $rows = [];
@@ -99,9 +103,10 @@ class AdminController {
     }
 
     public function customersPrint() {
-        $allCustomers = $this->customerModel->getAll(false);
         $search = $_GET['search'] ?? '';
-        if ($search) $allCustomers = Pagination::filterBySearch($allCustomers, $search);
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        $allCustomers = $this->customerModel->getAllFiltered($filters);
 
         $data['customers'] = $allCustomers;
         $data['search'] = $search;
@@ -141,11 +146,18 @@ class AdminController {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $oldCustomer = $this->customerModel->getById($id);
-            $result = $this->customerModel->update($id, $_POST);
-            if ($result) {
-                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated customer: ' . ($oldCustomer['customer_name'] ?? ''), $oldCustomer, ['customer_name' => $_POST['customer_name'] ?? '', 'customer_code' => $_POST['customer_code'] ?? ''], 'customer', $id);
-                $_SESSION['success'] = 'Customer updated successfully';
+            try {
+                $oldCustomer = $this->customerModel->getById($id);
+                $result = $this->customerModel->update($id, $_POST);
+                if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated customer: ' . ($oldCustomer['customer_name'] ?? ''), $oldCustomer, ['customer_name' => $_POST['customer_name'] ?? '', 'customer_code' => $_POST['customer_code'] ?? ''], 'customer', $id);
+                    $_SESSION['success'] = 'Customer updated successfully';
+                    header('Location: ?controller=admin&action=customers');
+                    exit;
+                }
+            } catch (\Exception $e) {
+                error_log('customerEdit error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Failed to update customer: ' . $e->getMessage();
                 header('Location: ?controller=admin&action=customers');
                 exit;
             }
@@ -156,33 +168,35 @@ class AdminController {
 
     public function customerDelete() {
         $id = $_GET['id'] ?? null;
-        $oldCustomer = $this->customerModel->getById($id);
-        $this->customerModel->softDelete($id);
-        AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted customer: ' . ($oldCustomer['customer_name'] ?? $id), $oldCustomer, null, 'customer', $id);
-        $_SESSION['success'] = 'Customer deleted successfully';
+        try {
+            $oldCustomer = $this->customerModel->getById($id);
+            $this->customerModel->softDelete($id);
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted customer: ' . ($oldCustomer['customer_name'] ?? $id), $oldCustomer, null, 'customer', $id);
+            $_SESSION['success'] = 'Customer deleted successfully';
+        } catch (\Exception $e) {
+            error_log('customerDelete error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to delete customer: ' . $e->getMessage();
+        }
         header('Location: ?controller=admin&action=customers');
         exit;
     }
 
     public function items() {
-        $allItems = $this->itemModel->getAll(false);
         $search = $_GET['search'] ?? '';
         $customerFilter = $_GET['customer_id'] ?? '';
-        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
-        if ($customerFilter) {
-            $allItems = array_filter($allItems, function($item) use ($customerFilter) {
-                return isset($item['customer_id']) && $item['customer_id'] == $customerFilter;
-            });
-            $allItems = array_values($allItems);
-        }
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($customerFilter) $filters['customer_id'] = $customerFilter;
 
         $hasFilters = ($search !== '' || $customerFilter !== '');
         if ($hasFilters) {
+            $allItems = $this->itemModel->getAllFiltered($filters);
             $data['items'] = $allItems;
             $data['page'] = 1;
             $data['totalPages'] = 1;
             $data['total'] = count($allItems);
         } else {
+            $allItems = $this->itemModel->getAll(false);
             $pagination = Pagination::paginate($allItems, 10);
             $data['items'] = $pagination['items'];
             $data['page'] = $pagination['page'];
@@ -198,16 +212,12 @@ class AdminController {
     }
 
     public function itemsExport() {
-        $allItems = $this->itemModel->getAll(false);
         $search = $_GET['search'] ?? '';
         $customerFilter = $_GET['customer_id'] ?? '';
-        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
-        if ($customerFilter) {
-            $allItems = array_filter($allItems, function($item) use ($customerFilter) {
-                return isset($item['customer_id']) && $item['customer_id'] == $customerFilter;
-            });
-            $allItems = array_values($allItems);
-        }
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($customerFilter) $filters['customer_id'] = $customerFilter;
+        $allItems = $this->itemModel->getAllFiltered($filters);
 
         $headers = ['Code', 'Description', 'Customer', 'UOM', 'Conversion'];
         $rows = [];
@@ -224,16 +234,12 @@ class AdminController {
     }
 
     public function itemsPrint() {
-        $allItems = $this->itemModel->getAll(false);
         $search = $_GET['search'] ?? '';
         $customerFilter = $_GET['customer_id'] ?? '';
-        if ($search) $allItems = Pagination::filterBySearch($allItems, $search);
-        if ($customerFilter) {
-            $allItems = array_filter($allItems, function($item) use ($customerFilter) {
-                return isset($item['customer_id']) && $item['customer_id'] == $customerFilter;
-            });
-            $allItems = array_values($allItems);
-        }
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($customerFilter) $filters['customer_id'] = $customerFilter;
+        $allItems = $this->itemModel->getAllFiltered($filters);
 
         $data['items'] = $allItems;
         $data['search'] = $search;
@@ -250,14 +256,26 @@ class AdminController {
             try {
                 $result = $this->itemModel->create($_POST);
                 if ($result) {
-                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created item: ' . ($_POST['item_name'] ?? ''), null, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? ''], 'item', $result);
+                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created item: ' . ($_POST['item_description'] ?? ''), null, ['item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['item_description'] ?? ''], 'item', $result);
                     $_SESSION['success'] = 'Item created successfully';
-                    header('Location: ?controller=admin&action=items');
+                    $search = $_POST['filter_search'] ?? '';
+                    $customerFilter = $_POST['filter_customer_id'] ?? '';
+                    $redirect = '?controller=admin&action=items';
+                    if ($search !== '' || $customerFilter !== '') {
+                        $redirect .= '&search=' . urlencode($search) . '&customer_id=' . urlencode($customerFilter);
+                    }
+                    header('Location: ' . $redirect);
                     exit;
                 }
             } catch (\Exception $e) {
                 $_SESSION['error'] = $e->getMessage();
-                header('Location: ?controller=admin&action=items');
+                $search = $_POST['filter_search'] ?? '';
+                $customerFilter = $_POST['filter_customer_id'] ?? '';
+                $redirect = '?controller=admin&action=items';
+                if ($search !== '' || $customerFilter !== '') {
+                    $redirect .= '&search=' . urlencode($search) . '&customer_id=' . urlencode($customerFilter);
+                }
+                header('Location: ' . $redirect);
                 exit;
             }
         }
@@ -268,19 +286,29 @@ class AdminController {
 
     public function itemEdit() {
         $id = $_GET['id'] ?? null;
+        $search = $_GET['search'] ?? '';
+        $customerFilter = $_GET['customer_id'] ?? '';
         $data['item'] = $this->itemModel->getById($id);
         if (!$data['item']) {
             $_SESSION['error'] = 'Item not found';
-            header('Location: ?controller=admin&action=items');
+            $redirect = '?controller=admin&action=items';
+            if ($search !== '' || $customerFilter !== '') {
+                $redirect .= '&search=' . urlencode($search) . '&customer_id=' . urlencode($customerFilter);
+            }
+            header('Location: ' . $redirect);
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $oldItem = $this->itemModel->getById($id);
             $result = $this->itemModel->update($id, $_POST);
             if ($result) {
-                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item: ' . ($oldItem['item_name'] ?? ''), $oldItem, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? ''], 'item', $id);
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item: ' . ($oldItem['item_description'] ?? ''), $oldItem, ['item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['item_description'] ?? ''], 'item', $id);
                 $_SESSION['success'] = 'Item updated successfully';
-                header('Location: ?controller=admin&action=items');
+                $redirect = '?controller=admin&action=items';
+                if ($search !== '' || $customerFilter !== '') {
+                    $redirect .= '&search=' . urlencode($search) . '&customer_id=' . urlencode($customerFilter);
+                }
+                header('Location: ' . $redirect);
                 exit;
             }
         }
@@ -291,28 +319,58 @@ class AdminController {
 
     public function itemDelete() {
         $id = $_GET['id'] ?? null;
-        $oldItem = $this->itemModel->getById($id);
-        $this->itemModel->softDelete($id);
-        AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted item: ' . ($oldItem['item_name'] ?? $id), $oldItem, null, 'item', $id);
-        $_SESSION['success'] = 'Item deleted successfully';
-        header('Location: ?controller=admin&action=items');
+        try {
+            $oldItem = $this->itemModel->getById($id);
+            $this->itemModel->softDelete($id);
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted item: ' . ($oldItem['item_description'] ?? $id), $oldItem, null, 'item', $id);
+            $_SESSION['success'] = 'Item deleted successfully';
+        } catch (\Exception $e) {
+            error_log('itemDelete error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to delete item: ' . $e->getMessage();
+        }
+        $search = $_GET['search'] ?? '';
+        $customerFilter = $_GET['customer_id'] ?? '';
+        $redirect = '?controller=admin&action=items';
+        if ($search !== '' || $customerFilter !== '') {
+            $redirect .= '&search=' . urlencode($search) . '&customer_id=' . urlencode($customerFilter);
+        }
+        header('Location: ' . $redirect);
         exit;
     }
 
     public function itemToggleStatus() {
         $id = $_GET['id'] ?? null;
-        $oldItem = $this->itemModel->getById($id);
-        $this->itemModel->toggleStatus($id);
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled item status: ' . ($oldItem['item_name'] ?? $id), $oldItem, null, 'item', $id);
-        header('Location: ?controller=admin&action=items');
+        try {
+            $oldItem = $this->itemModel->getById($id);
+            $this->itemModel->toggleStatus($id);
+            $newStatus = $oldItem['status'] ? 'Inactive' : 'Active';
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled item status to ' . $newStatus . ': ' . ($oldItem['item_description'] ?? $id), $oldItem, null, 'item', $id);
+            $_SESSION['success'] = 'Item status changed to ' . $newStatus;
+        } catch (\Exception $e) {
+            error_log('itemToggleStatus error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to update status: ' . $e->getMessage();
+        }
+        $redirect = '?controller=admin&action=items';
+        $search = $_GET['search'] ?? '';
+        $customerFilter = $_GET['customer_id'] ?? '';
+        if ($search !== '' || $customerFilter !== '') {
+            $redirect .= '&search=' . urlencode($search) . '&customer_id=' . urlencode($customerFilter);
+        }
+        header('Location: ' . $redirect);
         exit;
     }
 
     public function customerToggleStatus() {
         $id = $_GET['id'] ?? null;
-        $oldCustomer = $this->customerModel->getById($id);
-        $this->customerModel->toggleStatus($id);
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled customer status: ' . ($oldCustomer['customer_name'] ?? $id), $oldCustomer, null, 'customer', $id);
+        try {
+            $oldCustomer = $this->customerModel->getById($id);
+            $this->customerModel->toggleStatus($id);
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled customer status: ' . ($oldCustomer['customer_name'] ?? $id), $oldCustomer, null, 'customer', $id);
+            $_SESSION['success'] = 'Customer status updated';
+        } catch (\Exception $e) {
+            error_log('customerToggleStatus error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to update status: ' . $e->getMessage();
+        }
         header('Location: ?controller=admin&action=customers');
         exit;
     }
@@ -328,12 +386,17 @@ class AdminController {
 
     public function customerUpdate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $id = $_POST['customer_id'] ?? null;
-            $oldCustomer = $this->customerModel->getById($id);
-            $result = $this->customerModel->update($id, $_POST);
-            if ($result) {
-                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated customer (inline): ' . ($oldCustomer['customer_name'] ?? ''), $oldCustomer, ['customer_name' => $_POST['customer_name'] ?? '', 'customer_code' => $_POST['customer_code'] ?? ''], 'customer', $id);
-                $_SESSION['success'] = 'Customer updated successfully';
+            try {
+                $id = $_POST['customer_id'] ?? null;
+                $oldCustomer = $this->customerModel->getById($id);
+                $result = $this->customerModel->update($id, $_POST);
+                if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated customer (inline): ' . ($oldCustomer['customer_name'] ?? ''), $oldCustomer, ['customer_name' => $_POST['customer_name'] ?? '', 'customer_code' => $_POST['customer_code'] ?? ''], 'customer', $id);
+                    $_SESSION['success'] = 'Customer updated successfully';
+                }
+            } catch (\Exception $e) {
+                error_log('customerUpdate error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Failed to update customer: ' . $e->getMessage();
             }
         }
         header('Location: ?controller=admin&action=customers');
@@ -347,48 +410,42 @@ class AdminController {
                 $oldItem = $this->itemModel->getById($id);
                 $result = $this->itemModel->update($id, $_POST);
                 if ($result) {
-                    AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item (inline): ' . ($oldItem['item_name'] ?? ''), $oldItem, ['item_name' => $_POST['item_name'] ?? '', 'item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['description'] ?? ''], 'item', $id);
+                    AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item (inline): ' . ($oldItem['item_description'] ?? ''), $oldItem, ['item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['item_description'] ?? ''], 'item', $id);
                     $_SESSION['success'] = 'Item updated successfully';
                 }
             } catch (\Exception $e) {
                 $_SESSION['error'] = $e->getMessage();
             }
         }
-        header('Location: ?controller=admin&action=items');
+        $search = $_POST['filter_search'] ?? '';
+        $customerFilter = $_POST['filter_customer_id'] ?? '';
+        $redirect = '?controller=admin&action=items';
+        if ($search !== '' || $customerFilter !== '') {
+            $redirect .= '&search=' . urlencode($search) . '&customer_id=' . urlencode($customerFilter);
+        }
+        header('Location: ' . $redirect);
         exit;
     }
 
 public function purchaseOrders() {
-    $allPOs = $this->warehouseModel->getPurchaseOrders();
     $search = $_GET['search'] ?? '';
     $filterCustomer = $_GET['filter_customer'] ?? '';
     $filterItem = $_GET['filter_item'] ?? '';
     $filterDate = $_GET['filter_date'] ?? '';
 
-    if ($search) $allPOs = Pagination::filterBySearch($allPOs, $search);
-
-    $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
-
-    if ($filterCustomer) {
-        $allPOs = array_values(array_filter($allPOs, fn($po) => stripos($po['customer_name'] ?? '', $filterCustomer) !== false));
-    }
-    if ($filterItem) {
-        $allPOs = array_values(array_filter($allPOs, function($po) use ($filterItem) {
-            $items = $this->warehouseModel->getPurchaseOrderItemsByPOIds([$po['po_id']]);
-            foreach (($items[$po['po_id']] ?? []) as $item) {
-                if (stripos($item['item_description'] ?? '', $filterItem) !== false) return true;
-            }
-            return false;
-        }));
-    }
-    if ($filterDate) {
-        $allPOs = array_values(array_filter($allPOs, fn($po) => substr($po['date_created'] ?? '', 0, 10) === $filterDate));
-    }
-
     $hasFilter = $search || $filterCustomer || $filterItem || $filterDate;
     if ($hasFilter) {
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
+        if ($filterItem) $filters['item_description'] = $filterItem;
+        if ($filterDate) $filters['date'] = $filterDate;
+        $allPOs = $this->warehouseModel->getPurchaseOrdersFiltered($filters);
+        $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
         $pagination = ['items' => $allPOs, 'page' => 1, 'perPage' => count($allPOs), 'total' => count($allPOs), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
     } else {
+        $allPOs = $this->warehouseModel->getPurchaseOrders();
+        $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
         $pagination = Pagination::paginate($allPOs, 10);
     }
 
@@ -433,7 +490,6 @@ public function purchaseOrders() {
 }
 
 public function delivered() {
-    $allDeliveries = $this->warehouseModel->getDeliveries();
     $search = $_GET['search'] ?? '';
     $filterCustomer = $_GET['filter_customer'] ?? '';
     $filterItem = $_GET['filter_item'] ?? '';
@@ -444,43 +500,26 @@ public function delivered() {
     $filterType = $_GET['filter_type'] ?? '';
     $filterReports = isset($_GET['filter_reports']) && $_GET['filter_reports'] === '1';
 
+    $hasFilter = $search || $filterCustomer || $filterItem || $filterDR || $filterDate || $filterPo || $filterDeliveredBy || $filterType || $filterReports;
+    if ($hasFilter) {
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
+        if ($filterItem) $filters['item_description'] = $filterItem;
+        if ($filterDR) $filters['dr_number'] = $filterDR;
+        if ($filterDate) $filters['delivery_date'] = $filterDate;
+        if ($filterPo) $filters['po_number'] = $filterPo;
+        if ($filterDeliveredBy) $filters['delivered_by'] = $filterDeliveredBy;
+        if ($filterType) $filters['production_type'] = $filterType;
+        if ($filterReports) $filters['has_reports'] = true;
+        $allDeliveries = $this->warehouseModel->getDeliveriesFiltered($filters);
+    } else {
+        $allDeliveries = $this->warehouseModel->getDeliveries();
+    }
+
     $reportedCount = 0;
     foreach ($allDeliveries as $d) {
         if (($d['remarks_type'] ?? '') === 'report') $reportedCount++;
-    }
-
-    if ($search) $allDeliveries = Pagination::filterBySearch($allDeliveries, $search);
-    if ($filterCustomer) {
-        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['customer_name'] ?? '', $filterCustomer) !== false));
-    }
-    if ($filterItem) {
-        $allDeliveries = array_values(array_filter($allDeliveries, function($d) use ($filterItem) {
-            $lotItems = json_decode($d['lot_items'] ?? '[]', true);
-            if (is_array($lotItems)) {
-                foreach ($lotItems as $li) {
-                    if (stripos($li['item_description'] ?? '', $filterItem) !== false) return true;
-                }
-            }
-            return stripos($d['item_description'] ?? '', $filterItem) !== false;
-        }));
-    }
-    if ($filterDR) {
-        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['dr_number'] ?? '', $filterDR) !== false));
-    }
-    if ($filterDate) {
-        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => substr($d['delivery_date'] ?? '', 0, 10) === $filterDate));
-    }
-    if ($filterPo) {
-        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['customer_po_number'] ?? '', $filterPo) !== false));
-    }
-    if ($filterDeliveredBy) {
-        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => stripos($d['delivered_by_name'] ?? '', $filterDeliveredBy) !== false));
-    }
-    if ($filterType) {
-        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => ($d['production_type'] ?? 'normal') === $filterType));
-    }
-    if ($filterReports) {
-        $allDeliveries = array_values(array_filter($allDeliveries, fn($d) => ($d['remarks_type'] ?? '') === 'report'));
     }
 
     usort($allDeliveries, function($a, $b) {
@@ -505,7 +544,6 @@ public function delivered() {
     $allPOs = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_po_number'))));
     $allDeliveredBy = array_values(array_unique(array_filter(array_column($allDeliveries, 'delivered_by_name'))));
 
-    $hasFilter = $filterCustomer || $filterItem || $filterDR || $filterDate || $filterPo || $filterDeliveredBy || $filterType || $filterReports;
     if ($hasFilter) {
         $pagination = ['items' => $allDeliveries, 'page' => 1, 'perPage' => count($allDeliveries), 'total' => count($allDeliveries), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
     } else {
@@ -513,6 +551,19 @@ public function delivered() {
     }
 
     $data['deliveries'] = $pagination['items'];
+    $deliveryIds = array_column($pagination['items'], 'delivery_id');
+        $receiptsMap = [];
+        if (!empty($deliveryIds)) {
+            $placeholders = implode(',', array_fill(0, count($deliveryIds), '?'));
+            $conn = $this->warehouseModel::getConnection();
+            $stmt = $conn->prepare("SELECT * FROM delivery_receipts WHERE delivery_id IN ($placeholders) AND `remove` = 0 ORDER BY date_created ASC");
+            $stmt->execute($deliveryIds);
+            foreach ($stmt->fetchAll() as $r) {
+                $receiptsMap[$r['delivery_id']][] = $r;
+            }
+        }
+        $data['receipts_map'] = $receiptsMap;
+
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
@@ -547,6 +598,7 @@ public function toggleDeliveryStatus() {
         }
         $deliveryId = $_POST['delivery_id'] ?? null;
         if (!$deliveryId) {
+            http_response_code(400);
             echo json_encode(['error' => 'Missing delivery_id']);
             exit;
         }
@@ -554,8 +606,9 @@ public function toggleDeliveryStatus() {
         AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled delivery status #' . $deliveryId, null, ['active_status' => (int)$newStatus], 'delivery', $deliveryId);
         echo json_encode(['success' => true, 'active_status' => (int)$newStatus]);
     } catch (\Exception $e) {
+        error_log('toggleDeliveryStatus error: ' . $e->getMessage());
         http_response_code(500);
-        echo json_encode(['error' => $e->getMessage()]);
+        echo json_encode(['error' => 'Failed to toggle delivery status']);
     }
     exit;
 }
@@ -586,65 +639,81 @@ public function deleteDelivery() {
 
 public function updateDelivery() {
     header('Content-Type: application/json');
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        http_response_code(405);
-        echo json_encode(['error' => 'Method not allowed']);
-        exit;
-    }
-    $deliveryId = $_POST['delivery_id'] ?? null;
-    $drNumber = trim($_POST['dr_number'] ?? '');
-    $deliveryDate = $_POST['delivery_date'] ?? '';
-    $lotChangesJson = $_POST['lot_changes'] ?? '[]';
+    try {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        $deliveryId = $_POST['delivery_id'] ?? null;
+        $drNumber = trim($_POST['dr_number'] ?? '');
+        $deliveryDate = $_POST['delivery_date'] ?? '';
+        $lotChangesJson = $_POST['lot_changes'] ?? '[]';
 
-    if (!$deliveryId) {
-        echo json_encode(['error' => 'Missing delivery_id']);
-        exit;
-    }
+        if (!$deliveryId) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing delivery_id']);
+            exit;
+        }
 
-    $lotChanges = json_decode($lotChangesJson, true);
-    if (!is_array($lotChanges)) $lotChanges = [];
+        $lotChanges = json_decode($lotChangesJson, true);
+        if (!is_array($lotChanges)) $lotChanges = [];
 
-    $result = $this->warehouseModel->updateDelivery($deliveryId, [
-        'dr_number' => $drNumber,
-        'delivery_date' => $deliveryDate,
-        'lot_changes' => $lotChanges
-    ]);
+        $result = $this->warehouseModel->updateDelivery($deliveryId, [
+            'dr_number' => $drNumber,
+            'delivery_date' => $deliveryDate,
+            'lot_changes' => $lotChanges
+        ]);
 
-    if (is_array($result) && isset($result['success']) && !$result['success']) {
-        echo json_encode(['error' => $result['error']]);
-    } else {
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated delivery #' . $deliveryId, null, ['dr_number' => $drNumber, 'delivery_date' => $deliveryDate], 'delivery', $deliveryId);
-        echo json_encode(['success' => true]);
+        if (is_array($result) && isset($result['success']) && !$result['success']) {
+            http_response_code(400);
+            echo json_encode(['error' => $result['error']]);
+        } else {
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated delivery #' . $deliveryId, null, ['dr_number' => $drNumber, 'delivery_date' => $deliveryDate], 'delivery', $deliveryId);
+            echo json_encode(['success' => true]);
+        }
+    } catch (\Exception $e) {
+        error_log('updateDelivery error: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to update delivery']);
     }
     exit;
 }
 
 public function resolveDeliveryReport() {
     header('Content-Type: application/json');
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        http_response_code(405);
-        echo json_encode(['error' => 'Method not allowed']);
-        exit;
-    }
-    $reportId = $_POST['report_id'] ?? null;
-    $newQuantity = $_POST['new_quantity'] ?? null;
-    $newDrNumber = trim($_POST['new_dr_number'] ?? '');
+    try {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        $reportId = $_POST['report_id'] ?? null;
+        $newQuantity = $_POST['new_quantity'] ?? null;
+        $newDrNumber = trim($_POST['new_dr_number'] ?? '');
 
-    if (!$reportId) {
-        echo json_encode(['error' => 'Missing report_id']);
-        exit;
-    }
+        if (!$reportId) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing report_id']);
+            exit;
+        }
 
-    $result = $this->warehouseModel->resolveDeliveryReport(
-        $reportId,
-        $newQuantity !== null ? intval($newQuantity) : null,
-        $_SESSION['user_id'],
-        $newDrNumber ?: null
-    );
-    if ($result) {
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Resolved delivery report #' . $reportId, null, ['new_quantity' => $newQuantity, 'new_dr_number' => $newDrNumber], 'delivery_report', $reportId);
-        echo json_encode(['success' => true]);
-    } else {
+        $result = $this->warehouseModel->resolveDeliveryReport(
+            $reportId,
+            $newQuantity !== null ? intval($newQuantity) : null,
+            $_SESSION['user_id'],
+            $newDrNumber ?: null
+        );
+        if ($result) {
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Resolved delivery report #' . $reportId, null, ['new_quantity' => $newQuantity, 'new_dr_number' => $newDrNumber], 'delivery_report', $reportId);
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(404);
+            echo json_encode(['error' => 'Report not found']);
+        }
+    } catch (\Exception $e) {
+        error_log('resolveDeliveryReport error: ' . $e->getMessage());
+        http_response_code(500);
         echo json_encode(['error' => 'Failed to resolve report']);
     }
     exit;
@@ -663,7 +732,6 @@ public function getDeliveryReports() {
 }
 
 public function productionHistory() {
-    $allHistory = $this->warehouseModel->getProductionHistory();
     $search = $_GET['search'] ?? '';
     $filterCustomer = $_GET['filter_customer'] ?? '';
     $filterItem = $_GET['filter_item'] ?? '';
@@ -673,39 +741,32 @@ public function productionHistory() {
     $filterDateTo = $_GET['filter_date_to'] ?? '';
     $filterReports = isset($_GET['filter_reports']) && $_GET['filter_reports'] === '1';
 
+    $hasFilter = $search || $filterCustomer || $filterItem || $filterLot || $filterPo || $filterDateFrom || $filterDateTo || $filterReports;
+    if ($hasFilter) {
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
+        if ($filterItem) $filters['item_description'] = $filterItem;
+        if ($filterLot) $filters['lot_number'] = $filterLot;
+        if ($filterPo) $filters['po_number'] = $filterPo;
+        if ($filterDateFrom) $filters['date_from'] = $filterDateFrom;
+        if ($filterDateTo) $filters['date_to'] = $filterDateTo;
+        if ($filterReports) $filters['has_reports'] = true;
+        $allHistory = $this->warehouseModel->getProductionHistoryFiltered($filters);
+    } else {
+        $allHistory = $this->warehouseModel->getProductionHistory();
+    }
+
     $reportsCount = 0;
     foreach ($allHistory as $h) {
         if (($h['report_status'] ?? '') === 'pending') $reportsCount++;
-    }
-
-    if ($search) $allHistory = Pagination::filterBySearch($allHistory, $search);
-    if ($filterCustomer) {
-        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['customer_name'] ?? '', $filterCustomer) !== false));
-    }
-    if ($filterItem) {
-        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['item_description'] ?? '', $filterItem) !== false));
-    }
-    if ($filterLot) {
-        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['lot_number'] ?? '', $filterLot) !== false));
-    }
-    if ($filterPo) {
-        $allHistory = array_values(array_filter($allHistory, fn($h) => stripos($h['customer_po_number'] ?? '', $filterPo) !== false));
-    }
-    if ($filterDateFrom) {
-        $allHistory = array_values(array_filter($allHistory, fn($h) => substr($h['date_created'] ?? '', 0, 10) >= $filterDateFrom));
-    }
-    if ($filterDateTo) {
-        $allHistory = array_values(array_filter($allHistory, fn($h) => substr($h['date_created'] ?? '', 0, 10) <= $filterDateTo));
-    }
-    if ($filterReports) {
-        $allHistory = array_values(array_filter($allHistory, fn($h) => ($h['report_status'] ?? '') === 'pending'));
     }
 
     usort($allHistory, function($a, $b) {
         $aReported = ($a['report_status'] ?? '') === 'pending' ? 1 : 0;
         $bReported = ($b['report_status'] ?? '') === 'pending' ? 1 : 0;
         if ($aReported !== $bReported) return $bReported - $aReported;
-        return strtotime($a['date_created'] ?? '') - strtotime($b['date_created'] ?? '');
+        return strtotime($b['date_created'] ?? '') - strtotime($a['date_created'] ?? '');
     });
 
     $allCustomers = array_values(array_unique(array_filter(array_column($allHistory, 'customer_name'))));
@@ -713,7 +774,6 @@ public function productionHistory() {
     $allLots = array_values(array_unique(array_filter(array_column($allHistory, 'lot_number'))));
     $allPos = array_values(array_unique(array_filter(array_column($allHistory, 'customer_po_number'))));
 
-    $hasFilter = $filterCustomer || $filterItem || $filterLot || $filterPo || $filterDateFrom || $filterDateTo || $filterReports;
     if ($hasFilter) {
         $pagination = ['items' => $allHistory, 'page' => 1, 'perPage' => count($allHistory), 'total' => count($allHistory), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
     } else {
@@ -751,40 +811,51 @@ public function productionHistory() {
 
 public function editHistoryRecord() {
     header('Content-Type: application/json');
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        echo json_encode(['success' => false, 'message' => 'Invalid request']);
-        exit;
+    try {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        $history_id = $_POST['history_id'] ?? null;
+        $new_added_quantity = intval($_POST['new_added_quantity'] ?? 0);
+        $new_lot = trim($_POST['new_lot_number'] ?? '');
+        if (!$history_id || $new_added_quantity <= 0 || empty($new_lot)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Missing required fields']);
+            exit;
+        }
+        $before = $this->warehouseModel->getProductionHistoryById($history_id);
+        $result = $this->warehouseModel->editHistoryRecord($history_id, $new_added_quantity, $new_lot, $_SESSION['user_id']);
+        if ($result) {
+            $after = $this->warehouseModel->getProductionHistoryById($history_id);
+            $oldValues = $before ? [
+                'previous_quantity' => $before['previous_quantity'] ?? null,
+                'added_quantity' => $before['added_quantity'] ?? null,
+                'new_quantity' => $before['new_quantity'] ?? null,
+                'lot_number' => $before['lot_number'] ?? null,
+                'old_added_quantity' => $before['old_added_quantity'] ?? null,
+                'old_lot_number' => $before['old_lot_number'] ?? null,
+            ] : null;
+            $newValues = $after ? [
+                'previous_quantity' => $after['previous_quantity'] ?? null,
+                'added_quantity' => $after['added_quantity'] ?? null,
+                'new_quantity' => $after['new_quantity'] ?? null,
+                'lot_number' => $after['lot_number'] ?? null,
+                'old_added_quantity' => $after['old_added_quantity'] ?? null,
+                'old_lot_number' => $after['old_lot_number'] ?? null,
+            ] : null;
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated production quantity and lot for history #' . $history_id, $oldValues, $newValues, 'production_history', $history_id);
+            echo json_encode(['success' => true]);
+        } else {
+            http_response_code(404);
+            echo json_encode(['error' => 'History record not found']);
+        }
+    } catch (\Exception $e) {
+        error_log('editHistoryRecord error: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to update history record']);
     }
-    $history_id = $_POST['history_id'] ?? null;
-    $new_added_quantity = intval($_POST['new_added_quantity'] ?? 0);
-    $new_lot = trim($_POST['new_lot_number'] ?? '');
-    if (!$history_id || $new_added_quantity <= 0 || empty($new_lot)) {
-        echo json_encode(['success' => false, 'message' => 'Missing required fields']);
-        exit;
-    }
-    $before = $this->warehouseModel->getProductionHistoryById($history_id);
-    $result = $this->warehouseModel->editHistoryRecord($history_id, $new_added_quantity, $new_lot, $_SESSION['user_id']);
-    if ($result) {
-        $after = $this->warehouseModel->getProductionHistoryById($history_id);
-        $oldValues = $before ? [
-            'previous_quantity' => $before['previous_quantity'] ?? null,
-            'added_quantity' => $before['added_quantity'] ?? null,
-            'new_quantity' => $before['new_quantity'] ?? null,
-            'lot_number' => $before['lot_number'] ?? null,
-            'old_added_quantity' => $before['old_added_quantity'] ?? null,
-            'old_lot_number' => $before['old_lot_number'] ?? null,
-        ] : null;
-        $newValues = $after ? [
-            'previous_quantity' => $after['previous_quantity'] ?? null,
-            'added_quantity' => $after['added_quantity'] ?? null,
-            'new_quantity' => $after['new_quantity'] ?? null,
-            'lot_number' => $after['lot_number'] ?? null,
-            'old_added_quantity' => $after['old_added_quantity'] ?? null,
-            'old_lot_number' => $after['old_lot_number'] ?? null,
-        ] : null;
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated production quantity and lot for history #' . $history_id, $oldValues, $newValues, 'production_history', $history_id);
-    }
-    echo json_encode(['success' => $result]);
     exit;
 }
 
@@ -816,7 +887,9 @@ public function deleteProductionHistory() {
         $filters = [];
         if (!empty($_GET['customer_id'])) $filters['customer_id'] = $_GET['customer_id'];
         if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
+        $this->warehouseModel->syncExcessProduction();
         $data['excess'] = $this->warehouseModel->getAllExcess($filters);
+        $data['advance'] = $this->warehouseModel->getAllAdvanceProduction($filters);
         $data['customers'] = $this->warehouseModel->getCustomers();
         $data['page_title'] = 'Excess Production';
         $this->render('excess_production/index', $data);
@@ -824,19 +897,27 @@ public function deleteProductionHistory() {
 
     public function updateExcessNotes() {
         header('Content-Type: application/json');
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false]);
-            exit;
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $excess_id = $_POST['excess_id'] ?? null;
+            $notes = $_POST['notes'] ?? '';
+            if (!$excess_id) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Missing excess_id']);
+                exit;
+            }
+            $this->warehouseModel->updateExcessNotes($excess_id, $notes);
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated excess notes for #' . $excess_id, null, ['notes' => $notes], 'excess_production', $excess_id);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            error_log('updateExcessNotes error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to update notes']);
         }
-        $excess_id = $_POST['excess_id'] ?? null;
-        $notes = $_POST['notes'] ?? '';
-        if (!$excess_id) {
-            echo json_encode(['success' => false, 'message' => 'Missing excess_id']);
-            exit;
-        }
-        $this->warehouseModel->updateExcessNotes($excess_id, $notes);
-        AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated excess notes for #' . $excess_id, null, ['notes' => $notes], 'excess_production', $excess_id);
-        echo json_encode(['success' => true]);
         exit;
     }
 
@@ -865,6 +946,18 @@ public function deleteProductionHistory() {
         ];
         $data['page_title'] = 'Activity Logs';
         $this->render('activity_logs/index', $data);
+    }
+
+    public function getLotsByPOItem() {
+        header('Content-Type: application/json');
+        $poiId = $_GET['poi_id'] ?? null;
+        if (!$poiId) {
+            echo json_encode([]);
+            exit;
+        }
+        $lots = $this->warehouseModel->getLotsByPOItem($poiId);
+        echo json_encode($lots);
+        exit;
     }
 
     private function render($view, $data = []) {

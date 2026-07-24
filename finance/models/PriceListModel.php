@@ -120,4 +120,40 @@ class PriceListModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         return $stmt->execute(['id' => $id]);
     }
+
+    public function getAllFiltered($filters = []) {
+        $sql = "SELECT pl.*, i.item_code, i.item_description, i.item_size as item_item_size, c.customer_name
+                FROM price_list pl
+                LEFT JOIN items i ON pl.item_id = i.item_id
+                LEFT JOIN customers c ON i.customer_id = c.customer_id
+                WHERE pl.`remove` = 0";
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $like = '%' . $filters['search'] . '%';
+            $sql .= " AND (pl.product_name LIKE :search1 
+                       OR i.item_code LIKE :search2
+                       OR i.item_description LIKE :search3
+                       OR c.customer_name LIKE :search4
+                       OR pl.net_size LIKE :search5)";
+            $params['search1'] = $like;
+            $params['search2'] = $like;
+            $params['search3'] = $like;
+            $params['search4'] = $like;
+            $params['search5'] = $like;
+        }
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            $sql .= " AND pl.status = :filter_status";
+            $params['filter_status'] = (int)$filters['status'];
+        }
+        if (!empty($filters['customer_name'])) {
+            $sql .= " AND c.customer_name = :filter_customer";
+            $params['filter_customer'] = $filters['customer_name'];
+        }
+
+        $sql .= " ORDER BY pl.status DESC, pl.product_name ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
 }

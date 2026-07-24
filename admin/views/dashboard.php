@@ -1,33 +1,50 @@
 <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="card stat-card stat-card-blue h-100">
-                <div class="card-body">
-                    <div class="stat-icon"><i class="bi bi-people"></i></div>
-                    <div>
-                        <h6>Total Customers</h6>
-                        <h3><?= count($customers ?? []) ?></h3>
+        <div class="col-md-3">
+            <a href="?controller=admin&action=customers" class="text-decoration-none">
+                <div class="card stat-card stat-card-blue h-100" style="cursor:pointer;">
+                    <div class="card-body">
+                        <div class="stat-icon"><i class="bi bi-people"></i></div>
+                        <div>
+                            <h6>Total Customers</h6>
+                            <h3><?= count($customers ?? []) ?></h3>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
-        <div class="col-md-4">
-            <div class="card stat-card stat-card-green h-100">
-                <div class="card-body">
-                    <div class="stat-icon"><i class="bi bi-box-seam"></i></div>
-                    <div>
-                        <h6>Total Items</h6>
-                        <h3><?= count($items ?? []) ?></h3>
+        <div class="col-md-3">
+            <a href="?controller=admin&action=items" class="text-decoration-none">
+                <div class="card stat-card stat-card-green h-100" style="cursor:pointer;">
+                    <div class="card-body">
+                        <div class="stat-icon"><i class="bi bi-box-seam"></i></div>
+                        <div>
+                            <h6>Total Items</h6>
+                            <h3><?= count($items ?? []) ?></h3>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
-        <div class="col-md-4">
-            <div class="card stat-card stat-card-orange h-100">
+        <div class="col-md-3">
+            <a href="?controller=admin&action=purchaseOrders" class="text-decoration-none">
+                <div class="card stat-card stat-card-orange h-100" style="cursor:pointer;">
+                    <div class="card-body">
+                        <div class="stat-icon"><i class="bi bi-cart3"></i></div>
+                        <div>
+                            <h6>Total Customer PO</h6>
+                            <h3><?= $allPOCount ?? 0 ?></h3>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card stat-card-purple h-100" style="cursor:pointer;" data-bs-toggle="modal" data-bs-target="#reportModal">
                 <div class="card-body">
-                    <div class="stat-icon"><i class="bi bi-cart3"></i></div>
+                    <div class="stat-icon"><i class="bi bi-clipboard-data"></i></div>
                     <div>
-                        <h6>Total Customer PO</h6>
-                        <h3><?= $allPOCount ?? 0 ?></h3>
+                        <h6>Reports</h6>
+                        <h3><?= ($deliveryReportsCount ?? 0) + ($reportsCount ?? 0) ?></h3>
                     </div>
                 </div>
             </div>
@@ -173,8 +190,9 @@
                                     <div class="d-flex align-items-center" style="min-height: 20px;">
                                         <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                             <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
-                                        </div>
-                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
+</div>
+
+<small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
                                     </div>
                                 <?php endforeach; ?>
                             <?php else: ?>
@@ -278,6 +296,101 @@
                     <button class="btn btn-primary">Save</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="reportModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-clipboard-data me-2"></i>Reports</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <?php
+                $deliveryReports = array_filter($deliveries ?? [], fn($d) => ($d['remarks_type'] ?? '') === 'report');
+                $deliveryReports = array_slice(array_values($deliveryReports), 0, 10);
+                ?>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0"><i class="bi bi-truck me-2"></i>Delivery Reports <span class="badge bg-danger ms-1"><?= $deliveryReportsCount ?? 0 ?></span></h6>
+                    <a href="?controller=admin&action=delivered&filter_reports=1" class="btn btn-outline-primary btn-sm">View All</a>
+                </div>
+                <div class="table-responsive mb-4">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>PO Number</th>
+                                <th>Customer</th>
+                                <th>Item</th>
+                                <th>DR Number</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($deliveryReports as $d):
+                                $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                                $itemDesc = '';
+                                if (is_array($lotItems) && count($lotItems) > 0) {
+                                    $itemDesc = $lotItems[0]['item_description'] ?? '';
+                                } else {
+                                    $itemDesc = $d['item_description'] ?? '-';
+                                }
+                            ?>
+                            <tr>
+                                <td><strong class="text-primary"><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?></strong></td>
+                                <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
+                                <td><small><?= htmlspecialchars($itemDesc) ?></small></td>
+                                <td><small><?= htmlspecialchars($d['dr_number'] ?? '-') ?></small></td>
+                                <td><small><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></small></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($deliveryReports)): ?>
+                            <tr><td colspan="5" class="text-center text-muted py-3">No pending delivery reports</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0"><i class="bi bi-flag me-2"></i>Lot Number Reports <span class="badge bg-warning text-dark ms-1"><?= $reportsCount ?? 0 ?></span></h6>
+                    <a href="?controller=admin&action=productionHistory&filter_reports=1" class="btn btn-outline-primary btn-sm">View All</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>PO Number</th>
+                                <th>Customer</th>
+                                <th>Item</th>
+                                <th>Old Lot #</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            $pendingReports = array_filter($history ?? [], fn($h) => ($h['report_status'] ?? '') === 'pending');
+                            $pendingReports = array_slice(array_values($pendingReports), 0, 10);
+                            foreach ($pendingReports as $h):
+                            ?>
+                            <tr>
+                                <td><strong class="text-primary"><?= htmlspecialchars($h['customer_po_number'] ?? '-') ?></strong></td>
+                                <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
+                                <td><small><?= htmlspecialchars($h['item_description'] ?? '-') ?></small></td>
+                                <td><small><?= htmlspecialchars($h['lot_number'] ?? '-') ?></small></td>
+                                <td><small class="text-muted"><?= htmlspecialchars($h['report_reason'] ?? '-') ?></small></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($pendingReports)): ?>
+                            <tr><td colspan="5" class="text-center text-muted py-3">No pending lot number reports</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
         </div>
     </div>
 </div>

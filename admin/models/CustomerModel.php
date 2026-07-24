@@ -99,4 +99,30 @@ class CustomerModel extends BaseModel {
         $stmt->execute();
         return $stmt->fetchAll();
     }
+
+    public function getAllFiltered($filters = [], $activeOnly = false) {
+        $sql = "SELECT * FROM {$this->table} WHERE `remove` = 0";
+        $params = [];
+
+        if ($activeOnly) {
+            $sql .= " AND status = 1";
+        }
+
+        if (!empty($filters['search'])) {
+            $like = '%' . $filters['search'] . '%';
+            $sql .= " AND (customer_code LIKE :search1 
+                       OR customer_name LIKE :search2
+                       OR customer_address LIKE :search3
+                       OR customer_tin LIKE :search4)";
+            $params['search1'] = $like;
+            $params['search2'] = $like;
+            $params['search3'] = $like;
+            $params['search4'] = $like;
+        }
+
+        $sql .= " ORDER BY status DESC, customer_id DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
 }

@@ -54,6 +54,8 @@
                     <th class="sortable" data-sort="prev">Previous Lot Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="added">Added Lot Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="new">New Lot Qty <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="shift">Shift <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="status">Status <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="totalpo">Total PO Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="excess">Excess <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
@@ -80,7 +82,17 @@
                     </strong></td>
                     <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($h['sts_ref'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
+                    <td>
+                        <?php if (!empty($h['sts_ref'])): ?>
+                            <strong><?= htmlspecialchars($h['sts_ref']) ?></strong>
+                            <a href="?controller=production&action=printSTS&sts_ref=<?= urlencode($h['sts_ref']) ?>" target="_blank" class="btn btn-sm btn-outline-primary ms-1" title="Print STS"><i class="bi bi-printer"></i></a>
+                            <?php if (!empty($h['sts_remarks'])): ?>
+                                <br><small class="text-muted" title="Remarks" style="font-style:italic"><?= htmlspecialchars($h['sts_remarks']) ?></small>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if (!empty($h['lot_number'])): ?>
                             <strong><?= htmlspecialchars($h['lot_number']) ?></strong>
@@ -92,20 +104,43 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?= intval($h['previous_quantity'] ?? 0) ?>
+                        <?= intval($h['computed_prev_lot_qty'] ?? $h['previous_quantity'] ?? 0) ?>
                     </td>
                     <td>
                         <span class="text-success">+<?= $h['added_quantity'] ?></span>
+                        <?php if (!empty($h['pcs_per_case'])): ?>
+                            <br><small class="text-muted" title="PCS per Case">/ <?= htmlspecialchars($h['pcs_per_case']) ?> cs</small>
+                        <?php endif; ?>
                         <?php if (!empty($h['date_edited']) && $h['old_added_quantity'] !== null): ?>
                             <br><small class="text-muted">(old: +<?= $h['old_added_quantity'] ?>)</small>
                         <?php endif; ?>
                     </td>
-                    <td><strong><?= intval($h['new_quantity'] ?? 0) ?></strong></td>
+                    <td><strong><?= intval($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) ?></strong></td>
+                    <td>
+                        <?php if (!empty($h['shift'])): ?>
+                            <small><?= htmlspecialchars($h['shift']) ?></small>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (!empty($h['reject_status'])): ?>
+                            <?php
+                            $statusClass = 'secondary';
+                            if ($h['reject_status'] === 'Good') $statusClass = 'success';
+                            elseif ($h['reject_status'] === 'Reject') $statusClass = 'danger';
+                            elseif ($h['reject_status'] === 'For Rework') $statusClass = 'warning text-dark';
+                            ?>
+                            <span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($h['reject_status']) ?></span>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= $h['computed_po_qty'] ?? 0 ?></td>
                     <td>
                         <?php
                         $ordered = $h['ordered_quantity'] ?? 0;
-                        $excess = $ordered > 0 ? $h['new_quantity'] - $ordered : 0;
+                        $excess = $ordered > 0 ? ($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) - $ordered : 0;
                         ?>
                         <?php if ($excess > 0): ?>
                             <span class="badge bg-danger">+<?= $excess ?></span>
@@ -126,7 +161,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="13" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="15" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

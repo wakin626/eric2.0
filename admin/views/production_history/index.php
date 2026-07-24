@@ -119,7 +119,7 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?= intval($h['previous_quantity'] ?? 0) ?>
+                        <?= intval($h['computed_prev_lot_qty'] ?? $h['previous_quantity'] ?? 0) ?>
                     </td>
                     <td>
                         <span class="text-success">+<?= $h['added_quantity'] ?></span>
@@ -127,12 +127,12 @@
                             <br><small class="text-muted">(old: +<?= $h['old_added_quantity'] ?>)</small>
                         <?php endif; ?>
                     </td>
-                    <td><strong><?= intval($h['new_quantity'] ?? 0) ?></strong></td>
+                    <td><strong><?= intval($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) ?></strong></td>
                     <td><?= $h['computed_po_qty'] ?? 0 ?></td>
                     <td>
                         <?php
                         $ordered = $h['ordered_quantity'] ?? 0;
-                        $excess = $ordered > 0 ? $h['new_quantity'] - $ordered : 0;
+                        $excess = $ordered > 0 ? ($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) - $ordered : 0;
                         ?>
                         <?php if ($excess > 0): ?>
                             <span class="badge bg-danger">+<?= $excess ?></span>
