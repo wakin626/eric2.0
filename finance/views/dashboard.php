@@ -1,131 +1,21 @@
 <div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card stat-card p-3 h-100">
-            <h6 class="text-muted">Total PO</h6>
-            <h3><?= $stats['total_pos'] ?? 0 ?></h3>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stat-card p-3 h-100 border-warning">
-            <h6 class="text-muted">Ready to Deliver</h6>
-            <h3 class="text-warning"><?= $stats['ready_to_deliver'] ?? 0 ?></h3>
-        </div>
-    </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card stat-card p-3 h-100 border-success">
             <h6 class="text-muted">Total Sales Invoices</h6>
             <h3 class="text-success"><?= $stats['total_invoiced'] ?? 0 ?></h3>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card stat-card p-3 h-100 border-info">
             <h6 class="text-muted">Pending Invoicing</h6>
             <h3 class="text-info"><?= $stats['pending_invoicing'] ?? 0 ?></h3>
         </div>
     </div>
-</div>
-
-<div class="card data-card mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-box-seam me-2"></i>POs Ready to Deliver</span>
-        <a href="?controller=finance&action=readyToDeliver" class="btn btn-primary btn-sm">View All</a>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>PO Number</th>
-                    <th>Customer</th>
-                    <th>Item</th>
-                    <th>Production Progress</th>
-                    <th>Available</th>
-                    <th>Type</th>
-                    <th class="text-center">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach (array_slice($ready_to_deliver ?? [], 0, 10) as $po):
-                    $items = $po_items_map[$po['po_id']] ?? [];
-                ?>
-                <tr>
-                    <td><strong class="text-primary">
-                    <?php
-                    $allNormalCr = [];
-                    if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
-                        foreach ($items as $item) {
-                            $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
-                            foreach ($ncrRecords as $ncr) { $allNormalCr[] = $ncr; }
-                        }
-                    }
-                    if (!empty($allNormalCr)):
-                    ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($po['customer_po_number']) ?>
-                    </strong></td>
-                    <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
-                    <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item): ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small class="text-muted">-</small>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item):
-                                $qty = $item['quantity'] ?? 0;
-                                $itemProduced = $item['produced_quantity'] ?? 0;
-                                $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
-                                $isExcess = $itemProduced > $qty;
-                            ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <div class="d-flex align-items-center">
-                                    <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                        <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
-                                    </div>
-                                    <small class="text-muted text-nowrap"><?= $itemProduced ?> pcs</small>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small class="text-muted">-</small>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if (!empty($items)): ?>
-                            <?php foreach ($items as $idx => $item):
-                                $itemProduced = $item['produced_quantity'] ?? 0;
-                                $itemDelivered = $item['delivered_quantity'] ?? 0;
-                                $itemAvailable = max(0, $itemProduced - $itemDelivered);
-                                $conv = $item['uom_conversion'] ?? null;
-                            ?>
-                                <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <span class="badge bg-success"><?= $itemAvailable ?></span>
-                                <small class="text-muted"><?= $itemDelivered ?> PCS<?= $conv ? ' / ' . round($itemDelivered / $conv) . ' CS' : '' ?></small>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <small class="text-muted">-</small>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
-                            <span class="badge bg-info">Advance</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Normal</span>
-                        <?php endif; ?>
-                    </td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewPODetails(<?= $po['po_id'] ?>)" title="View Details">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                <?php if (empty($ready_to_deliver)): ?>
-                <tr><td colspan="7" class="text-center text-muted py-4">No POs ready to deliver</td></tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
+    <div class="col-md-4">
+        <div class="card stat-card p-3 h-100">
+            <h6 class="text-muted">Total Delivered</h6>
+            <h3><?= $stats['total_deliveries'] ?? 0 ?></h3>
+        </div>
     </div>
 </div>
 

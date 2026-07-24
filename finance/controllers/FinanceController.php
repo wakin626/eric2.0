@@ -31,18 +31,7 @@ class FinanceController {
     public function index() {
         $data['page_title'] = 'Finance Dashboard';
         $data['stats'] = $this->financeModel->getFinanceStats();
-        $data['ready_to_deliver'] = $this->financeModel->getPOsReadyToDeliver();
-        $data['recent_deliveries'] = array_slice($this->financeModel->getAllDeliveries(), 0, 5);
-        $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
-
-        $allPoiIds = [];
-        foreach ($data['po_items_map'] as $items) {
-            foreach ($items as $item) { $allPoiIds[] = $item['poi_id'] ?? $item['poi_id']; }
-        }
-        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+        $data['recent_deliveries'] = array_slice($this->financeModel->getAllDeliveries(), 0, 10);
 
         $this->render('dashboard', $data);
     }
