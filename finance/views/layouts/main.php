@@ -75,10 +75,20 @@
                     <small style="color: #64748b; font-size: 0.7rem;"><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
                 <ul class="nav flex-column sidebar-menu">
-                    <?php $currentAction = $_GET['action'] ?? ''; ?>
+                    <?php $currentAction = $_GET['action'] ?? '';
+                    $pendingSIcount = 0;
+                    try {
+                        $pdo = \App\Core\BaseModel::getConnection();
+                        $siStmt = $pdo->query("SELECT COUNT(*) as cnt FROM deliveries WHERE `remove` = 0 AND (si_number IS NULL OR si_number = '')");
+                        $pendingSIcount = (int)$siStmt->fetch()['cnt'];
+                    } catch (Exception $e) {}
+                    ?>
                     <li class="nav-item">
-                        <a class="nav-link <?= $currentAction === '' ? 'active' : '' ?>" href="?controller=finance">
-                            <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                        <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
+                            <i class="bi bi-receipt me-2"></i>Sales Invoice
+                            <?php if ($pendingSIcount > 0): ?>
+                                <span class="badge bg-danger rounded-pill ms-auto"><?= $pendingSIcount ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
                     <li class="nav-item">
