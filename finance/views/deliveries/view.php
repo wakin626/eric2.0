@@ -42,6 +42,7 @@
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
                         <h5 class="modal-title" id="siModalLabel"><i class="bi bi-pencil-square me-2"></i>Set Sales Invoice Number</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <form method="POST" action="?controller=finance&action=saveSINumber">
                         <div class="modal-body">
