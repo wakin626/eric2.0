@@ -4,15 +4,18 @@
 
 <div class="mb-3">
     <a href="?controller=finance&action=deliveries" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Back to Deliveries
+        <i class="bi bi-arrow-left me-1"></i>Back to Sales Invoices
     </a>
 </div>
 
 <div class="row g-4">
     <div class="col-md-8">
         <div class="card data-card mb-4">
-            <div class="card-header">
-                <i class="bi bi-info-circle me-2"></i>Delivery Information
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-receipt me-2"></i>Sales Invoice Information</span>
+                <?php if (!empty($delivery['si_number'])): ?>
+                    <span class="badge bg-success fs-6"><?= htmlspecialchars($delivery['si_number']) ?></span>
+                <?php endif; ?>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -32,6 +35,28 @@
                 </div>
             </div>
         </div>
+
+        <?php if (empty($delivery['si_number'])): ?>
+        <div class="card data-card mb-4 border-primary">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-pencil-square me-2"></i>Set Sales Invoice Number
+            </div>
+            <div class="card-body">
+                <form method="POST" action="?controller=finance&action=saveSINumber" class="row g-3 align-items-end">
+                    <input type="hidden" name="delivery_id" value="<?= $delivery['delivery_id'] ?>">
+                    <div class="col-md-8">
+                        <label class="form-label">SI Number</label>
+                        <input type="text" name="si_number" class="form-control" placeholder="Enter SI number (e.g. SI-00001)" required>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check-circle me-1"></i>Save SI Number
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <div class="card data-card mb-4">
             <div class="card-header">
@@ -102,7 +127,7 @@
 
         <div class="card data-card mb-4">
             <div class="card-header">
-                <i class="bi bi-paperclip me-2"></i>Receipts
+                <i class="bi bi-paperclip me-2"></i>Delivery Receipts
             </div>
             <div class="card-body">
                 <?php if (!empty($receipts)): ?>
@@ -123,21 +148,21 @@
                             </a>
                             <a href="?controller=finance&action=deleteReceipt&id=<?= $r['receipt_id'] ?>&delivery_id=<?= $delivery['delivery_id'] ?>" 
                                class="btn btn-sm btn-outline-danger" title="Delete"
-                               onclick="return confirm('Are you sure you want to delete this receipt?')">
+                               onclick="return confirm('Are you sure you want to delete this delivery receipt?')">
                                 <i class="bi bi-trash"></i>
                             </a>
                         </div>
                     </div>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <p class="text-center text-muted py-3">No receipts attached yet</p>
+                    <p class="text-center text-muted py-3">No delivery receipts attached yet</p>
                 <?php endif; ?>
             </div>
         </div>
 
         <div class="card data-card">
             <div class="card-header">
-                <i class="bi bi-upload me-2"></i>Attach Receipt
+                <i class="bi bi-upload me-2"></i>Attach Delivery Receipt
             </div>
             <div class="card-body">
                 <form method="POST" action="?controller=finance&action=uploadReceipt" enctype="multipart/form-data">
@@ -151,7 +176,7 @@
                     </div>
                     
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-upload me-2"></i>Upload Receipt
+                        <i class="bi bi-upload me-2"></i>Upload Delivery Receipt
                     </button>
                 </form>
             </div>

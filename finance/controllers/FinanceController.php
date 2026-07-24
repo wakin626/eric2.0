@@ -157,7 +157,7 @@ class FinanceController {
         foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
         $data['normal_consumption_records'] = $normalConsumptionByPoi;
 
-        $data['page_title'] = 'Deliveries';
+        $data['page_title'] = 'Sales Invoice';
         $this->render('deliveries/index', $data);
     }
 
@@ -175,8 +175,54 @@ class FinanceController {
         $data['receipts'] = $this->financeModel->getReceiptsByDelivery($id);
         $data['poi_item'] = $this->financeModel->getDeliveryPoiItem($delivery['poi_id'] ?? 0);
         $data['price_list'] = !empty($data['poi_item']['item_id']) ? $this->priceListModel->getByItemId($data['poi_item']['item_id']) : null;
-        $data['page_title'] = 'Delivery Details';
+        $siNumber = $delivery['si_number'] ?? null;
+        $data['page_title'] = $siNumber ? 'Sales Invoice ' . $siNumber : 'Sales Invoice';
         $this->render('deliveries/view', $data);
+    }
+
+    public function saveSINumber() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $delivery_id = $_POST['delivery_id'] ?? null;
+                $si_number = trim($_POST['si_number'] ?? '');
+
+                if (!$delivery_id) {
+                    $_SESSION['error'] = 'Missing delivery ID';
+                    header('Location: ?controller=finance&action=deliveries');
+                    exit;
+                }
+
+                if (empty($si_number)) {
+                    $_SESSION['error'] = 'SI number is required';
+                    header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+                    exit;
+                }
+
+                $conn = self::getConnection();
+
+                $check = $conn->prepare("SELECT delivery_id FROM deliveries WHERE si_number = :si_number AND delivery_id != :delivery_id AND `remove` = 0");
+                $check->execute(['si_number' => $si_number, 'delivery_id' => $delivery_id]);
+                if ($check->fetch()) {
+                    $_SESSION['error'] = 'SI number "' . $si_number . '" is already used on another delivery';
+                    header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+                    exit;
+                }
+
+                $stmt = $conn->prepare("UPDATE deliveries SET si_number = :si_number WHERE delivery_id = :delivery_id");
+                $stmt->execute(['si_number' => $si_number, 'delivery_id' => $delivery_id]);
+
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'finance', 'Set SI number ' . $si_number . ' on delivery #' . $delivery_id, null, ['si_number' => $si_number], 'delivery', $delivery_id);
+
+                $_SESSION['success'] = 'SI number ' . $si_number . ' saved successfully';
+                header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
+                exit;
+            } catch (\Exception $e) {
+                error_log('saveSINumber error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Failed to save SI number';
+                header("Location: ?controller=finance&action=deliveries");
+                exit;
+            }
+        }
     }
 
     public function uploadReceipt() {
@@ -243,9 +289,9 @@ class FinanceController {
                     'uploaded_by' => $_SESSION['user_id']
                 ]);
                 $poFinance = (new \App\Models\FinanceModel())->getPurchaseOrderById($po_id);
-                AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Uploaded receipt ' . $fileName . ' for ' . ($poFinance['customer_po_number'] ?? $poFinance['po_number'] ?? 'PO #' . $po_id) . ' on delivery #' . $delivery_id, null, ['file' => $fileName], 'receipt', $po_id);
+                AuditModel::log($_SESSION['user_id'], 'CREATE', 'finance', 'Uploaded delivery receipt ' . $fileName . ' for ' . ($poFinance['customer_po_number'] ?? $poFinance['po_number'] ?? 'PO #' . $po_id) . ' on delivery #' . $delivery_id, null, ['file' => $fileName], 'receipt', $po_id);
 
-                $_SESSION['success'] = 'Receipt uploaded successfully';
+                $_SESSION['success'] = 'Delivery receipt uploaded successfully';
                 header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");
                 exit;
             } catch (\Exception $e) {
@@ -268,12 +314,12 @@ class FinanceController {
                     unlink(__DIR__ . '/../../' . $receipt['file_path']);
                 }
                 $this->financeModel->deleteReceipt($receipt_id);
-                AuditModel::log($_SESSION['user_id'], 'DELETE', 'finance', 'Deleted receipt ' . basename($receipt['file_path'] ?? '') . ' from delivery #' . $delivery_id, ['path' => $receipt['file_path'] ?? ''], null, 'receipt', $receipt_id);
-                $_SESSION['success'] = 'Receipt deleted';
+                AuditModel::log($_SESSION['user_id'], 'DELETE', 'finance', 'Deleted delivery receipt ' . basename($receipt['file_path'] ?? '') . ' from delivery #' . $delivery_id, ['path' => $receipt['file_path'] ?? ''], null, 'receipt', $receipt_id);
+                $_SESSION['success'] = 'Delivery receipt deleted';
             }
         } catch (\Exception $e) {
             error_log('deleteReceipt error: ' . $e->getMessage());
-            $_SESSION['error'] = 'Failed to delete receipt';
+            $_SESSION['error'] = 'Failed to delete delivery receipt';
         }
 
         header("Location: ?controller=finance&action=viewDelivery&id={$delivery_id}");

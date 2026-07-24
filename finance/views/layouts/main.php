@@ -88,7 +88,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
-                            <i class="bi bi-truck me-2"></i>Deliveries
+                            <i class="bi bi-receipt me-2"></i>Sales Invoice
                         </a>
                     </li>
                     <li class="nav-item">

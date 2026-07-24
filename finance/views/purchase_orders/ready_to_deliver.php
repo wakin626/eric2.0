@@ -272,7 +272,7 @@ function viewPODetails(poId) {
             html += `</tbody></table></div>`;
 
             if (deliveries && deliveries.length > 0) {
-                html += `<h6 class="mt-3"><i class="bi bi-truck me-1"></i>Delivery History</h6>
+                html += `<h6 class="mt-3"><i class="bi bi-receipt me-1"></i>Sales Invoice History</h6>
                 <table class="table table-sm table-bordered mb-3">
                     <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>By</th><th>Remarks</th></tr></thead>
                     <tbody>`;

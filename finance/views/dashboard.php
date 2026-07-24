@@ -12,15 +12,15 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card p-3 h-100">
-            <h6 class="text-muted">Total Deliveries</h6>
-            <h3><?= $stats['total_deliveries'] ?? 0 ?></h3>
+        <div class="card stat-card p-3 h-100 border-success">
+            <h6 class="text-muted">Total Sales Invoices</h6>
+            <h3 class="text-success"><?= $stats['total_invoiced'] ?? 0 ?></h3>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card p-3 h-100">
-            <h6 class="text-muted">Receipts Attached</h6>
-            <h3><?= $stats['total_receipts'] ?? 0 ?></h3>
+        <div class="card stat-card p-3 h-100 border-info">
+            <h6 class="text-muted">Pending Invoicing</h6>
+            <h3 class="text-info"><?= $stats['pending_invoicing'] ?? 0 ?></h3>
         </div>
     </div>
 </div>
@@ -131,7 +131,7 @@
 
 <div class="card data-card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-truck me-2"></i>Recent Deliveries</span>
+        <span><i class="bi bi-receipt me-2"></i>Delivered POs — Sales Invoice Status</span>
         <a href="?controller=finance&action=deliveries" class="btn btn-primary btn-sm">View All</a>
     </div>
     <div class="table-responsive">
@@ -142,12 +142,14 @@
                     <th>Customer</th>
                     <th>Item / Lot</th>
                     <th>Delivered</th>
-                    <th>Delivery Date</th>
+                    <th>DR Number</th>
+                    <th>SI Number</th>
+                    <th>Status</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach (array_slice($recent_deliveries ?? [], 0, 5) as $d):
+                <?php foreach (array_slice($recent_deliveries ?? [], 0, 10) as $d):
                     $lotItems = json_decode($d['lot_items'] ?? '[]', true);
                     $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
 
@@ -168,6 +170,9 @@
                         $itemLines[] = '<small>' . htmlspecialchars(($d['item_code'] ?? '-') . ' - ' . ($d['item_description'] ?? '')) . '</small>';
                         $deliveredLines[] = $d['delivery_quantity'] ?? 0;
                     }
+
+                    $siNumber = $d['si_number'] ?? null;
+                    $hasSI = !empty($siNumber);
                 ?>
                 <tr>
                     <td><strong class="text-primary">
@@ -180,16 +185,30 @@
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><?= implode('<br>', $itemLines) ?></td>
                     <td><?= implode('<br>', $deliveredLines) ?></td>
-                    <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
+                    <td><small class="text-muted"><?= htmlspecialchars($d['dr_number'] ?? '-') ?></small></td>
+                    <td>
+                        <?php if ($hasSI): ?>
+                            <strong class="text-success"><?= htmlspecialchars($siNumber) ?></strong>
+                        <?php else: ?>
+                            <span class="text-muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($hasSI): ?>
+                            <span class="badge bg-success">Invoiced</span>
+                        <?php else: ?>
+                            <span class="badge bg-warning text-dark">Not Invoiced</span>
+                        <?php endif; ?>
+                    </td>
                     <td class="text-center">
-                        <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-success" title="Attach Receipt">
-                            <i class="bi bi-paperclip"></i>
+                        <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-primary" title="View Sales Invoice">
+                            <i class="bi bi-eye"></i>
                         </a>
                     </td>
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($recent_deliveries)): ?>
-                <tr><td colspan="6" class="text-center text-muted py-3">No deliveries yet</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-3">No deliveries yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -296,7 +315,7 @@ function viewPODetails(poId) {
             html += `</tbody></table></div>`;
 
             if (deliveries && deliveries.length > 0) {
-                html += `<h6 class="mt-3"><i class="bi bi-truck me-1"></i>Delivery History</h6>
+                html += `<h6 class="mt-3"><i class="bi bi-receipt me-1"></i>Sales Invoice History</h6>
                 <table class="table table-sm table-bordered mb-3">
                     <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>By</th><th>Remarks</th></tr></thead>
                     <tbody>`;

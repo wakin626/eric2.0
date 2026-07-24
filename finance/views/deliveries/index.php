@@ -1,6 +1,6 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-        <span class="text-muted">Showing <?= count($deliveries) ?> of <?= $total ?> deliveries</span>
+        <span class="text-muted">Showing <?= count($deliveries) ?> of <?= $total ?> sales invoices</span>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
@@ -20,7 +20,7 @@
                 <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
                 <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
                 <i class="bi bi-search"></i>
-                <input type="text" name="search" id="searchDelivery" class="form-control" placeholder="Search delivery..." value="<?= htmlspecialchars($search ?? '') ?>">
+                <input type="text" name="search" id="searchDelivery" class="form-control" placeholder="Search sales invoice..." value="<?= htmlspecialchars($search ?? '') ?>">
             </form>
         </div>
     </div>
@@ -36,8 +36,8 @@
                     <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
                     <th>Lot Number</th>
                     <th>Quantity</th>
-                    <th class="sortable" data-sort="date">Delivery Date <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="dr_number">DR No. <i class="bi bi-chevron-expand"></i></th>
+                    <th>SI Number</th>
                     <th>Type</th>
                     <th class="sortable" data-sort="by">Delivered By <i class="bi bi-chevron-expand"></i></th>
                     <th class="text-center">Actions</th>
@@ -64,6 +64,7 @@
                         $lotLines[] = '<small class="text-muted">' . htmlspecialchars($d['lot_number'] ?? '-') . '</small>';
                         $qtyLines[] = $d['delivery_quantity'] ?? 0;
                     }
+                    $siNumber = $d['si_number'] ?? null;
                 ?>
                 <tr data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>">
                     <td><strong class="text-primary">
@@ -77,8 +78,14 @@
                     <td><?= implode('', $itemLines) ?></td>
                     <td><?= implode('', $lotLines) ?></td>
                     <td><?= implode('', $qtyLines) ?></td>
-                    <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '-') ?></td>
+                    <td>
+                        <?php if (!empty($siNumber)): ?>
+                            <strong class="text-success"><?= htmlspecialchars($siNumber) ?></strong>
+                        <?php else: ?>
+                            <span class="text-muted">—</span>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
                             <span class="badge bg-info">Advance</span>
@@ -101,14 +108,14 @@
                             <i class="bi bi-list-ul"></i>
                         </button>
                         <?php endif; ?>
-                        <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-primary" title="View Delivery">
+                        <a href="?controller=finance&action=viewDelivery&id=<?= $d['delivery_id'] ?>" class="btn btn-sm btn-outline-primary" title="View Sales Invoice">
                             <i class="bi bi-eye"></i>
                         </a>
                     </td>
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="10" class="text-center text-muted py-4">No deliveries found</td></tr>
+                <tr><td colspan="11" class="text-center text-muted py-4">No sales invoices found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

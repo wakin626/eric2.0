@@ -174,6 +174,12 @@ class FinanceModel extends BaseModel {
         $stmt = self::getConnection()->query("SELECT COUNT(*) as cnt FROM delivery_receipts WHERE `remove` = 0");
         $data['total_receipts'] = $stmt->fetch()['cnt'];
 
+        $stmt = self::getConnection()->query("SELECT COUNT(*) as cnt FROM deliveries WHERE `remove` = 0 AND si_number IS NOT NULL AND si_number != ''");
+        $data['total_invoiced'] = $stmt->fetch()['cnt'];
+
+        $stmt = self::getConnection()->query("SELECT COUNT(*) as cnt FROM deliveries WHERE `remove` = 0 AND (si_number IS NULL OR si_number = '')");
+        $data['pending_invoicing'] = $stmt->fetch()['cnt'];
+
         return $data;
     }
 
