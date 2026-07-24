@@ -97,11 +97,6 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= in_array($currentAction, ['deliveries', 'viewDelivery']) ? 'active' : '' ?>" href="?controller=finance&action=deliveries">
-                            <i class="bi bi-receipt me-2"></i>Sales Invoice
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link <?= in_array($currentAction, ['priceList', 'priceListCreate', 'priceListUpdate', 'priceListToggle']) ? 'active' : '' ?>" href="?controller=finance&action=priceList">
                             <i class="bi bi-tag me-2"></i>Price List
                         </a>
