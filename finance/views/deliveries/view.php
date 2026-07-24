@@ -37,23 +37,28 @@
         </div>
 
         <?php if (empty($delivery['si_number'])): ?>
-        <div class="card data-card mb-4 border-primary">
-            <div class="card-header bg-primary text-white">
-                <i class="bi bi-pencil-square me-2"></i>Set Sales Invoice Number
-            </div>
-            <div class="card-body">
-                <form method="POST" action="?controller=finance&action=saveSINumber" class="row g-3 align-items-end">
-                    <input type="hidden" name="delivery_id" value="<?= $delivery['delivery_id'] ?>">
-                    <div class="col-md-8">
-                        <label class="form-label">SI Number</label>
-                        <input type="text" name="si_number" class="form-control" placeholder="Enter SI number (e.g. SI-00001)" required>
+        <div class="modal fade" id="siModal" tabindex="-1" aria-labelledby="siModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="siModalLabel"><i class="bi bi-pencil-square me-2"></i>Set Sales Invoice Number</h5>
                     </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-check-circle me-1"></i>Save SI Number
-                        </button>
-                    </div>
-                </form>
+                    <form method="POST" action="?controller=finance&action=saveSINumber">
+                        <div class="modal-body">
+                            <input type="hidden" name="delivery_id" value="<?= $delivery['delivery_id'] ?>">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">SI Number</label>
+                                <input type="text" name="si_number" class="form-control form-control-lg" placeholder="e.g. SI-00001" required autofocus>
+                                <div class="form-text">You must set an SI number before viewing this sales invoice.</div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="bi bi-check-circle me-1"></i>Save & Continue
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -105,7 +110,7 @@
                         </tr>
                         <?php else: ?>
                         <tr><td colspan="6" class="text-center text-muted py-3">No lot items found</td></tr>
-                        <?php endif; ?>
+<?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -184,4 +189,13 @@
     </div>
 </div>
 
+<?php endif; ?>
+
+<?php if (empty($delivery['si_number'])): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var modal = new bootstrap.Modal(document.getElementById('siModal'));
+    modal.show();
+});
+</script>
 <?php endif; ?>
