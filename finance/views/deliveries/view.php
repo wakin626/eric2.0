@@ -151,7 +151,7 @@
                                 <?php endif; ?>
                             </small>
                         </div>
-                        <a href="<?= $r['file_path'] ?>" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
+                        <a href="<?= URL_ROOT . $r['file_path'] ?>" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
                             <i class="bi bi-eye"></i>
                         </a>
                     </div>
@@ -180,7 +180,7 @@
                             </small>
                         </div>
                         <div class="btn-group">
-                            <a href="<?= $r['file_path'] ?>" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
+                            <a href="<?= URL_ROOT . $r['file_path'] ?>" target="_blank" class="btn btn-sm btn-outline-primary" title="View">
                                 <i class="bi bi-eye"></i>
                             </a>
                             <a href="?controller=finance&action=deleteReceipt&id=<?= $r['receipt_id'] ?>&delivery_id=<?= $delivery['delivery_id'] ?>" 

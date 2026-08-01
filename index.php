@@ -15,7 +15,9 @@ spl_autoload_register(function ($class) {
         'C:\xampp\htdocs\order-billing-system\production\controllers' => 'App\Controllers',
         'C:\xampp\htdocs\order-billing-system\production\models' => 'App\Models',
         'C:\xampp\htdocs\order-billing-system\finance\controllers' => 'App\Controllers',
-        'C:\xampp\htdocs\order-billing-system\finance\models' => 'App\Models'
+        'C:\xampp\htdocs\order-billing-system\finance\models' => 'App\Models',
+        'C:\xampp\htdocs\order-billing-system\qc\controllers' => 'App\Controllers',
+        'C:\xampp\htdocs\order-billing-system\qc\models' => 'App\Models'
     ];
     
     foreach ($paths as $baseDir => $prefix) {
@@ -38,6 +40,7 @@ $authControllers = ['auth'];
 $warehouseControllers = ['warehouse'];
 $productionControllers = ['production'];
 $financeControllers = ['finance'];
+$qcControllers = ['qc'];
 
 if (in_array($controller, $authControllers)) {
     $controllerFile = __DIR__ . "/auth/controllers/{$controller}Controller.php";
@@ -47,6 +50,8 @@ if (in_array($controller, $authControllers)) {
     $controllerFile = __DIR__ . "/production/controllers/{$controller}Controller.php";
 } elseif (in_array($controller, $financeControllers)) {
     $controllerFile = __DIR__ . "/finance/controllers/{$controller}Controller.php";
+} elseif (in_array($controller, $qcControllers)) {
+    $controllerFile = __DIR__ . "/qc/controllers/{$controller}Controller.php";
 } else {
     $controllerFile = __DIR__ . "/admin/controllers/{$controller}Controller.php";
 }

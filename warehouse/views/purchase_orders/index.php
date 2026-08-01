@@ -242,7 +242,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Production Process</label>
-                            <select name="production_type" class="form-select" required>
+                            <select name="production_type" id="productionType" class="form-select" required>
                                 <option value="normal">Normal Production</option>
                                 <option value="advance">Advance Production</option>
                             </select>
@@ -321,6 +321,7 @@
                 </table>
                 <strong>Items:</strong>
                 <div id="prevCItems"></div>
+                <div id="prevCAdvanceLots" class="mt-3"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancel</button>
@@ -741,36 +742,32 @@ customerSelect.addEventListener('change', function() {
         var items = results[0];
         var excessItems = results[1];
 
-        window._customerExcess = {};
         window._customerAdvance = {};
-        var excessIds = [];
+        window._customerAdvanceQty = {};
+        var advanceIds = [];
         excessItems.forEach(function(e) {
-            window._customerExcess[e.item_id] = e.total_remaining;
-            excessIds.push(Number(e.item_id));
-            if (e.excess_remaining > 0 && e.advance_remaining > 0) {
-                window._customerAdvance[e.item_id] = 'Excess: ' + e.excess_remaining + ' + Advance: ' + e.advance_remaining;
-            } else if (e.advance_remaining > 0) {
-                window._customerAdvance[e.item_id] = 'Advance production: ' + e.advance_remaining + ' pcs';
-            } else {
-                window._customerAdvance[e.item_id] = 'Excess from previous PO: ' + e.excess_remaining + ' pcs';
+            if (e.advance_remaining > 0) {
+                window._customerAdvance[e.item_id] = 'Advance available: ' + e.advance_remaining + ' pcs (must consume all)';
+                window._customerAdvanceQty[e.item_id] = parseInt(e.advance_remaining);
+                advanceIds.push(Number(e.item_id));
             }
         });
 
-        var excessList = items.filter(function(i) { return excessIds.indexOf(Number(i.item_id)) !== -1; });
-        var regularList = items.filter(function(i) { return excessIds.indexOf(Number(i.item_id)) === -1; });
-        var sorted = excessList.concat(regularList);
+        var advanceList = items.filter(function(i) { return advanceIds.indexOf(Number(i.item_id)) !== -1; });
+        var regularList = items.filter(function(i) { return advanceIds.indexOf(Number(i.item_id)) === -1; });
+        var sorted = advanceList.concat(regularList);
 
         var html = '<option value="">Select Item</option>';
         sorted.forEach(function(item) {
-            var hasExcess = excessIds.indexOf(Number(item.item_id)) !== -1;
+            var hasAdvance = advanceIds.indexOf(Number(item.item_id)) !== -1;
             html += '<option value="' + item.item_id + '"'
-                + (hasExcess ? ' data-has-excess="true"' : '')
+                + (hasAdvance ? ' data-has-excess="true"' : '')
                 + ' data-code="' + (item.item_code || '') + '"'
                 + ' data-description="' + (item.item_description || '') + '"'
                 + ' data-uom="' + (item.item_uom || '') + '"'
                 + ' data-price="' + (item.item_amount || 0) + '">'
                 + item.item_code + ' - ' + item.item_description
-                + (hasExcess ? ' (Has Available Qty)' : '')
+                + (hasAdvance ? ' (Has Available Qty)' : '')
                 + '</option>';
         });
         document.querySelectorAll('.item-select').forEach(function(sel) {
@@ -807,6 +804,26 @@ function updateItemDropdowns() {
     refreshSearchables();
 }
 
+function updateProductionType() {
+    var prodSelect = document.getElementById('productionType');
+    if (!prodSelect) return;
+    var advanceOption = prodSelect.querySelector('option[value="advance"]');
+    if (!advanceOption) return;
+    var hasAdvanceItem = false;
+    document.querySelectorAll('#itemsContainer .item-row').forEach(function(row) {
+        var itemId = row.querySelector('[name="item_id[]"]').value;
+        if (itemId && window._customerAdvance && window._customerAdvance[itemId]) {
+            hasAdvanceItem = true;
+        }
+    });
+    if (hasAdvanceItem) {
+        advanceOption.disabled = true;
+        if (prodSelect.value === 'advance') prodSelect.value = 'normal';
+    } else {
+        advanceOption.disabled = false;
+    }
+}
+
 function setupItemRow(row) {
     const select = row.querySelector('.item-select');
     const codeInput = row.querySelector('.item-code');
@@ -827,21 +844,25 @@ function setupItemRow(row) {
         updateItemDropdowns();
 
         var itemId = this.value;
-        if (itemId && window._customerExcess && window._customerExcess[itemId]) {
-            var excessQty = window._customerExcess[itemId];
-            qtyInput.value = excessQty;
-            qtyInput.min = 1;
+        if (itemId && window._customerAdvance && window._customerAdvance[itemId]) {
+            var advQty = window._customerAdvanceQty[itemId] || 0;
+            qtyInput.value = advQty;
+            qtyInput.min = advQty;
             if (excessBadge) {
-                excessBadge.textContent = window._customerAdvance[itemId] || ('Available: ' + excessQty + ' pcs');
+                excessBadge.textContent = window._customerAdvance[itemId];
                 excessBadge.classList.remove('d-none');
             }
         } else {
             qtyInput.value = '';
+            qtyInput.min = 1;
             if (excessBadge) {
                 excessBadge.textContent = '';
                 excessBadge.classList.add('d-none');
             }
         }
+
+        updateProductionType();
+
     });
 
     const removeButton = row.querySelector('.remove-item');
@@ -851,6 +872,7 @@ function setupItemRow(row) {
             row.remove();
             updateRemoveButtons();
             updateItemDropdowns();
+            updateProductionType();
         }
     });
 
@@ -912,6 +934,16 @@ document.getElementById('createPOForm').addEventListener('submit', function(e) {
 
     if (items.length === 0) { alert('Please add at least one item.'); return; }
 
+    if (prodType !== 'advance') {
+        for (var i = 0; i < items.length; i++) {
+            var advQty = window._customerAdvanceQty[items[i].item_id];
+            if (advQty && parseInt(items[i].quantity) < advQty) {
+                alert('Item ' + (items[i].item_code || items[i].item_id) + ' has advance production available (' + advQty + ' pcs). You must order at least ' + advQty + ' pcs to consume all advance lots.');
+                return;
+            }
+        }
+    }
+
     document.getElementById('itemsJson').value = JSON.stringify(items);
 
     var customerName = document.getElementById('customerName').value || '-';
@@ -930,20 +962,42 @@ document.getElementById('createPOForm').addEventListener('submit', function(e) {
     var itemsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item Code</th><th>Description</th><th>UOM</th><th>Qty</th></tr></thead><tbody>';
     items.forEach(function(item) {
         var qty = parseInt(item.quantity) || 0;
-        var availQty = (window._customerExcess && window._customerExcess[item.item_id]) ? parseInt(window._customerExcess[item.item_id]) : 0;
         var qtyCell = '<td>' + qty + '</td>';
-        if (availQty > 0 && qty > availQty) {
-            var newProd = qty - availQty;
-            qtyCell = '<td>' + qty + '<br><small class="text-success"><i class="bi bi-arrow-return-right"></i> Available: ' + availQty + ' + New: ' + newProd + '</small></td>';
-        } else if (availQty > 0 && qty === availQty) {
-            qtyCell = '<td>' + qty + '<br><small class="text-success"><i class="bi bi-arrow-return-right"></i> All pre-produced: ' + availQty + '</small></td>';
-        }
         itemsHtml += '<tr><td>' + (item.item_code || '-') + '</td><td>' + (item.item_description || '-') + '</td><td>' + (item.uom || 'PCS') + '</td>' + qtyCell + '</tr>';
     });
     itemsHtml += '</tbody></table>';
     document.getElementById('prevCItems').innerHTML = itemsHtml;
 
+    document.getElementById('prevCAdvanceLots').innerHTML = '';
+
     new bootstrap.Modal(document.getElementById('createPreviewModal')).show();
+
+    if (prodType !== 'advance' && window._customerAdvance && Object.keys(window._customerAdvance).length > 0) {
+        var advanceItemIds = [];
+        items.forEach(function(item) {
+            if (window._customerAdvance[item.item_id]) advanceItemIds.push(item.item_id);
+        });
+
+        var allLots = [];
+        var fetches = advanceItemIds.map(function(itemId) {
+            return fetch('?controller=warehouse&action=getAdvanceLots&customer_id=' + customerId + '&item_id=' + itemId)
+                .then(function(r) { return r.json(); })
+                .then(function(lots) {
+                    lots.forEach(function(lot) { allLots.push(lot); });
+                });
+        });
+
+        Promise.all(fetches).then(function() {
+            if (allLots.length === 0) return;
+            var lotHtml = '<strong>Advance Production Lots to be Consumed:</strong>';
+            lotHtml += '<table class="table table-sm table-bordered mb-0 mt-2"><thead><tr><th>Advance PO</th><th>Lot Number</th><th>Available Qty</th></tr></thead><tbody>';
+            allLots.forEach(function(lot) {
+                lotHtml += '<tr><td>' + (lot.customer_po_number || '-') + '</td><td>' + (lot.lot_number || '-') + '</td><td>' + lot.available_quantity + '</td></tr>';
+            });
+            lotHtml += '</tbody></table>';
+            document.getElementById('prevCAdvanceLots').innerHTML = lotHtml;
+        });
+    }
 });
 
 window._createFormConfirmed = false;

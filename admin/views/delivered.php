@@ -470,7 +470,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (drReceipts.length > 0) {
                         drReceipts.forEach(function(r) {
-                            var path = r.file_path || '';
+                            var path = (typeof URL_ROOT !== 'undefined' ? URL_ROOT : '/') + (r.file_path || '');
                             var wrapper = document.createElement('div');
                             wrapper.className = 'position-relative d-inline-block';
                             if (path.toLowerCase().endsWith('.pdf')) {
@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (siReceipts.length > 0) {
                         siReceipts.forEach(function(r) {
-                            var path = r.file_path || '';
+                            var path = (typeof URL_ROOT !== 'undefined' ? URL_ROOT : '/') + (r.file_path || '');
                             var wrapper = document.createElement('div');
                             wrapper.className = 'position-relative d-inline-block';
                             if (path.toLowerCase().endsWith('.pdf')) {

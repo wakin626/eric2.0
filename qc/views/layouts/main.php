@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $page_title ?? 'Warehouse Dashboard' ?></title>
+    <title><?= $page_title ?? 'QC Dashboard' ?></title>
     <link href="public/css/bootstrap.min.css" rel="stylesheet">
     <link href="public/css/bootstrap-icons.min.css" rel="stylesheet">
     <link href="public/css/style.css" rel="stylesheet">
@@ -60,12 +60,6 @@
             margin-left: 7px;
             padding-left: 10px;
         }
-        .sidebar .collapse .nav-link.active {
-            background: rgba(74,144,217,0.10);
-            border-left: 2px solid var(--accent);
-            margin-left: 0;
-            padding-left: 8px;
-        }
         .alert { animation: slideInDown 0.3s ease; }
         @keyframes slideInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         .alert-success { border-left: 4px solid #22c55e; background: #f0fdf4; color: #166534; }
@@ -77,58 +71,16 @@
 <body>
     <div class="container-fluid p-0">
         <div class="row g-0">
-            <!-- SIDEBAR NAV - Slides in/out via CSS transform -->
             <nav class="sidebar" id="sidebar">
                 <div class="text-center py-3 border-bottom" style="border-color: rgba(255,255,255,0.08) !important">
-                    <h5 class="mb-0" style="color: #fff; font-weight: 700; letter-spacing: 0.5px; font-size: 1rem;"><?= ucfirst($_SESSION['department'] ?? 'Warehouse') ?></h5>
+                    <h5 class="mb-0" style="color: #fff; font-weight: 700; letter-spacing: 0.5px; font-size: 1rem;"><?= ucfirst($_SESSION['department'] ?? 'QC') ?></h5>
                     <small style="color: #64748b; font-size: 0.7rem;"><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
-                <?php $currentAction = $_GET['action'] ?? ''; ?>
                 <ul class="nav flex-column sidebar-menu">
                     <li class="nav-item">
-                        <a class="nav-link <?= $currentAction === '' ? 'active' : '' ?>" href="?controller=warehouse">
+                        <a class="nav-link <?= $page_title == 'QC Dashboard' ? 'active' : '' ?>" href="?controller=qc">
                             <i class="bi bi-speedometer2 me-2"></i>Dashboard
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?= $currentAction === 'purchaseOrders' ? 'active' : '' ?>" href="?controller=warehouse&action=purchaseOrders">
-                            <i class="bi bi-cart3 me-2"></i>Customer PO
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?= $currentAction === 'excessProduction' ? 'active' : '' ?>" href="?controller=warehouse&action=excessProduction">
-                            <i class="bi bi-exclamation-triangle me-2"></i>Excess Production
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?= in_array($currentAction, ['deliveries', 'createDelivery']) ? 'active' : '' ?>" href="?controller=warehouse&action=deliveries">
-                            <i class="bi bi-truck me-2"></i>Deliveries
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?= ($currentAction ?? '') === 'activityLogs' ? 'active' : '' ?>" href="?controller=warehouse&action=activityLogs">
-                            <i class="bi bi-clock-history me-2"></i>Activity Logs
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <?= in_array($currentAction, ['reports', 'deliveryReport']) ? 'active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#reportsSubmenu">
-                            <i class="bi bi-graph-up me-2"></i>Reports
-                            <i class="bi bi-chevron-down ms-auto" style="font-size:0.7rem"></i>
-                        </a>
-                        <div class="collapse <?= in_array($currentAction, ['reports', 'deliveryReport']) ? 'show' : '' ?>" id="reportsSubmenu">
-                            <ul class="nav flex-column ms-4">
-                                <li class="nav-item">
-                                    <a class="nav-link py-1 <?= ($currentAction ?? '') === 'reports' ? 'active' : '' ?>" href="?controller=warehouse&action=reports" style="font-size:0.8rem">
-                                        <i class="bi bi-bar-chart me-2"></i>Overview
-                                    </a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link py-1 <?= ($currentAction ?? '') === 'deliveryReport' ? 'active' : '' ?>" href="?controller=warehouse&action=deliveryReport" style="font-size:0.8rem">
-                                        <i class="bi bi-truck me-2"></i>Deliveries
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
                     </li>
                     <li class="nav-item mt-auto">
                         <a class="nav-link" href="?controller=auth&action=logout" style="color: #64748b; transition: all 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
@@ -138,13 +90,10 @@
                 </ul>
             </nav>
             
-            <!-- MAIN CONTENT - Full width always -->
             <div class="main-wrapper" id="mainWrapper">
             <main class="p-4">
-                <!-- Header with toggle button -->
                 <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                     <h4 class="mb-0"><?= $page_title ?? 'Dashboard' ?></h4>
-                    <!-- TOGGLE BUTTON - Click to slide sidebar -->
                     <div class="d-flex align-items-center gap-2">
                         <!-- NOTIFICATION BELL -->
                         <div class="position-relative">
@@ -217,7 +166,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Auto-dismiss flash alerts after 4 seconds
     const flashAlerts = document.querySelectorAll('.alert.alert-dismissible.fade.show');
     flashAlerts.forEach(function(alertElement) {
         setTimeout(function() {

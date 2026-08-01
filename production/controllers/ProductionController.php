@@ -4,6 +4,7 @@ namespace App\Controllers;
 use App\Models\WarehouseModel;
 use App\Models\AuditModel;
 use App\Helpers\Pagination;
+use App\Helpers\NotificationHelper;
 
 class ProductionController {
     private $warehouseModel;
@@ -42,6 +43,19 @@ class ProductionController {
         foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
         $data['normal_consumption_records'] = $normalConsumptionByPoi;
 
+        $advByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $advByPoi[$cr['normal_poi_id']] = intval($cr['quantity']); }
+        foreach ($data['purchase_orders'] as &$po) {
+            $totalAdv = 0;
+            if (!empty($data['po_items_map'][$po['po_id']])) {
+                foreach ($data['po_items_map'][$po['po_id']] as $item) {
+                    $totalAdv += $advByPoi[$item['poi_id']] ?? 0;
+                }
+            }
+            $po['produced_quantity'] = intval($po['produced_quantity']) + $totalAdv;
+        }
+        unset($po);
+
         $this->render('dashboard', $data);
     }
 
@@ -65,6 +79,19 @@ class ProductionController {
         $normalConsumptionByPoi = [];
         foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
         $data['normal_consumption_records'] = $normalConsumptionByPoi;
+
+        $advByPoi = [];
+        foreach ($rawNormalConsumption as $cr) { $advByPoi[$cr['normal_poi_id']] = intval($cr['quantity']); }
+        foreach ($data['purchase_orders'] as &$po) {
+            $totalAdv = 0;
+            if (!empty($data['po_items_map'][$po['po_id']])) {
+                foreach ($data['po_items_map'][$po['po_id']] as $item) {
+                    $totalAdv += $advByPoi[$item['poi_id']] ?? 0;
+                }
+            }
+            $po['produced_quantity'] = intval($po['produced_quantity']) + $totalAdv;
+        }
+        unset($po);
 
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
@@ -216,6 +243,10 @@ class ProductionController {
                     }
                 }
 
+                NotificationHelper::create('production', 'Production Updated', 'A batch of production quantities has been updated [' . ($autoStsRef ?? 'batch') . ']', 'warehouse', '?controller=warehouse&action=purchaseOrders', $_SESSION['user_id']);
+                NotificationHelper::create('production', 'Production Updated', 'A batch of production quantities has been updated [' . ($autoStsRef ?? 'batch') . ']', 'admin', '?controller=admin&action=productionHistory', $_SESSION['user_id']);
+                NotificationHelper::qcInspectionNeeded('New production entries', '', $_SESSION['user_id']);
+
                 $conn->commit();
                 $_SESSION['success'] = 'Production quantity updated successfully';
                 $from = $_POST['from'] ?? 'purchaseOrders';
@@ -282,6 +313,11 @@ class ProductionController {
             $excess = $produced - $ordered;
             $po = $this->warehouseModel->getPurchaseOrderById($po_id);
             if ($po) {
+                $itemStmt = $conn->prepare("SELECT item_code FROM items WHERE item_id = :item_id");
+                $itemStmt->execute(['item_id' => $poi['item_id']]);
+                $item = $itemStmt->fetch();
+                $itemCode = $item['item_code'] ?? 'Item #' . $poi['item_id'];
+
                 $this->warehouseModel->insertExcessProduction([
                     'customer_id' => $po['customer_id'],
                     'item_id' => $poi['item_id'],
@@ -290,6 +326,13 @@ class ProductionController {
                     'excess_quantity' => $excess,
                     'notes' => 'Excess from PO ' . ($po['customer_po_number'] ?? $po_id)
                 ]);
+
+                \App\Helpers\NotificationHelper::excessDetected(
+                    $po['customer_po_number'] ?? 'PO #' . $po_id,
+                    $itemCode,
+                    $excess,
+                    $_SESSION['full_name'] ?? null
+                );
             }
         }
     }
@@ -371,6 +414,7 @@ class ProductionController {
                         $report_type
                     );
                     AuditModel::log($_SESSION['user_id'], 'CREATE', 'production', 'Reported production history entry #' . $history_id . ' with reason: ' . $reason, null, $_POST, 'production_history', null);
+                    NotificationHelper::productionReported($history_id, $reason, $_SESSION['user_id']);
                     $_SESSION['success'] = 'Report submitted successfully.';
                 } else {
                     $_SESSION['error'] = 'History record not found.';

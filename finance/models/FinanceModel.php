@@ -49,7 +49,24 @@ class FinanceModel extends BaseModel {
                 WHERE poi.po_id = :po_id AND i.`remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+        if (!empty($rows)) {
+            $conn = self::getConnection();
+            $advStmt = $conn->prepare("SELECT normal_poi_id, SUM(quantity) as adv_consumed FROM advance_production_consumption WHERE normal_po_id = ? GROUP BY normal_poi_id");
+            $advStmt->execute([$po_id]);
+            $advMap = [];
+            foreach ($advStmt->fetchAll() as $row) {
+                $advMap[$row['normal_poi_id']] = intval($row['adv_consumed']);
+            }
+            foreach ($rows as &$item) {
+                $pid = $item['poi_id'] ?? null;
+                if ($pid && isset($advMap[$pid])) {
+                    $item['produced_quantity'] = intval($item['produced_quantity']) + $advMap[$pid];
+                }
+            }
+            unset($item);
+        }
+        return $rows;
     }
 
     public function getDeliveriesByPO($po_id) {
@@ -214,6 +231,24 @@ class FinanceModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         $all = $stmt->fetchAll();
+        $conn = self::getConnection();
+        $poIds = array_unique(array_column($all, 'po_id'));
+        if (!empty($poIds)) {
+            $placeholders = implode(',', array_fill(0, count($poIds), '?'));
+            $advStmt = $conn->prepare("SELECT normal_poi_id, SUM(quantity) as adv_consumed FROM advance_production_consumption WHERE normal_po_id IN ($placeholders) GROUP BY normal_poi_id");
+            $advStmt->execute(array_values($poIds));
+            $advMap = [];
+            foreach ($advStmt->fetchAll() as $row) {
+                $advMap[$row['normal_poi_id']] = intval($row['adv_consumed']);
+            }
+            foreach ($all as &$item) {
+                $pid = $item['poi_id'] ?? null;
+                if ($pid && isset($advMap[$pid])) {
+                    $item['produced_quantity'] = intval($item['produced_quantity']) + $advMap[$pid];
+                }
+            }
+            unset($item);
+        }
         $map = [];
         foreach ($all as $item) {
             $map[$item['po_id']][] = $item;

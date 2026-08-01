@@ -64,6 +64,8 @@
         @keyframes slideInDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         .alert-success { border-left: 4px solid #22c55e; background: #f0fdf4; color: #166534; }
         .alert-danger { border-left: 4px solid #ef4444; background: #fef2f2; color: #991b1b; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 4px); z-index: 1050; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); width: 380px; max-height: 500px; overflow-y: auto; }
+        .notif-item:hover { background: #f8fafc; }
     </style>
 </head>
 <body>
@@ -118,9 +120,25 @@
             <main class="p-4">
                 <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                     <h4 class="mb-0"><?= $page_title ?? 'Dashboard' ?></h4>
-                    <button class="btn btn-outline-dark" id="sidebarToggle" title="Toggle Sidebar">
-                        <i class="bi bi-list fs-5"></i>
-                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- NOTIFICATION BELL -->
+                        <div class="position-relative">
+                            <button class="btn btn-outline-dark position-relative" id="notifBell" title="Notifications">
+                                <i class="bi bi-bell"></i>
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notifBadge" style="font-size:0.6rem">0</span>
+                            </button>
+                            <div class="notif-dropdown d-none" id="notifDropdown">
+                                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                    <strong style="font-size:0.9rem">Notifications</strong>
+                                    <button class="btn btn-sm btn-link text-decoration-none" id="markAllReadBtn" style="font-size:0.75rem">Mark all read</button>
+                                </div>
+                                <div id="notifList"></div>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-dark" id="sidebarToggle" title="Toggle Sidebar">
+                            <i class="bi bi-list fs-5"></i>
+                        </button>
+                    </div>
                 </div>
                 <?php if (isset($_SESSION['success'])): ?>
                     <div class="alert alert-success alert-dismissible fade show">
@@ -141,6 +159,8 @@
     </div>
     <script src="public/js/bootstrap.bundle.min.js"></script>
     <script src="public/js/app.js"></script>
+    <script>var URL_ROOT = '<?= URL_ROOT ?>';</script>
+    <script src="public/js/notifications.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');

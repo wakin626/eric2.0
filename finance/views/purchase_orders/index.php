@@ -99,7 +99,7 @@
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
 <?php $conv = $item['uom_conversion'] ?? null; ?>
-<small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
+<small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? floor($itemDelivered / $conv) . '/' . floor($itemQty / $conv) . ' cs' : '—/—' ?></small>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>
@@ -348,7 +348,7 @@ function viewPODetails(poId) {
                 receipts.forEach(r => {
                     html += `<li class="list-group-item d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-file-earmark me-2"></i>${r.file_name}</span>
-                        <a href="${r.file_path}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i></a>
+                        <a href="${URL_ROOT}${r.file_path}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i></a>
                     </li>`;
                 });
                 html += `</ul>`;

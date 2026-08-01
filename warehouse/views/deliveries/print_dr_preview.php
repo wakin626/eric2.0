@@ -144,6 +144,22 @@
             text-overflow: clip;
         }
 
+        /* ─── FOOTER FIELDS ─── */
+        .dr-remarks {
+            position: absolute;
+            bottom: 2.79in;
+            left: 1.40in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+        }
+        .dr-plate-no {
+            position: absolute;
+            bottom: 1.83in;
+            left: 3.52in;
+            font-family: Calibri, sans-serif;
+            font-size: 11pt;
+        }
+
         /* ─── Print Styles ─── */
         @media print {
             @page { size: 8.5in 11in; margin: 0 !important; }
@@ -170,19 +186,6 @@
     <div class="dr-field-terms"><?= htmlspecialchars($po['customer_terms'] ?? '') ?> DAYS</div>
     <div class="dr-field-po-number"><?= htmlspecialchars($po['customer_po_number'] ?? '') ?></div>
 
-    <?php
-    $allRemarks = [];
-    foreach ($dr_deliveries as $dd) {
-        $r = trim($dd['remarks'] ?? '');
-        if ($r !== '' && !in_array($r, $allRemarks)) $allRemarks[] = $r;
-    }
-    ?>
-    <?php if (!empty($allRemarks)): ?>
-    <div style="margin-top: 8px; font-size: 11px;">
-        <strong>Remarks:</strong> <?= htmlspecialchars(implode('; ', $allRemarks)) ?>
-    </div>
-    <?php endif; ?>
-
     <!-- TABLE BODY -->
     <div class="dr-table-start">
         <?php if (!empty($dr_deliveries)): ?>
@@ -207,10 +210,30 @@
             <div class="dr-row" style="margin-top: 4px;">
                 <div class="dr-col-qty"></div>
                 <div class="dr-col-unit"></div>
-                <div class="dr-col-desc" style="font-style: italic; font-weight: bold;">Nothing follows.</div>
+                <div class="dr-col-desc" style="font-style: italic; font-weight: bold;">============Nothing follows.============</div>
             </div>
         <?php endif; ?>
     </div>
+
+    <?php
+    $allRemarks = [];
+    $plateNumber = '';
+    $vehicleType = '';
+    $logisticProvider = '';
+    foreach ($dr_deliveries as $dd) {
+        $r = trim($dd['remarks'] ?? '');
+        if ($r !== '' && !in_array($r, $allRemarks)) $allRemarks[] = $r;
+        if (empty($plateNumber) && !empty($dd['plate_number'])) $plateNumber = $dd['plate_number'];
+        if (empty($vehicleType) && !empty($dd['vehicle_type'])) $vehicleType = $dd['vehicle_type'];
+        if (empty($logisticProvider) && !empty($dd['logistic_provider'])) $logisticProvider = $dd['logistic_provider'];
+    }
+    ?>
+    <?php if (!empty($allRemarks)): ?>
+    <div class="dr-remarks"> <?= htmlspecialchars(implode('; ', $allRemarks)) ?></div>
+    <?php endif; ?>
+    <?php if (!empty($plateNumber)): ?>
+    <div class="dr-plate-no"> <?= htmlspecialchars($plateNumber) ?></div>
+    <?php endif; ?>
 
 </div>
 

@@ -42,7 +42,7 @@
                         <td>
                             <?php $conv = $item['uom_conversion'] ?? null; ?>
                             <?php if ($conv && $item['item_uom'] !== 'CS'): ?>
-                                <?= round($item['quantity'] / $conv) ?> CS
+                                <?= floor($item['quantity'] / $conv) ?> CS
                             <?php else: ?>
                                 —
                             <?php endif; ?>

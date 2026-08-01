@@ -86,7 +86,7 @@
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                 <span class="badge bg-success"><?= $itemAvailable ?></span>
-                                <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? round($itemDelivered / $conv) . '/' . round($itemQty / $conv) . ' cs' : '—/—' ?></small>
+                                <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? floor($itemDelivered / $conv) . '/' . floor($itemQty / $conv) . ' cs' : '—/—' ?></small>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <small class="text-muted">-</small>

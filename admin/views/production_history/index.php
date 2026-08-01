@@ -83,6 +83,7 @@
                     <th class="sortable" data-sort="totalpo">Total PO Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="excess">Excess <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
+                    <th>QC Remark</th>
                     <th>Report</th>
                     <th>Action</th>
                 </tr>
@@ -142,6 +143,19 @@
                     </td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td>
+                        <?php if (!empty($h['qc_remark'])): ?>
+                            <div>
+                                <small><?= nl2br(htmlspecialchars($h['qc_remark'])) ?></small>
+                                <br><small class="text-muted">
+                                    <i class="bi bi-person me-1"></i><?= htmlspecialchars($h['qc_inspector_name'] ?? '') ?>
+                                    &middot; <?= date('m/d/Y g:i A', strtotime($h['qc_inspected_at'])) ?>
+                                </small>
+                            </div>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <?php
                         $hasReport = !empty($h['report_id']);
                         $reportPending = $hasReport && $h['report_status'] === 'pending';
@@ -177,7 +191,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="14" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="15" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

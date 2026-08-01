@@ -158,6 +158,27 @@ class WarehouseModel extends BaseModel {
         return $stmt->fetch();
     }
 
+    private function adjustProducedForAdvanceConsumption(&$items, $conn = null) {
+        if (empty($items)) return;
+        if (!$conn) $conn = self::getConnection();
+        $poIds = array_unique(array_column($items, 'po_id'));
+        if (empty($poIds)) return;
+        $placeholders = implode(',', array_fill(0, count($poIds), '?'));
+        $advStmt = $conn->prepare("SELECT normal_po_id, normal_poi_id, SUM(quantity) as adv_consumed FROM advance_production_consumption WHERE normal_po_id IN ($placeholders) GROUP BY normal_po_id, normal_poi_id");
+        $advStmt->execute(array_values($poIds));
+        $advMap = [];
+        foreach ($advStmt->fetchAll() as $row) {
+            $advMap[$row['normal_poi_id']] = intval($row['adv_consumed']);
+        }
+        foreach ($items as &$item) {
+            $pid = $item['poi_id'] ?? null;
+            if ($pid && isset($advMap[$pid])) {
+                $item['produced_quantity'] = intval($item['produced_quantity']) + $advMap[$pid];
+            }
+        }
+        unset($item);
+    }
+
     public function getPurchaseOrderItems($po_id) {
         $sql = "SELECT poi.*, i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom, i.uom_conversion 
             FROM purchase_order_items poi 
@@ -165,7 +186,9 @@ class WarehouseModel extends BaseModel {
             WHERE poi.po_id = :po_id AND i.remove = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
-        return $stmt->fetchAll();
+        $rows = $stmt->fetchAll();
+        $this->adjustProducedForAdvanceConsumption($rows);
+        return $rows;
     }
 
     public function getPurchaseOrderItemById($poi_id) {
@@ -192,6 +215,7 @@ class WarehouseModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute($poIds);
         $rows = $stmt->fetchAll();
+        $this->adjustProducedForAdvanceConsumption($rows);
         $grouped = [];
         foreach ($rows as $row) {
             $grouped[$row['po_id']][] = $row;
@@ -221,8 +245,8 @@ class WarehouseModel extends BaseModel {
             $perPoi = [];
         }
 
-        $sql = "INSERT INTO deliveries (po_id, poi_id, lot_id, delivered_by, delivery_date, delivery_quantity, dr_number, lot_items, remarks) 
-                VALUES (:po_id, :poi_id, :lot_id, :delivered_by, :delivery_date, :delivery_quantity, :dr_number, :lot_items, :remarks)";
+        $sql = "INSERT INTO deliveries (po_id, poi_id, lot_id, delivered_by, delivery_date, delivery_quantity, dr_number, plate_number, vehicle_type, logistic_provider, lot_items, remarks) 
+                VALUES (:po_id, :poi_id, :lot_id, :delivered_by, :delivery_date, :delivery_quantity, :dr_number, :plate_number, :vehicle_type, :logistic_provider, :lot_items, :remarks)";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'po_id' => $data['po_id'],
@@ -232,6 +256,9 @@ class WarehouseModel extends BaseModel {
             'delivery_date' => $data['delivery_date'],
             'delivery_quantity' => $actualDeliveryQty,
             'dr_number' => $data['dr_number'] ?? null,
+            'plate_number' => $data['plate_number'] ?? null,
+            'vehicle_type' => $data['vehicle_type'] ?? null,
+            'logistic_provider' => $data['logistic_provider'] ?? null,
             'lot_items' => $data['lot_items'] ?? null,
             'remarks' => $data['remarks'] ?? ''
         ]);
@@ -239,25 +266,26 @@ class WarehouseModel extends BaseModel {
 
         if (!empty($perPoi)) {
             foreach ($perPoi as $poiId => $qty) {
-                $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = (
-                    SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
-                    WHERE d.poi_id = poi.poi_id AND d.`remove` = 0
+                $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = GREATEST(0,
+                    (SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                    WHERE d.poi_id = poi.poi_id AND d.`remove` = 0)
+                    - COALESCE((SELECT SUM(b.quantity) FROM backloads b WHERE b.poi_id = poi.poi_id AND b.`remove` = 0), 0)
                 ) WHERE poi.poi_id = :poi_id")
                     ->execute(['poi_id' => $poiId]);
             }
         } elseif (!empty($data['poi_id'])) {
-            $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = (
-                SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
-                WHERE d.poi_id = poi.poi_id AND d.`remove` = 0
+            $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = GREATEST(0,
+                (SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                WHERE d.poi_id = poi.poi_id AND d.`remove` = 0)
+                - COALESCE((SELECT SUM(b.quantity) FROM backloads b WHERE b.poi_id = poi.poi_id AND b.`remove` = 0), 0)
             ) WHERE poi.poi_id = :poi_id")
-                ->execute(['poi_id' => $data['po_id']]);
+                ->execute(['poi_id' => $data['poi_id']]);
         }
 
         $conn->prepare("UPDATE purchase_orders po SET delivered_quantity = (
-            SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
-            WHERE d.po_id = po.po_id AND d.`remove` = 0
-        ) WHERE po.po_id = :po_id")
-            ->execute(['po_id' => $data['po_id']]);
+            SELECT COALESCE(SUM(delivered_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+        ) WHERE po.po_id = :po_id2")
+            ->execute(['po_id' => $data['po_id'], 'po_id2' => $data['po_id']]);
 
         $conn->commit();
         return $deliveryId;
@@ -332,19 +360,19 @@ class WarehouseModel extends BaseModel {
             }
 
             foreach ($poiIds as $poiId) {
-                $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = (
-                    SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
-                    WHERE d.poi_id = poi.poi_id AND d.`remove` = 0
+                $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = GREATEST(0,
+                    (SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                    WHERE d.poi_id = poi.poi_id AND d.`remove` = 0)
+                    - COALESCE((SELECT SUM(b.quantity) FROM backloads b WHERE b.poi_id = poi.poi_id AND b.`remove` = 0), 0)
                 ) WHERE poi.poi_id = :poi_id")
                     ->execute(['poi_id' => $poiId]);
             }
 
             if (!empty($delivery['po_id'])) {
                 $conn->prepare("UPDATE purchase_orders po SET delivered_quantity = (
-                    SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
-                    WHERE d.po_id = po.po_id AND d.`remove` = 0
-                ) WHERE po.po_id = :po_id")
-                    ->execute(['po_id' => $delivery['po_id']]);
+                    SELECT COALESCE(SUM(delivered_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+                ) WHERE po.po_id = :po_id2")
+                    ->execute(['po_id' => $delivery['po_id'], 'po_id2' => $delivery['po_id']]);
 
                 if (!empty($poiIds)) {
                     $placeholders = implode(',', array_fill(0, count($poiIds), '?'));
@@ -589,7 +617,9 @@ class WarehouseModel extends BaseModel {
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
                     pr.report_type as report_type, pr.new_lot_number as resolved_lot,
-                    poi.quantity as ordered_quantity
+                    poi.quantity as ordered_quantity,
+                    ph.qc_remark, ph.qc_inspected_by, ph.qc_inspected_at,
+                    ph.qc_inspector_name
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
@@ -777,7 +807,9 @@ class WarehouseModel extends BaseModel {
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
                     pr.report_type as report_type, pr.new_lot_number as resolved_lot,
-                    poi.quantity as ordered_quantity
+                    poi.quantity as ordered_quantity,
+                    ph.qc_remark, ph.qc_inspected_by, ph.qc_inspected_at,
+                    ph.qc_inspector_name
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
@@ -994,19 +1026,58 @@ class WarehouseModel extends BaseModel {
 
     public function getAvailableLotsForPO($po_id) {
         $conn = self::getConnection();
-        $stmt = $conn->prepare("SELECT lot_items FROM deliveries 
-                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0");
+        $stmt = $conn->prepare("SELECT delivery_id, delivery_date, lot_items FROM deliveries 
+                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0
+                ORDER BY delivery_date ASC, delivery_id ASC");
         $stmt->execute(['po_id' => $po_id]);
         $jsonDelivered = [];
+        $deliveryEvents = [];
         while ($r = $stmt->fetch()) {
             $items = json_decode($r['lot_items'], true);
             if (!is_array($items)) continue;
             foreach ($items as $li) {
                 if (isset($li['lot_id'])) {
                     $lid = intval($li['lot_id']);
-                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                    $qty = intval($li['qty'] ?? 0);
+                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + $qty;
+                    $deliveryEvents[$lid][] = ['type' => 'delivery', 'date' => $r['delivery_date'], 'qty' => $qty];
                 }
             }
+        }
+
+        $jsonBackloaded = [];
+        $backloadEvents = [];
+        $blStmt = $conn->prepare("SELECT b.lot_id, b.quantity, b.backload_date
+                FROM backloads b WHERE b.po_id = :po_id AND b.`remove` = 0
+                ORDER BY b.backload_date ASC, b.backload_id ASC");
+        $blStmt->execute(['po_id' => $po_id]);
+        while ($bl = $blStmt->fetch()) {
+            $lid = intval($bl['lot_id']);
+            $qty = intval($bl['quantity']);
+            $jsonBackloaded[$lid] = ($jsonBackloaded[$lid] ?? 0) + $qty;
+            $backloadEvents[$lid][] = ['type' => 'backload', 'date' => $bl['backload_date'], 'qty' => $qty];
+        }
+
+        $lotActiveBackloaded = [];
+        $allLotIds = array_unique(array_merge(array_keys($deliveryEvents), array_keys($backloadEvents)));
+        foreach ($allLotIds as $lid) {
+            $events = array_merge($deliveryEvents[$lid] ?? [], $backloadEvents[$lid] ?? []);
+            usort($events, function($a, $b) {
+                $cmp = strcmp($a['date'], $b['date']);
+                if ($cmp !== 0) return $cmp;
+                if ($a['type'] === 'backload' && $b['type'] !== 'backload') return -1;
+                if ($a['type'] !== 'backload' && $b['type'] === 'backload') return 1;
+                return 0;
+            });
+            $pool = 0;
+            foreach ($events as $evt) {
+                if ($evt['type'] === 'backload') {
+                    $pool += $evt['qty'];
+                } else {
+                    $pool = max(0, $pool - $evt['qty']);
+                }
+            }
+            $lotActiveBackloaded[$lid] = $pool;
         }
 
         // Get normal PO items
@@ -1041,13 +1112,15 @@ class WarehouseModel extends BaseModel {
             if (isset($advanceMap[$lot['poi_id']])) {
                 $lot['poi_id'] = $advanceMap[$lot['poi_id']];
             }
-            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lot['lot_id']] ?? 0));
+            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lot['lot_id']] ?? 0) + ($jsonBackloaded[$lot['lot_id']] ?? 0));
+            $lot['backloaded_qty'] = $lotActiveBackloaded[$lot['lot_id']] ?? 0;
             if ($lot['available_quantity'] <= 0) continue;
 
             $key = $lot['lot_number'] . '_' . $lot['poi_id'];
             if (isset($merged[$key])) {
                 $merged[$key]['available_quantity'] += $lot['available_quantity'];
                 $merged[$key]['quantity_produced'] += $lot['quantity_produced'];
+                $merged[$key]['backloaded_qty'] = ($merged[$key]['backloaded_qty'] ?? 0) + ($lot['backloaded_qty'] ?? 0);
             } else {
                 $merged[$key] = $lot;
             }
@@ -1069,23 +1142,64 @@ class WarehouseModel extends BaseModel {
         $stmt = $conn->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
         $lots = $stmt->fetchAll();
-        $stmt2 = $conn->prepare("SELECT lot_items FROM deliveries 
-                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0");
+        $stmt2 = $conn->prepare("SELECT delivery_id, delivery_date, lot_items FROM deliveries 
+                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0
+                ORDER BY delivery_date ASC, delivery_id ASC");
         $stmt2->execute(['po_id' => $po_id]);
         $jsonDelivered = [];
+        $deliveryEvents = [];
         while ($r = $stmt2->fetch()) {
             $items = json_decode($r['lot_items'], true);
             if (!is_array($items)) continue;
             foreach ($items as $li) {
                 if (isset($li['lot_id'])) {
                     $lid = intval($li['lot_id']);
-                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                    $qty = intval($li['qty'] ?? 0);
+                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + $qty;
+                    $deliveryEvents[$lid][] = ['type' => 'delivery', 'date' => $r['delivery_date'], 'qty' => $qty];
                 }
             }
         }
+        $jsonBackloaded = [];
+        $backloadEvents = [];
+        $blStmt = $conn->prepare("SELECT b.lot_id, b.quantity, b.backload_date
+                FROM backloads b INNER JOIN deliveries d ON b.delivery_id = d.delivery_id
+                WHERE d.po_id = :po_id AND b.`remove` = 0
+                ORDER BY b.backload_date ASC, b.backload_id ASC");
+        $blStmt->execute(['po_id' => $po_id]);
+        while ($bl = $blStmt->fetch()) {
+            $lid = intval($bl['lot_id']);
+            $qty = intval($bl['quantity']);
+            $jsonBackloaded[$lid] = ($jsonBackloaded[$lid] ?? 0) + $qty;
+            $backloadEvents[$lid][] = ['type' => 'backload', 'date' => $bl['backload_date'], 'qty' => $qty];
+        }
+
+        $lotActiveBackloaded = [];
+        $allLotIds = array_unique(array_merge(array_keys($deliveryEvents), array_keys($backloadEvents)));
+        foreach ($allLotIds as $lid) {
+            $events = array_merge($deliveryEvents[$lid] ?? [], $backloadEvents[$lid] ?? []);
+            usort($events, function($a, $b) {
+                $cmp = strcmp($a['date'], $b['date']);
+                if ($cmp !== 0) return $cmp;
+                if ($a['type'] === 'backload' && $b['type'] !== 'backload') return -1;
+                if ($a['type'] !== 'backload' && $b['type'] === 'backload') return 1;
+                return 0;
+            });
+            $pool = 0;
+            foreach ($events as $evt) {
+                if ($evt['type'] === 'backload') {
+                    $pool += $evt['qty'];
+                } else {
+                    $pool = max(0, $pool - $evt['qty']);
+                }
+            }
+            $lotActiveBackloaded[$lid] = $pool;
+        }
+
         $result = [];
         foreach ($lots as $lot) {
-            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lot['lot_id']] ?? 0));
+            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lot['lot_id']] ?? 0) + ($jsonBackloaded[$lot['lot_id']] ?? 0));
+            $lot['backloaded_qty'] = $lotActiveBackloaded[$lot['lot_id']] ?? 0;
             if ($lot['available_quantity'] > 0) $result[] = $lot;
         }
         usort($result, function($a, $b) { return strcmp($a['lot_number'], $b['lot_number']); });
@@ -1140,7 +1254,13 @@ class WarehouseModel extends BaseModel {
                 }
             }
         }
-        return max(0, $lot['quantity_produced'] - $deliveredJson);
+        $backloadedStmt = $conn->prepare("SELECT COALESCE(SUM(b.quantity), 0) FROM backloads b
+                INNER JOIN deliveries d ON b.delivery_id = d.delivery_id
+                WHERE d.po_id = :po_id AND b.lot_id = :lot_id AND b.`remove` = 0");
+        $backloadedStmt->execute(['po_id' => $po_id, 'lot_id' => $lot_id]);
+        $backloaded = intval($backloadedStmt->fetchColumn());
+
+        return max(0, $lot['quantity_produced'] - $deliveredJson + $backloaded);
     }
 
     public function getLotsByPOForPrint($po_id) {
@@ -1164,6 +1284,7 @@ class WarehouseModel extends BaseModel {
                 WHERE lot_items IS NOT NULL AND `remove` = 0");
         $stmt2->execute();
         $jsonDelivered = [];
+        $lotActualConv = [];
         while ($r = $stmt2->fetch()) {
             $items = json_decode($r['lot_items'], true);
             if (!is_array($items)) continue;
@@ -1171,11 +1292,17 @@ class WarehouseModel extends BaseModel {
                 if (isset($li['lot_id'])) {
                     $lid = intval($li['lot_id']);
                     $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                    if (!isset($lotActualConv[$lid]) && !empty($li['actual_uom_conversion'])) {
+                        $lotActualConv[$lid] = intval($li['actual_uom_conversion']);
+                    }
                 }
             }
         }
         foreach ($rows as &$row) {
             $row['available_quantity'] = max(0, $row['quantity_produced'] - ($row['delivered_legacy'] ?? 0) - ($jsonDelivered[$row['lot_id']] ?? 0));
+            if (isset($lotActualConv[$row['lot_id']])) {
+                $row['actual_uom_conversion'] = $lotActualConv[$row['lot_id']];
+            }
         }
         unset($row);
 
@@ -1254,6 +1381,10 @@ class WarehouseModel extends BaseModel {
                             'uom_conversion' => $li['uom_conversion'] ?? null,
                             'actual_uom_conversion' => $li['actual_uom_conversion'] ?? null,
                             'item_id' => $li['item_id'] ?? null,
+                            'remarks' => $d['remarks'] ?? '',
+                            'plate_number' => $d['plate_number'] ?? '',
+                            'vehicle_type' => $d['vehicle_type'] ?? '',
+                            'logistic_provider' => $d['logistic_provider'] ?? '',
                         ];
                     }
                 }
@@ -1542,9 +1673,10 @@ class WarehouseModel extends BaseModel {
                     }
                 }
                 foreach ($poiIds as $poiId) {
-                    $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = (
-                        SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
-                        WHERE d.poi_id = poi.poi_id AND d.`remove` = 0
+                    $conn->prepare("UPDATE purchase_order_items poi SET delivered_quantity = GREATEST(0,
+                        (SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
+                        WHERE d.poi_id = poi.poi_id AND d.`remove` = 0)
+                        - COALESCE((SELECT SUM(b.quantity) FROM backloads b WHERE b.poi_id = poi.poi_id AND b.`remove` = 0), 0)
                     ) WHERE poi.poi_id = :poi_id")->execute(['poi_id' => $poiId]);
                 }
 
@@ -1552,9 +1684,8 @@ class WarehouseModel extends BaseModel {
                 $poId = $delivery['po_id'];
                 if ($poId) {
                     $conn->prepare("UPDATE purchase_orders po SET delivered_quantity = (
-                        SELECT COALESCE(SUM(d.delivery_quantity), 0) FROM deliveries d
-                        WHERE d.po_id = po.po_id AND d.`remove` = 0
-                    ) WHERE po.po_id = :po_id")->execute(['po_id' => $poId]);
+                        SELECT COALESCE(SUM(delivered_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+                    ) WHERE po.po_id = :po_id2")->execute(['po_id' => $poId, 'po_id2' => $poId]);
                 }
             }
         }
@@ -2078,6 +2209,31 @@ class WarehouseModel extends BaseModel {
         return $results;
     }
 
+    public function getAdvanceLotsByCustomerItem($customer_id, $item_id) {
+        $conn = self::getConnection();
+        $sql = "SELECT l.lot_id, l.lot_number, l.quantity_produced, l.lot_date,
+                       poi.poi_id, po.po_id, po.customer_po_number,
+                       (l.quantity_produced - COALESCE(consumed.total, 0)) as available_quantity
+                FROM production_lots l
+                INNER JOIN purchase_order_items poi ON l.poi_id = poi.poi_id
+                INNER JOIN purchase_orders po ON poi.po_id = po.po_id
+                LEFT JOIN (
+                    SELECT apc.advance_poi_id, SUM(apc.quantity) as total
+                    FROM advance_production_consumption apc
+                    GROUP BY apc.advance_poi_id
+                ) consumed ON consumed.advance_poi_id = poi.poi_id
+                WHERE po.customer_id = :customer_id
+                  AND poi.item_id = :item_id
+                  AND po.production_type = 'advance'
+                  AND po.`remove` = 0
+                  AND l.is_removed = 0
+                  AND (l.quantity_produced - COALESCE(consumed.total, 0)) > 0
+                ORDER BY l.lot_id ASC";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id, 'item_id' => $item_id]);
+        return $stmt->fetchAll();
+    }
+
     public function getAdvanceConsumptionByPoiIds($poi_ids) {
         if (empty($poi_ids)) return [];
         $placeholders = implode(',', array_fill(0, count($poi_ids), '?'));
@@ -2146,5 +2302,646 @@ class WarehouseModel extends BaseModel {
             }
         }
         return $results;
+    }
+
+    public function getWeeklyDeliveryStats($customerId = null, $weekOffset = 0) {
+        $startOffset = $weekOffset * 12;
+        $sql = "SELECT 
+                    YEARWEEK(d.delivery_date, 1) as year_week,
+                    COUNT(*) as delivery_count,
+                    COALESCE(SUM(CASE 
+                        WHEN i.uom_conversion IS NOT NULL AND i.uom_conversion > 0 
+                        THEN FLOOR(d.delivery_quantity / i.uom_conversion) 
+                        ELSE d.delivery_quantity 
+                    END), 0) as total_cases
+                FROM deliveries d
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE d.`remove` = 0
+                  AND d.delivery_date >= DATE_SUB(CURDATE(), INTERVAL " . ($startOffset + 24) . " WEEK)";
+        $params = [];
+
+        if ($customerId) {
+            $sql .= " AND d.po_id IN (SELECT po_id FROM purchase_orders WHERE customer_id = :customer_id)";
+            $params['customer_id'] = $customerId;
+        }
+
+        $sql .= " GROUP BY year_week ORDER BY year_week ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function getCustomersWithDeliveries() {
+        $sql = "SELECT DISTINCT c.customer_id, c.customer_name
+                FROM customers c
+                INNER JOIN purchase_orders po ON c.customer_id = po.customer_id
+                INNER JOIN deliveries d ON po.po_id = d.po_id
+                WHERE d.`remove` = 0
+                ORDER BY c.customer_name";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getDeliveryDetailsForWeek($yearWeek, $customerId = null) {
+        $sql = "SELECT 
+                    d.delivery_id,
+                    d.delivery_date,
+                    d.dr_number,
+                    d.delivery_quantity,
+                    d.lot_items,
+                    po.customer_po_number,
+                    c.customer_name,
+                    i.item_description,
+                    i.item_uom,
+                    i.uom_conversion,
+                    u.full_name as delivered_by_name
+                FROM deliveries d
+                LEFT JOIN purchase_orders po ON d.po_id = po.po_id
+                LEFT JOIN customers c ON po.customer_id = c.customer_id
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                LEFT JOIN users u ON d.delivered_by = u.user_id
+                WHERE d.`remove` = 0
+                  AND YEARWEEK(d.delivery_date, 1) = :year_week";
+        $params = ['year_week' => $yearWeek];
+
+        if ($customerId) {
+            $sql .= " AND d.po_id IN (SELECT po_id FROM purchase_orders WHERE customer_id = :customer_id)";
+            $params['customer_id'] = $customerId;
+        }
+
+        $sql .= " ORDER BY d.delivery_date DESC, d.delivery_id DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$row) {
+            $lotItems = json_decode($row['lot_items'], true);
+            if (is_array($lotItems) && count($lotItems) > 0) {
+                $totalCases = 0;
+                foreach ($lotItems as $li) {
+                    $qty = intval($li['qty'] ?? 0);
+                    $conv = !empty($li['actual_uom_conversion']) ? intval($li['actual_uom_conversion']) : 0;
+                    if ($conv > 0) {
+                        $totalCases += floor($qty / $conv);
+                    } else {
+                        $itemUom = $row['uom_conversion'] ?? 0;
+                        $totalCases += $itemUom > 0 ? floor($qty / $itemUom) : 0;
+                    }
+                }
+                $row['cases_delivered'] = $totalCases;
+            } else {
+                $conv = $row['uom_conversion'] ?? 0;
+                $row['cases_delivered'] = ($conv > 0) ? floor($row['delivery_quantity'] / $conv) : $row['delivery_quantity'];
+            }
+        }
+        return $rows;
+    }
+
+    public function getPoItemSummary($customerId = null) {
+        $sql = "SELECT 
+                    poi.poi_id,
+                    poi.po_id,
+                    poi.quantity as po_qty,
+                    poi.produced_quantity,
+                    poi.delivered_quantity,
+                    poi.unit_price,
+                    po.customer_po_number,
+                    po.date_created as po_date,
+                    c.customer_name,
+                    i.item_code,
+                    i.item_description,
+                    i.item_uom,
+                    i.uom_conversion
+                FROM purchase_order_items poi
+                LEFT JOIN purchase_orders po ON poi.po_id = po.po_id
+                LEFT JOIN customers c ON po.customer_id = c.customer_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE poi.quantity > 0";
+        $params = [];
+
+        if ($customerId) {
+            $sql .= " AND po.customer_id = :customer_id";
+            $params['customer_id'] = $customerId;
+        }
+
+        $sql .= " ORDER BY c.customer_name ASC, po.customer_po_number ASC, i.item_description ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        $this->adjustProducedForAdvanceConsumption($rows);
+        return $rows;
+    }
+
+    public function getUniqueItemsForLots() {
+        $sql = "SELECT DISTINCT i.item_id, i.item_code, i.item_description
+                FROM production_lots pl
+                LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                WHERE pl.is_removed = 0
+                  AND i.item_id IS NOT NULL
+                ORDER BY i.item_description ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getLotsByItem($itemId) {
+        $sql = "SELECT 
+                    pl.lot_number,
+                    pl.po_id,
+                    MIN(pl.poi_id) as poi_id,
+                    MIN(pl.lot_date) as lot_date,
+                    MIN(pl.created_by) as created_by,
+                    SUM(pl.quantity_produced) as quantity_produced,
+                    po.customer_po_number,
+                    c.customer_name,
+                    u.full_name as created_by_name,
+                    i.uom_conversion
+                FROM production_lots pl
+                LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                LEFT JOIN purchase_orders po ON pl.po_id = po.po_id
+                LEFT JOIN customers c ON po.customer_id = c.customer_id
+                LEFT JOIN users u ON pl.created_by = u.user_id
+                WHERE pl.is_removed = 0
+                  AND poi.item_id = :item_id
+                GROUP BY pl.lot_number, pl.po_id, po.customer_po_number, c.customer_name, u.full_name, i.uom_conversion
+                ORDER BY MIN(pl.lot_date) DESC, pl.lot_number DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['item_id' => $itemId]);
+        $lots = $stmt->fetchAll();
+
+        $allDelivered = $this->getLotDeliveries();
+        $allLotIds = $this->getLotIdsByItem($itemId);
+
+        $backloadStmt = self::getConnection()->prepare(
+            "SELECT lot_id, SUM(quantity) as total_backloaded FROM backloads WHERE `remove` = 0 GROUP BY lot_id"
+        );
+        $backloadStmt->execute();
+        $allBackloaded = [];
+        while ($bl = $backloadStmt->fetch()) {
+            $allBackloaded[intval($bl['lot_id'])] = intval($bl['total_backloaded']);
+        }
+
+        $deliveredByKey = [];
+        foreach ($allLotIds as $lid) {
+            $key = $lid['lot_number'] . '_' . $lid['po_id'];
+            $deliveredByKey[$key] = ($deliveredByKey[$key] ?? 0) + ($allDelivered[$lid['lot_id']] ?? 0);
+        }
+        foreach ($lots as &$lot) {
+            $key = $lot['lot_number'] . '_' . $lot['po_id'];
+            $lot['quantity_delivered'] = $deliveredByKey[$key] ?? 0;
+            $lotBackloaded = 0;
+            foreach ($allLotIds as $lid) {
+                if ($lid['lot_number'] === $lot['lot_number'] && $lid['po_id'] === $lot['po_id']) {
+                    $lotBackloaded += $allBackloaded[$lid['lot_id']] ?? 0;
+                }
+            }
+            $lot['quantity_backloaded'] = $lotBackloaded;
+        }
+        return $lots;
+    }
+
+    public function getAllLotsStockOnHand() {
+        $sql = "SELECT 
+                    pl.lot_number,
+                    pl.po_id,
+                    pl.lot_id,
+                    pl.poi_id,
+                    pl.lot_date,
+                    pl.created_by,
+                    pl.quantity_produced,
+                    po.customer_po_number,
+                    c.customer_name,
+                    u.full_name as created_by_name,
+                    i.uom_conversion,
+                    i.item_code,
+                    i.item_description
+                FROM production_lots pl
+                LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                LEFT JOIN purchase_orders po ON pl.po_id = po.po_id
+                LEFT JOIN customers c ON po.customer_id = c.customer_id
+                LEFT JOIN users u ON pl.created_by = u.user_id
+                WHERE pl.is_removed = 0
+                ORDER BY i.item_description ASC, pl.lot_date DESC, pl.lot_number DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        $lots = $stmt->fetchAll();
+
+        $allDelivered = $this->getLotDeliveries();
+
+        $backloadStmt = self::getConnection()->prepare(
+            "SELECT lot_id, SUM(quantity) as total_backloaded FROM backloads WHERE `remove` = 0 GROUP BY lot_id"
+        );
+        $backloadStmt->execute();
+        $allBackloaded = [];
+        while ($bl = $backloadStmt->fetch()) {
+            $allBackloaded[intval($bl['lot_id'])] = intval($bl['total_backloaded']);
+        }
+
+        foreach ($lots as &$lot) {
+            $lotId = intval($lot['lot_id']);
+            $lot['quantity_delivered'] = $allDelivered[$lotId] ?? 0;
+            $lot['quantity_backloaded'] = $allBackloaded[$lotId] ?? 0;
+        }
+        return $lots;
+    }
+
+    private function getLotIdsByItem($itemId) {
+        $sql = "SELECT pl.lot_id, pl.lot_number, pl.po_id
+                FROM production_lots pl
+                LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
+                WHERE pl.is_removed = 0 AND poi.item_id = :item_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['item_id' => $itemId]);
+        return $stmt->fetchAll();
+    }
+
+    private function getLotDeliveries() {
+        $result = [];
+
+        $sql = "SELECT delivery_id, lot_items FROM deliveries WHERE remove = 0 AND lot_items IS NOT NULL";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        $rows = $stmt->fetchAll();
+        foreach ($rows as $row) {
+            $items = json_decode($row['lot_items'], true);
+            if (!is_array($items)) continue;
+            foreach ($items as $li) {
+                $lotId = intval($li['lot_id']);
+                $qty = intval($li['qty'] ?? 0);
+                if ($lotId > 0) {
+                    $result[$lotId] = ($result[$lotId] ?? 0) + $qty;
+                }
+            }
+        }
+
+        $sql2 = "SELECT lot_id, delivery_quantity FROM deliveries WHERE remove = 0 AND lot_items IS NULL AND lot_id IS NOT NULL AND delivery_quantity > 0";
+        $stmt2 = self::getConnection()->prepare($sql2);
+        $stmt2->execute();
+        $rows2 = $stmt2->fetchAll();
+        foreach ($rows2 as $row) {
+            $lotId = intval($row['lot_id']);
+            $qty = intval($row['delivery_quantity']);
+            if ($lotId > 0) {
+                $result[$lotId] = ($result[$lotId] ?? 0) + $qty;
+            }
+        }
+
+        return $result;
+    }
+
+    public function getDeliveryReportData($filters = []) {
+        $sql = "SELECT d.delivery_id, d.dr_number, d.si_number, d.plate_number, d.vehicle_type, d.logistic_provider,
+                       d.delivery_date, d.delivery_quantity,
+                       d.lot_items, d.remarks, d.report_remarks, d.date_created,
+                       po.customer_po_number, po.customer_po_date, po.total_quantity, po.production_type,
+                       c.customer_name,
+                       poi.quantity as item_quantity, poi.poi_id,
+                       i.item_code, i.item_description, COALESCE(poi.item_uom, i.item_uom) as item_uom,
+                       pl.lot_number,
+                       u.full_name as delivered_by_name
+                FROM deliveries d
+                LEFT JOIN purchase_orders po ON d.po_id = po.po_id
+                LEFT JOIN customers c ON po.customer_id = c.customer_id
+                LEFT JOIN purchase_order_items poi ON d.poi_id = poi.poi_id
+                LEFT JOIN items i ON poi.item_id = i.item_id
+                LEFT JOIN production_lots pl ON d.lot_id = pl.lot_id
+                LEFT JOIN users u ON d.delivered_by = u.user_id
+                WHERE d.`remove` = 0";
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $like = '%' . $filters['search'] . '%';
+            $sql .= " AND (d.dr_number LIKE :s1 OR d.si_number LIKE :s2
+                       OR po.customer_po_number LIKE :s3 OR c.customer_name LIKE :s4
+                       OR i.item_description LIKE :s5 OR pl.lot_number LIKE :s6
+                       OR u.full_name LIKE :s7 OR d.remarks LIKE :s8)";
+            $params['s1'] = $like;
+            $params['s2'] = $like;
+            $params['s3'] = $like;
+            $params['s4'] = $like;
+            $params['s5'] = $like;
+            $params['s6'] = $like;
+            $params['s7'] = $like;
+            $params['s8'] = $like;
+        }
+        if (!empty($filters['date_from'])) {
+            $sql .= " AND d.delivery_date >= :date_from";
+            $params['date_from'] = $filters['date_from'];
+        }
+        if (!empty($filters['date_to'])) {
+            $sql .= " AND d.delivery_date <= :date_to";
+            $params['date_to'] = $filters['date_to'];
+        }
+        if (!empty($filters['customer_id'])) {
+            $sql .= " AND po.customer_id = :customer_id";
+            $params['customer_id'] = $filters['customer_id'];
+        }
+
+        $sql .= " ORDER BY d.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function getDeliveryReportCustomers() {
+        $sql = "SELECT DISTINCT c.customer_id, c.customer_name
+                FROM deliveries d
+                JOIN purchase_orders po ON d.po_id = po.po_id
+                JOIN customers c ON po.customer_id = c.customer_id
+                WHERE d.`remove` = 0
+                ORDER BY c.customer_name ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getActivePOsByCustomer($customer_id) {
+        $sql = "SELECT po.po_id, po.customer_po_number, po.date_created, po.production_type
+                FROM purchase_orders po
+                WHERE po.customer_id = :customer_id AND po.`remove` = 0
+                ORDER BY po.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getLastExcessLotForPOItem($poi_id) {
+        $sql = "SELECT l.lot_id, l.lot_number, l.quantity_produced, l.lot_date
+                FROM production_lots l
+                WHERE l.poi_id = :poi_id AND l.is_removed = 0
+                ORDER BY l.lot_id DESC
+                LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['poi_id' => $poi_id]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public function assignExcessToPO($excess_id, $target_po_id, $qty, $lot_id = null, $user_id = null) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $qty = (int)$qty;
+            if ($qty <= 0) {
+                $conn->rollBack();
+                return ['success' => false, 'message' => 'Invalid quantity'];
+            }
+
+            $stmt = $conn->prepare("SELECT * FROM excess_production WHERE excess_id = :excess_id FOR UPDATE");
+            $stmt->execute(['excess_id' => $excess_id]);
+            $excess = $stmt->fetch();
+            if (!$excess) {
+                $conn->rollBack();
+                return ['success' => false, 'message' => 'Excess record not found'];
+            }
+
+            $remaining = (int)$excess['excess_quantity'] - (int)$excess['consumed_quantity'];
+            if ($qty > $remaining) {
+                $conn->rollBack();
+                return ['success' => false, 'message' => 'Quantity exceeds available excess (' . $remaining . ')'];
+            }
+
+            $item_id = $excess['item_id'];
+            $customer_id = $excess['customer_id'];
+
+            $targetPo = $conn->prepare("SELECT po_id, customer_id FROM purchase_orders WHERE po_id = :po_id AND `remove` = 0");
+            $targetPo->execute(['po_id' => $target_po_id]);
+            $target = $targetPo->fetch();
+            if (!$target || (int)$target['customer_id'] !== (int)$customer_id) {
+                $conn->rollBack();
+                return ['success' => false, 'message' => 'Destination PO not found or belongs to a different customer'];
+            }
+
+            $targetItem = $conn->prepare("SELECT poi_id, produced_quantity FROM purchase_order_items WHERE po_id = :po_id AND item_id = :item_id");
+            $targetItem->execute(['po_id' => $target_po_id, 'item_id' => $item_id]);
+            $targetPoi = $targetItem->fetch();
+            if (!$targetPoi) {
+                $conn->rollBack();
+                return ['success' => false, 'message' => 'Item not found in destination PO'];
+            }
+
+            $source_poi_id = $excess['source_poi_id'];
+            $source_po_id = $excess['source_po_id'];
+
+            $conn->prepare("UPDATE purchase_order_items SET produced_quantity = GREATEST(0, produced_quantity - :qty) WHERE poi_id = :poi_id")
+                ->execute(['qty' => $qty, 'poi_id' => $source_poi_id]);
+
+            $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity + :qty WHERE poi_id = :poi_id")
+                ->execute(['qty' => $qty, 'poi_id' => $targetPoi['poi_id']]);
+
+            $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+            ) WHERE po_id = :po_id2")
+                ->execute(['po_id' => $source_po_id, 'po_id2' => $source_po_id]);
+
+            $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
+                SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+            ) WHERE po_id = :po_id2")
+                ->execute(['po_id' => $target_po_id, 'po_id2' => $target_po_id]);
+
+            $newConsumed = (int)$excess['consumed_quantity'] + $qty;
+            $newRemaining = (int)$excess['excess_quantity'] - $newConsumed;
+            if ($newRemaining <= 0) {
+                $conn->prepare("DELETE FROM excess_production WHERE excess_id = :excess_id")
+                    ->execute(['excess_id' => $excess_id]);
+            } else {
+                $conn->prepare("UPDATE excess_production SET consumed_quantity = :consumed, status = 'partial' WHERE excess_id = :excess_id")
+                    ->execute(['consumed' => $newConsumed, 'excess_id' => $excess_id]);
+            }
+
+            $lot_number = '';
+            if ($lot_id) {
+                $lotStmt = $conn->prepare("SELECT lot_number FROM production_lots WHERE lot_id = :lot_id AND is_removed = 0");
+                $lotStmt->execute(['lot_id' => $lot_id]);
+                $lotRow = $lotStmt->fetch();
+                $lot_number = $lotRow['lot_number'] ?? '';
+            } else {
+                $lotStmt = $conn->prepare("SELECT lot_number FROM production_lots WHERE poi_id = :poi_id AND is_removed = 0 ORDER BY lot_id DESC LIMIT 1");
+                $lotStmt->execute(['poi_id' => $source_poi_id]);
+                $lotRow = $lotStmt->fetch();
+                $lot_number = $lotRow['lot_number'] ?? '';
+            }
+
+            $sourceLotId = $lot_id;
+            if (!$sourceLotId) {
+                $fallbackLot = $conn->prepare("SELECT lot_id FROM production_lots WHERE poi_id = :poi_id AND is_removed = 0 ORDER BY lot_id DESC LIMIT 1");
+                $fallbackLot->execute(['poi_id' => $source_poi_id]);
+                $fallbackRow = $fallbackLot->fetch();
+                $sourceLotId = $fallbackRow['lot_id'] ?? null;
+            }
+
+            if ($sourceLotId) {
+                $conn->prepare("UPDATE production_lots SET quantity_produced = GREATEST(0, quantity_produced - :qty) WHERE lot_id = :lot_id")
+                    ->execute(['qty' => $qty, 'lot_id' => $sourceLotId]);
+
+                $conn->prepare("UPDATE production_lots SET is_removed = 1 WHERE lot_id = :lot_id AND quantity_produced <= 0")
+                    ->execute(['lot_id' => $sourceLotId]);
+            }
+
+            $conn->prepare("INSERT INTO production_lots (po_id, poi_id, lot_number, quantity_produced, lot_date, created_by)
+                VALUES (:po_id, :poi_id, :lot_number, :quantity_produced, :lot_date, :created_by)")
+                ->execute([
+                    'po_id' => $target_po_id,
+                    'poi_id' => $targetPoi['poi_id'],
+                    'lot_number' => $lot_number,
+                    'quantity_produced' => $qty,
+                    'lot_date' => date('Y-m-d'),
+                    'created_by' => $user_id
+                ]);
+
+            $conn->commit();
+            return ['success' => true];
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    public function createBackload($data) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $conn->prepare("INSERT INTO backloads (delivery_id, po_id, poi_id, lot_id, lot_number, quantity, reason, backloaded_by, backload_date)
+                VALUES (:delivery_id, :po_id, :poi_id, :lot_id, :lot_number, :quantity, :reason, :backloaded_by, :backload_date)")
+                ->execute([
+                    'delivery_id' => $data['delivery_id'],
+                    'po_id' => $data['po_id'],
+                    'poi_id' => $data['poi_id'],
+                    'lot_id' => $data['lot_id'],
+                    'lot_number' => $data['lot_number'] ?? '',
+                    'quantity' => $data['quantity'],
+                    'reason' => $data['reason'] ?? '',
+                    'backloaded_by' => $data['backloaded_by'],
+                    'backload_date' => $data['backload_date'] ?? date('Y-m-d')
+                ]);
+
+            $backloadId = $conn->lastInsertId();
+
+            $poiId = $data['poi_id'];
+
+            $delStmt = $conn->prepare("SELECT lot_items FROM deliveries WHERE po_id = :po_id AND `remove` = 0 AND lot_items IS NOT NULL");
+            $delStmt->execute(['po_id' => $data['po_id']]);
+            $totalDelivered = 0;
+            while ($delRow = $delStmt->fetch()) {
+                $items = json_decode($delRow['lot_items'], true);
+                if (!is_array($items)) continue;
+                foreach ($items as $li) {
+                    if (intval($li['poi_id'] ?? 0) === intval($poiId)) {
+                        $totalDelivered += intval($li['qty'] ?? 0);
+                    }
+                }
+            }
+
+            $backStmt = $conn->prepare("SELECT COALESCE(SUM(quantity), 0) FROM backloads WHERE poi_id = :poi_id AND `remove` = 0");
+            $backStmt->execute(['poi_id' => $poiId]);
+            $totalBackloaded = intval($backStmt->fetchColumn());
+
+            $newDeliveredQty = max(0, $totalDelivered - $totalBackloaded);
+            $conn->prepare("UPDATE purchase_order_items SET delivered_quantity = :qty WHERE poi_id = :poi_id")
+                ->execute(['qty' => $newDeliveredQty, 'poi_id' => $poiId]);
+
+            $conn->prepare("UPDATE purchase_orders SET delivered_quantity = (
+                SELECT COALESCE(SUM(delivered_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
+            ) WHERE po_id = :po_id2")
+                ->execute(['po_id' => $data['po_id'], 'po_id2' => $data['po_id']]);
+
+            $conn->commit();
+            return $backloadId;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    public function getBackloads($filters = []) {
+        $sql = "SELECT b.*, d.dr_number, po.customer_po_number, c.customer_name,
+                       i.item_code, i.item_description, u.full_name as backloaded_by_name
+                FROM backloads b
+                INNER JOIN deliveries d ON b.delivery_id = d.delivery_id
+                INNER JOIN purchase_orders po ON b.po_id = po.po_id
+                INNER JOIN customers c ON po.customer_id = c.customer_id
+                INNER JOIN purchase_order_items poi ON b.poi_id = poi.poi_id
+                INNER JOIN items i ON poi.item_id = i.item_id
+                INNER JOIN users u ON b.backloaded_by = u.user_id
+                WHERE b.`remove` = 0";
+        $params = [];
+
+        if (!empty($filters['search'])) {
+            $sql .= " AND (po.customer_po_number LIKE :search OR d.dr_number LIKE :search2)";
+            $params['search'] = '%' . $filters['search'] . '%';
+            $params['search2'] = '%' . $filters['search'] . '%';
+        }
+        if (!empty($filters['customer_id'])) {
+            $sql .= " AND po.customer_id = :customer_id";
+            $params['customer_id'] = $filters['customer_id'];
+        }
+
+        $sql .= " ORDER BY b.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function getBackloadsByDeliveryId($delivery_id) {
+        $sql = "SELECT b.*, i.item_code, i.item_description, u.full_name as backloaded_by_name
+                FROM backloads b
+                INNER JOIN purchase_order_items poi ON b.poi_id = poi.poi_id
+                INNER JOIN items i ON poi.item_id = i.item_id
+                INNER JOIN users u ON b.backloaded_by = u.user_id
+                WHERE b.delivery_id = :delivery_id AND b.`remove` = 0
+                ORDER BY b.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['delivery_id' => $delivery_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getDeliveryLotsForBackload($delivery_id) {
+        $sql = "SELECT d.lot_items, d.delivery_id, d.po_id
+                FROM deliveries d
+                WHERE d.delivery_id = :delivery_id AND d.`remove` = 0 AND d.lot_items IS NOT NULL";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['delivery_id' => $delivery_id]);
+        $delivery = $stmt->fetch();
+        if (!$delivery) return [];
+
+        $lotItems = json_decode($delivery['lot_items'], true);
+        if (!is_array($lotItems)) return [];
+
+        $result = [];
+        foreach ($lotItems as $li) {
+            $lotId = $li['lot_id'] ?? 0;
+            $poiId = $li['poi_id'] ?? 0;
+            $deliveredQty = intval($li['qty'] ?? 0);
+
+            $backloadedStmt = self::getConnection()->prepare(
+                "SELECT COALESCE(SUM(b.quantity), 0) as total_backloaded
+                 FROM backloads b
+                 WHERE b.delivery_id = :delivery_id AND b.lot_id = :lot_id AND b.`remove` = 0"
+            );
+            $backloadedStmt->execute(['delivery_id' => $delivery_id, 'lot_id' => $lotId]);
+            $backloaded = intval($backloadedStmt->fetchColumn());
+
+            $available = $deliveredQty - $backloaded;
+
+            if ($available > 0) {
+                $result[] = [
+                    'lot_id' => $lotId,
+                    'poi_id' => $poiId,
+                    'lot_number' => $li['lot_number'] ?? '',
+                    'item_code' => $li['item_code'] ?? '',
+                    'item_description' => $li['item_description'] ?? '',
+                    'uom_conversion' => intval($li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? 0),
+                    'item_uom' => $li['item_uom'] ?? 'PCS',
+                    'delivered_qty' => $deliveredQty,
+                    'already_backloaded' => $backloaded,
+                    'available_to_backload' => $available
+                ];
+            }
+        }
+        return $result;
     }
 }

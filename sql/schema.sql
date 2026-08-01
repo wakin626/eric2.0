@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
-    department ENUM('admin', 'warehouse', 'production', 'finance') NOT NULL,
+    department ENUM('admin', 'warehouse', 'production', 'finance', 'qc') NOT NULL,
     status TINYINT(1) DEFAULT 1,
     `remove` TINYINT(1) DEFAULT 0,
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,

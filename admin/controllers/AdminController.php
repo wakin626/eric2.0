@@ -6,7 +6,9 @@ use App\Models\ItemModel;
 use App\Models\WarehouseModel;
 use App\Helpers\Pagination;
 use App\Helpers\CsvExport;
+use App\Helpers\XlsxExport;
 use App\Models\AuditModel;
+use App\Helpers\NotificationHelper;
 
 class AdminController {
     private $customerModel;
@@ -706,6 +708,7 @@ public function resolveDeliveryReport() {
         );
         if ($result) {
             AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Resolved delivery report #' . $reportId, null, ['new_quantity' => $newQuantity, 'new_dr_number' => $newDrNumber], 'delivery_report', $reportId);
+            NotificationHelper::deliveryReportResolved($reportId, $_SESSION['user_id']);
             echo json_encode(['success' => true]);
         } else {
             http_response_code(404);
@@ -958,6 +961,284 @@ public function deleteProductionHistory() {
         $lots = $this->warehouseModel->getLotsByPOItem($poiId);
         echo json_encode($lots);
         exit;
+    }
+
+    public function reports() {
+        $customerId = $_GET['customer_id'] ?? null;
+        $weekOffset = max(0, intval($_GET['week_offset'] ?? 0));
+
+        $weeklyStats = $this->warehouseModel->getWeeklyDeliveryStats($customerId, $weekOffset);
+        $customers = $this->warehouseModel->getCustomersWithDeliveries();
+
+        $allStats = $this->warehouseModel->getWeeklyDeliveryStats(null, $weekOffset);
+        $startYearWeek = !empty($allStats) ? intval($allStats[0]['year_week']) : 0;
+
+        $weeklyDetails = [];
+        foreach ($weeklyStats as $ws) {
+            $yearWeek = $ws['year_week'];
+            $weeklyDetails[$yearWeek] = $this->warehouseModel->getDeliveryDetailsForWeek($yearWeek, $customerId);
+        }
+
+        $poItemSummary = $this->warehouseModel->getPoItemSummary();
+
+        $lotItems = $this->warehouseModel->getUniqueItemsForLots();
+        $selectedLotItem = $_GET['lot_item_id'] ?? null;
+        if ($selectedLotItem) {
+            $lotData = $this->warehouseModel->getLotsByItem($selectedLotItem);
+        } else {
+            $lotData = $this->warehouseModel->getAllLotsStockOnHand();
+        }
+
+        $data = [
+            'weeklyStats' => $weeklyStats,
+            'customers' => $customers,
+            'selectedCustomer' => $customerId,
+            'weeklyDetails' => $weeklyDetails,
+            'weekOffset' => $weekOffset,
+            'startYearWeek' => $startYearWeek,
+            'hasMoreWeeks' => count(array_filter($weeklyStats, fn($s) => intval($s['delivery_count']) > 0)) >= 12,
+            'poItemSummary' => $poItemSummary,
+            'lotItems' => $lotItems,
+            'selectedLotItem' => $selectedLotItem,
+            'lotData' => $lotData,
+            'page_title' => 'Reports'
+        ];
+        $this->render('reports/index', $data);
+    }
+
+    public function deliveryReport() {
+        $filters = [
+            'search'      => $_GET['search'] ?? '',
+            'date_from'   => $_GET['date_from'] ?? '',
+            'date_to'     => $_GET['date_to'] ?? '',
+            'customer_id' => $_GET['customer_id'] ?? '',
+        ];
+        $deliveries = $this->warehouseModel->getDeliveryReportData($filters);
+        $customers = $this->warehouseModel->getDeliveryReportCustomers();
+
+        $data = [
+            'deliveries'      => $deliveries,
+            'customers'       => $customers,
+            'filters'         => $filters,
+            'page_title'      => 'Delivery Report'
+        ];
+        $this->render('reports/delivery_report', $data);
+    }
+
+    public function exportDeliveryReport() {
+        $filters = [
+            'search'      => $_GET['search'] ?? '',
+            'date_from'   => $_GET['date_from'] ?? '',
+            'date_to'     => $_GET['date_to'] ?? '',
+            'customer_id' => $_GET['customer_id'] ?? '',
+        ];
+        $deliveries = $this->warehouseModel->getDeliveryReportData($filters);
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="delivery_report_' . date('Y-m-d') . '.csv"');
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+
+        fputcsv($output, ['#', 'DR Number', 'SI Number', 'Customer', 'PO Number', 'Item Code', 'Item', 'Lot Number', 'Quantity', 'Cases', 'Plate No.', 'Vehicle', 'Logistic Provider', 'Type', 'Delivery Date', 'Delivered By', 'Remarks']);
+        $rowNum = 0;
+        foreach ($deliveries as $d) {
+            $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+            if (!is_array($lotItems) || count($lotItems) === 0) {
+                $lotItems = [[
+                    'item_description' => $d['item_description'] ?? 'Unknown',
+                    'lot_number' => $d['lot_number'] ?? '—',
+                    'qty' => $d['delivery_quantity'] ?? 0,
+                    'actual_uom_conversion' => $d['actual_uom_conversion'] ?? null,
+                    'uom_conversion' => $d['uom_conversion'] ?? null,
+                    'item_uom' => $d['item_uom'] ?? ''
+                ]];
+            }
+            foreach ($lotItems as $li) {
+                $rowNum++;
+                $qty = intval($li['qty'] ?? 0);
+                $conv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;
+                $uom = $li['item_uom'] ?? '';
+                $cases = ($conv && $uom !== 'CS') ? floor($qty / $conv) . ' CS' : '';
+                $remarks = $d['report_remarks'] ?? $d['remarks'] ?? '';
+                fputcsv($output, [
+                    $rowNum,
+                    $d['dr_number'] ?? '',
+                    $d['si_number'] ?? '',
+                    $d['customer_name'] ?? '',
+                    $d['customer_po_number'] ?? '',
+                    $li['item_code'] ?? '',
+                    $li['item_description'] ?? '',
+                    $li['lot_number'] ?? '',
+                    $qty,
+                    $cases,
+                    $d['plate_number'] ?? '',
+                    $d['vehicle_type'] ?? '',
+                    $d['logistic_provider'] ?? '',
+                    $d['production_type'] ?? '',
+                    $d['delivery_date'] ?? '',
+                    $d['delivered_by_name'] ?? '',
+                    $remarks
+                ]);
+            }
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    public function exportReports() {
+        $customerId = $_GET['customer_id'] ?? null;
+        $weekOffset = max(0, intval($_GET['week_offset'] ?? 0));
+
+        $allStats = $this->warehouseModel->getWeeklyDeliveryStats($customerId, $weekOffset);
+
+        $poItemSummary = $this->warehouseModel->getPoItemSummary();
+
+        $lotItems = $this->warehouseModel->getUniqueItemsForLots();
+        $selectedLotItem = $_GET['lot_item_id'] ?? null;
+        $allLotData = [];
+        if ($selectedLotItem) {
+            $allLotData = $this->warehouseModel->getLotsByItem($selectedLotItem);
+        } else {
+            foreach ($lotItems as $li) {
+                $lots = $this->warehouseModel->getLotsByItem($li['item_id']);
+                $allLotData = array_merge($allLotData, $lots);
+            }
+        }
+
+        $filterSearch = $_GET['search'] ?? '';
+        $filterPo = $_GET['po_filter'] ?? '';
+        $filterItem = $_GET['item_filter'] ?? '';
+        $filterStatus = $_GET['status_filter'] ?? '';
+
+        $filteredItems = $poItemSummary;
+        if ($filterSearch !== '') {
+            $searchLower = strtolower($filterSearch);
+            $filteredItems = array_filter($filteredItems, fn($i) =>
+                str_contains(strtolower($i['customer_name'] ?? ''), $searchLower)
+                || str_contains(strtolower($i['customer_po_number'] ?? ''), $searchLower)
+                || str_contains(strtolower($i['item_description'] ?? ''), $searchLower)
+            );
+        }
+        if ($filterPo !== '') {
+            $filteredItems = array_filter($filteredItems, fn($i) => strtolower($i['customer_po_number']) === $filterPo);
+        }
+        if ($filterItem !== '') {
+            $filteredItems = array_filter($filteredItems, fn($i) => strtolower($i['item_description']) === $filterItem);
+        }
+        if ($filterStatus !== '') {
+            $filteredItems = array_filter($filteredItems, function($i) use ($filterStatus) {
+                $p = intval($i['produced_quantity']);
+                $d = intval($i['delivered_quantity']);
+                $q = intval($i['po_qty']);
+                if ($filterStatus === 'completed') return $d >= $q;
+                if ($filterStatus === 'in-progress') return $p > 0 && ($p < $q || $d < $q);
+                if ($filterStatus === 'pending') return $p === 0;
+                return true;
+            });
+        }
+        $filteredItems = array_values($filteredItems);
+
+        $xlsx = new XlsxExport();
+
+        $weekFrom = ($weekOffset * 12) + 1;
+
+        $xlsx->addSheet('Weekly Delivery Graph');
+        $xlsx->addRow(['WEEKLY DELIVERY GRAPH'], 1);
+        $xlsx->addMerge('A', 1, 'E', 1);
+        $weekHeaderRow = $xlsx->addRow(['Week', 'Year', 'Date Range', 'Deliveries', 'Cases'], 2);
+        $xlsx->setAutoFilter('A', $weekHeaderRow, 'E', $weekHeaderRow);
+        $weekNum = $weekFrom;
+        foreach ($allStats as $ws) {
+            $yw = $ws['year_week'];
+            $year = intval(floor($yw / 100));
+            $week = intval($yw % 100);
+            $jan4 = mktime(0, 0, 0, 1, 4, $year);
+            $dayOffset = ($week - 1) * 7 - date('w', $jan4) + 1;
+            $mon = date('M d', mktime(0, 0, 0, 1, 4 + $dayOffset, $year));
+            $sun = date('M d', mktime(0, 0, 0, 1, 4 + $dayOffset + 6, $year));
+            $xlsx->addRow([$weekNum, $year, $mon . ' - ' . $sun, intval($ws['delivery_count']), intval($ws['total_cases'])]);
+            $weekNum++;
+        }
+        $xlsx->autoFitColumns();
+
+        $xlsx->addSheet('PO Item Summary');
+        $xlsx->addRow(['PO ITEM SUMMARY'], 1);
+        $xlsx->addMerge('A', 1, 'I', 1);
+        $poHeaderRow = $xlsx->addRow(['Customer', 'PO Number', 'Item Code', 'Item', 'PO Qty', 'Produced', 'Delivered', 'Balance', 'Status'], 2);
+        $xlsx->setAutoFilter('A', $poHeaderRow, 'I', $poHeaderRow);
+        foreach ($filteredItems as $item) {
+            $ordered = intval($item['po_qty']);
+            $produced = intval($item['produced_quantity']);
+            $delivered = intval($item['delivered_quantity']);
+            $balance = $ordered - $delivered;
+            if ($delivered >= $ordered) {
+                $status = 'Completed';
+            } elseif ($produced > 0) {
+                $status = 'In Progress';
+            } else {
+                $status = 'Pending';
+            }
+            $xlsx->addRow([
+                $item['customer_name'] ?? '',
+                $item['customer_po_number'] ?? '',
+                $item['item_code'] ?? '',
+                $item['item_description'] ?? '',
+                $ordered, $produced, $delivered, $balance, $status
+            ]);
+        }
+        $xlsx->autoFitColumns();
+
+        $xlsx->addSheet('Stock on Hand');
+        $xlsx->addRow(['STOCK ON HAND'], 1);
+        $xlsx->addMerge('A', 1, 'G', 1);
+        $sohHeaderRow = $xlsx->addRow(['Customer', 'PO Number', 'Lot Number', 'Stock on Hand (cs)', 'Delivered (cs)', 'Expiration Date', 'Created By'], 2);
+        $xlsx->setAutoFilter('A', $sohHeaderRow, 'G', $sohHeaderRow);
+        foreach ($allLotData as $lot) {
+            $stockOnHandPcs = max(0, $lot['quantity_produced'] - $lot['quantity_delivered']);
+            $conv = intval($lot['uom_conversion'] ?? 0);
+            $stockCs = $conv > 0 ? floor($stockOnHandPcs / $conv) : $stockOnHandPcs;
+            $deliveredCs = $conv > 0 ? floor($lot['quantity_delivered'] / $conv) : $lot['quantity_delivered'];
+            $stockLabel = $conv > 0 ? $stockCs . ' cs' : $stockOnHandPcs . ' pcs';
+            $deliveredLabel = $conv > 0 ? $deliveredCs . ' cs' : $lot['quantity_delivered'] . ' pcs';
+            $expiry = $lot['lot_date'] ? date('M Y', strtotime($lot['lot_date'] . ' +3 years')) : '-';
+            $xlsx->addRow([
+                $lot['customer_name'] ?? '',
+                $lot['customer_po_number'] ?? '',
+                $lot['lot_number'] ?? '',
+                $stockLabel,
+                $deliveredLabel,
+                $expiry,
+                $lot['created_by_name'] ?? '-'
+            ]);
+        }
+        $xlsx->autoFitColumns();
+
+        $xlsx->download('admin_reports_' . date('Y-m-d') . '.xlsx');
+    }
+
+    public function viewBackloads() {
+        $search = $_GET['search'] ?? '';
+        $filterCustomer = $_GET['filter_customer'] ?? '';
+
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($filterCustomer) $filters['customer_id'] = $filterCustomer;
+
+        $allBackloads = $this->warehouseModel->getBackloads($filters);
+        $pagination = Pagination::paginate($allBackloads, 15);
+
+        $customers = $this->warehouseModel->getCustomers();
+
+        $data['backloads'] = $pagination['items'];
+        $data['page'] = $pagination['page'];
+        $data['totalPages'] = $pagination['totalPages'];
+        $data['total'] = $pagination['total'];
+        $data['search'] = $search;
+        $data['filterCustomer'] = $filterCustomer;
+        $data['customers'] = $customers;
+        $data['page_title'] = 'Backloads';
+        $this->render('backloads/index', $data);
     }
 
     private function render($view, $data = []) {

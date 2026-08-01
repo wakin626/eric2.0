@@ -62,6 +62,12 @@
             margin-left: 7px;
             padding-left: 10px;
         }
+        .sidebar .collapse .nav-link.active {
+            background: rgba(74,144,217,0.10);
+            border-left: 2px solid var(--accent);
+            margin-left: 0;
+            padding-left: 8px;
+        }
         .sidebar .nav-link .badge { font-size: 0.65rem; padding: 0.25em 0.55em; }
 
         .stat-card {
@@ -108,6 +114,8 @@
         .alert-success { border-left: 4px solid #22c55e; background: #f0fdf4; color: #166534; }
         .alert-danger { border-left: 4px solid #ef4444; background: #fef2f2; color: #991b1b; }
         .alert-warning { border-left: 4px solid #f97316; background: #fff7ed; color: #9a3412; }
+        .notif-dropdown { position: absolute; right: 0; top: calc(100% + 4px); z-index: 1050; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); width: 380px; max-height: 500px; overflow-y: auto; }
+        .notif-item:hover { background: #f8fafc; }
     </style>
 </head>
 <body>
@@ -140,6 +148,11 @@
 </a>
 </li>
 <li class="nav-item">
+<a class="nav-link <?= $currentAction === 'viewBackloads' ? 'active' : '' ?>" href="?controller=admin&action=viewBackloads">
+<i class="bi bi-arrow-return-left me-2"></i>Backloads
+</a>
+</li>
+<li class="nav-item">
 <a class="nav-link <?= $currentAction === 'productionHistory' ? 'active' : '' ?>" href="?controller=admin&action=productionHistory">
 <i class="bi bi-clock-history me-2"></i>Production History
 <?php if (!empty($reportsCount) && $reportsCount > 0): ?>
@@ -167,6 +180,26 @@
 <i class="bi bi-clock-history me-2"></i>Activity Logs
 </a>
 </li>
+<li class="nav-item">
+<a class="nav-link <?= in_array($currentAction, ['reports', 'deliveryReport']) ? 'active' : '' ?>" href="#" data-bs-toggle="collapse" data-bs-target="#reportsSubmenu">
+<i class="bi bi-graph-up me-2"></i>Reports
+<i class="bi bi-chevron-down ms-auto" style="font-size:0.7rem"></i>
+</a>
+<div class="collapse <?= in_array($currentAction, ['reports', 'deliveryReport']) ? 'show' : '' ?>" id="reportsSubmenu">
+    <ul class="nav flex-column ms-4">
+        <li class="nav-item">
+            <a class="nav-link py-1 <?= ($currentAction ?? '') === 'reports' ? 'active' : '' ?>" href="?controller=admin&action=reports" style="font-size:0.8rem">
+                <i class="bi bi-bar-chart me-2"></i>Overview
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link py-1 <?= ($currentAction ?? '') === 'deliveryReport' ? 'active' : '' ?>" href="?controller=admin&action=deliveryReport" style="font-size:0.8rem">
+                <i class="bi bi-truck me-2"></i>Deliveries
+            </a>
+        </li>
+    </ul>
+</div>
+</li>
 </ul>
             <div class="mt-auto p-3 border-top" style="border-color: rgba(255,255,255,0.08) !important">
                     <a href="?controller=auth&action=logout" class="nav-link text-center" style="color: #64748b; font-size: 0.875rem; transition: all 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
@@ -181,10 +214,26 @@
                 <!-- HEADER ROW - Contains toggle button on the right side -->
                 <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                     <h4 class="mb-0"><?= $page_title ?? 'Dashboard' ?></h4>
-                    <!-- TOGGLE BUTTON - Click to slide sidebar in/out -->
-                    <button class="btn btn-outline-dark" id="sidebarToggle" title="Toggle Sidebar">
-                        <i class="bi bi-list fs-5"></i>
-                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- NOTIFICATION BELL -->
+                        <div class="position-relative">
+                            <button class="btn btn-outline-dark position-relative" id="notifBell" title="Notifications">
+                                <i class="bi bi-bell"></i>
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notifBadge" style="font-size:0.6rem">0</span>
+                            </button>
+                            <div class="notif-dropdown d-none" id="notifDropdown">
+                                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                    <strong style="font-size:0.9rem">Notifications</strong>
+                                    <button class="btn btn-sm btn-link text-decoration-none" id="markAllReadBtn" style="font-size:0.75rem">Mark all read</button>
+                                </div>
+                                <div id="notifList"></div>
+                            </div>
+                        </div>
+                        <!-- TOGGLE BUTTON - Click to slide sidebar in/out -->
+                        <button class="btn btn-outline-dark" id="sidebarToggle" title="Toggle Sidebar">
+                            <i class="bi bi-list fs-5"></i>
+                        </button>
+                    </div>
                 </div>
                 <?php if (isset($_SESSION['success'])): ?>
                     <div class="alert alert-success alert-dismissible fade show">
@@ -221,6 +270,8 @@
     </div>
     <script src="public/js/bootstrap.bundle.min.js"></script>
     <script src="public/js/app.js"></script>
+    <script>var URL_ROOT = '<?= URL_ROOT ?>';</script>
+    <script src="public/js/notifications.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements by their IDs

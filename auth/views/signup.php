@@ -46,6 +46,7 @@
                             <option value="warehouse" <?= ($old['department'] ?? '') == 'warehouse' ? 'selected' : '' ?>>Warehouse</option>
                             <option value="production" <?= ($old['department'] ?? '') == 'production' ? 'selected' : '' ?>>Production</option>
                             <option value="finance" <?= ($old['department'] ?? '') == 'finance' ? 'selected' : '' ?>>Finance</option>
+                            <option value="qc" <?= ($old['department'] ?? '') == 'qc' ? 'selected' : '' ?>>QC</option>
                         </select>
                     </div>
                 </div>

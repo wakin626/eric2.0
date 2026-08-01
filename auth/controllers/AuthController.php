@@ -42,7 +42,8 @@ class AuthController {
                     'admin' => 'admin',
                     'warehouse' => 'warehouse',
                     'production' => 'production',
-                    'finance' => 'finance'
+                    'finance' => 'finance',
+                    'qc' => 'qc'
                 ];
                 $redirect = $redirectMap[$user['department']] ?? 'admin';
                 header("Location: ?controller={$redirect}");
@@ -59,7 +60,8 @@ class AuthController {
                 'admin' => 'admin',
                 'warehouse' => 'warehouse',
                 'production' => 'production',
-                'finance' => 'finance'
+                'finance' => 'finance',
+                'qc' => 'qc'
             ];
             $redirect = $redirectMap[$_SESSION['department']] ?? 'admin';
             header("Location: ?controller={$redirect}");
@@ -142,7 +144,7 @@ class AuthController {
 
     private function render($view, $data = []) {
         extract($data);
-        $departments = ['admin', 'warehouse', 'production', 'finance'];
+        $departments = ['admin', 'warehouse', 'production', 'finance', 'qc'];
         include __DIR__ . "/../views/{$view}.php";
     }
 }

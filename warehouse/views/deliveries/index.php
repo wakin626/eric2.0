@@ -6,6 +6,9 @@
         <button type="button" class="btn btn-primary ms-2" id="printDRBtn">
             <i class="bi bi-printer me-1"></i> Print DR
         </button>
+        <a href="?controller=warehouse&action=viewBackloads" class="btn btn-warning ms-2">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Backload Records
+        </a>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <select id="filterCustomer" class="form-select form-select-sm filter-select" style="width:200px">
@@ -61,25 +64,49 @@
                     $hasLotItems = is_array($lotItems) && count($lotItems) > 0;
                     $itemSummary = '';
                     $casesSummary = '';
+                    $deliveryBackloads = $backloads_map[$d['delivery_id']] ?? [];
+                    $backloadByItem = [];
+                    foreach ($deliveryBackloads as $bl) {
+                        foreach ($lotItems as $li) {
+                            if (intval($li['lot_id'] ?? 0) === intval($bl['lot_id'])) {
+                                $blKey = $li['item_description'] ?? $li['item_code'] ?? 'Unknown';
+                                $blConv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? 0;
+                                $blUom = $li['item_uom'] ?? '';
+                                if ($blConv && $blUom !== 'CS') {
+                                    $backloadByItem[$blKey] = ($backloadByItem[$blKey] ?? 0) + floor(intval($bl['quantity']) / $blConv);
+                                } else {
+                                    $backloadByItem[$blKey] = ($backloadByItem[$blKey] ?? 0) + intval($bl['quantity']);
+                                }
+                                break;
+                            }
+                        }
+                    }
                     if ($hasLotItems) {
                         $grouped = [];
                         foreach ($lotItems as $li) {
                             $key = $li['item_description'] ?? $li['item_code'] ?? 'Unknown';
-                            if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'lots' => [], 'conv' => null, 'uom' => ''];
+                            if (!isset($grouped[$key])) $grouped[$key] = ['qty' => 0, 'lots' => [], 'conv' => null, 'uom' => '', 'cases' => 0];
                             $grouped[$key]['qty'] += $li['qty'] ?? 0;
                             $grouped[$key]['lots'][] = $li['lot_number'] ?? '?';
-                            if (!empty($li['actual_uom_conversion'])) $grouped[$key]['conv'] = $li['actual_uom_conversion'];
-                            elseif (empty($grouped[$key]['conv']) && !empty($li['uom_conversion'])) $grouped[$key]['conv'] = $li['uom_conversion'];
-                            if (!empty($li['item_uom'])) $grouped[$key]['uom'] = $li['item_uom'];
+                            $lotConv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;
+                            $lotUom = $li['item_uom'] ?? '';
+                            if (!empty($lotUom)) $grouped[$key]['uom'] = $lotUom;
+                            if ($lotConv && $lotUom !== 'CS') {
+                                $grouped[$key]['cases'] += floor(($li['qty'] ?? 0) / $lotConv);
+                                $grouped[$key]['conv'] = $lotConv;
+                            }
                         }
                         $parts = [];
                         $caseParts = [];
                         foreach ($grouped as $desc => $info) {
                             $parts[] = htmlspecialchars($desc) . ' (' . $info['qty'] . ' - ' . implode(', ', $info['lots']) . ')';
-                            $conv = $info['conv'];
-                            $uom = $info['uom'];
-                            if ($conv && $uom !== 'CS') {
-                                $caseParts[] = htmlspecialchars($desc) . ': ' . floor($info['qty'] / $conv) . ' CS';
+                            if ($info['cases'] > 0) {
+                                $caseText = htmlspecialchars($desc) . ': ' . $info['cases'] . ' CS';
+                                $blQty = $backloadByItem[$desc] ?? 0;
+                                if ($blQty > 0) {
+                                    $caseText .= ' <span class="badge bg-danger ms-1">backload ' . $blQty . ' CS</span>';
+                                }
+                                $caseParts[] = $caseText;
                             }
                         }
                         $itemSummary = implode('<br>', $parts);
@@ -90,7 +117,15 @@
                         $conv = $d['actual_uom_conversion'] ?? $d['uom_conversion'] ?? null;
                         $itemUom = $d['item_uom'] ?? '';
                         if ($conv && $itemUom !== 'CS') {
-                            $casesSummary = floor(($d['delivery_quantity'] ?? 0) / $conv) . ' CS';
+                            $deliveredCS = floor(($d['delivery_quantity'] ?? 0) / $conv);
+                            $blCS = 0;
+                            foreach ($deliveryBackloads as $bl) {
+                                $blCS += intval($bl['quantity']);
+                            }
+                            $casesSummary = $deliveredCS . ' CS';
+                            if ($blCS > 0) {
+                                $casesSummary .= ' <span class="badge bg-danger ms-1">backload ' . $blCS . ' CS</span>';
+                            }
                         }
                     }
                 ?>
@@ -157,7 +192,8 @@
                             data-remarks-type="<?= htmlspecialchars($d['remarks_type'] ?? '') ?>"
                             data-lot-items="<?= htmlspecialchars($d['lot_items'] ?? '[]') ?>"
                             data-delivered-by="<?= htmlspecialchars($d['delivered_by_name'] ?? '') ?>"
-                            data-receipts="<?= htmlspecialchars(json_encode($receipts_map[$d['delivery_id']] ?? [])) ?>">
+                            data-receipts="<?= htmlspecialchars(json_encode($receipts_map[$d['delivery_id']] ?? [])) ?>"
+                            data-backloads="<?= htmlspecialchars(json_encode($backloads_map[$d['delivery_id']] ?? [])) ?>">
                             <i class="bi bi-eye"></i> View
                         </button>
                         <?php endif; ?>
@@ -174,6 +210,12 @@
                             data-po-id="<?= $d['po_id'] ?>"
                             data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>">
                             <i class="bi bi-paperclip"></i> Attach
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning backloadBtn <?= $disClass ?>" <?= $disAttr ?>
+                            data-delivery-id="<?= $d['delivery_id'] ?>"
+                            data-dr="<?= htmlspecialchars($d['dr_number'] ?? '') ?>"
+                            data-po="<?= htmlspecialchars($d['customer_po_number'] ?? '') ?>">
+                            <i class="bi bi-arrow-counterclockwise"></i> Backload
                         </button>
                     </td>
                 </tr>
@@ -266,6 +308,32 @@
                                 <label class="form-label">Delivery Receipt (DR) Number *</label>
                                 <input type="text" name="dr_number" id="modalDrNumber" class="form-control" placeholder="Enter DR number" required>
                             </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Plate No.</label>
+                                    <input type="text" name="plate_number" class="form-control" placeholder="e.g. ABC 1234">
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Vehicle Type</label>
+                                    <select name="vehicle_type" class="form-select">
+                                        <option value="">Select Vehicle</option>
+                                        <option value="4 Wheels">4 Wheels</option>
+                                        <option value="6 Wheels">6 Wheels</option>
+                                        <option value="10 Wheels">10 Wheels</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Logistic Provider</label>
+                                    <select name="logistic_provider" class="form-select">
+                                        <option value="">Select Provider</option>
+                                        <option value="FLJJ">FLJJ</option>
+                                        <option value="RPI">RPI</option>
+                                        <option value="Transportify">Transportify</option>
+                                        <option value="Lalamove">Lalamove</option>
+                                        <option value="Other">Others</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div class="mb-3">
                                 <label class="form-label">Purchase Order</label>
                                 <select name="po_id" id="poSelect" class="form-select" required>
@@ -301,6 +369,7 @@
                                             <th class="text-end">PO Qty</th>
                                             <th class="text-end">Produced</th>
                                             <th class="text-end">Delivered</th>
+                                            <th class="text-end text-danger">Backloaded</th>
                                             <th class="text-end">Balance</th>
                                             <th class="text-end text-success">Available</th>
                                         </tr>
@@ -335,6 +404,9 @@
                 <p class="text-muted mb-3">Please review the delivery details before saving.</p>
                 <table class="table table-bordered mb-0">
                     <tr><th style="width:40%">DR Number</th><td id="previewDR"></td></tr>
+                    <tr><th>Plate No.</th><td id="previewPlate"></td></tr>
+                    <tr><th>Vehicle Type</th><td id="previewVehicle"></td></tr>
+                    <tr><th>Logistic Provider</th><td id="previewLogistic"></td></tr>
                     <tr><th>Purchase Order</th><td id="previewPO"></td></tr>
                     <tr><th>Item</th><td id="previewItem"></td></tr>
                     <tr><th>Lot Details</th><td id="previewLots"></td></tr>
@@ -410,6 +482,11 @@
                 <h6 class="mb-2"><i class="bi bi-paperclip me-1"></i>DR Attachments</h6>
                 <div id="viewDRPhotoSection">
                     <div id="viewDRPhotoContainer" class="d-flex flex-wrap gap-2"></div>
+                </div>
+                <hr>
+                <h6 class="mb-2"><i class="bi bi-arrow-counterclockwise me-1"></i>Backload / Return History</h6>
+                <div id="viewBackloadSection">
+                    <div id="viewBackloadContainer"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -498,6 +575,86 @@
     </div>
 </div>
 
+<!-- Backload Modal -->
+<div class="modal fade" id="backloadModal" tabindex="-1">
+    <div class="modal-dialog" style="max-width: 95vw;">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>Backload / Return</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-2">DR: <strong id="backloadDrNumber">-</strong> | PO: <strong id="backloadPoNumber">-</strong></p>
+                <p class="text-muted mb-3">Enter the quantity returned in <strong>cases</strong>. Total returned will be converted to pcs automatically.</p>
+                <form id="backloadForm" method="POST" action="?controller=warehouse&action=backloadDelivery">
+                    <input type="hidden" id="backloadDeliveryId" name="delivery_id">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0" id="backloadLotsTable">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th>Lot Number</th>
+                                    <th>Delivered (CS)</th>
+                                    <th>Already Returned (CS)</th>
+                                    <th>Max Returnable (CS)</th>
+                                    <th style="width:100px">Return Qty (CS)</th>
+                                    <th style="width:140px">Qty (pcs)</th>
+                                    <th>Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backloadLotsBody">
+                                <tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-2 text-end">
+                        <strong>Total Return: <span id="backloadTotalPcs">0</span> pcs</strong>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancel</button>
+                <button type="button" class="btn btn-warning" id="submitBackloadBtn"><i class="bi bi-arrow-counterclockwise me-1"></i>Submit Backload</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Backload Preview Modal -->
+<div class="modal fade" id="backloadPreviewModal" tabindex="-1">
+    <div class="modal-dialog" style="max-width: 95vw;">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Confirm Backload</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Please review the backload details before submitting.</p>
+                <div class="row mb-3">
+                    <div class="col-md-4"><strong>DR Number:</strong> <span id="prevBackloadDr">-</span></div>
+                    <div class="col-md-4"><strong>PO Number:</strong> <span id="prevBackloadPo">-</span></div>
+                    <div class="col-md-4"><strong>Total Return:</strong> <span id="prevBackloadTotal" class="text-danger fw-bold">0</span> pcs</div>
+                </div>
+                <table class="table table-sm table-bordered mb-0">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Lot Number</th>
+                            <th>Qty Returned (pcs)</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prevBackloadBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmBackloadBtn"><i class="bi bi-arrow-counterclockwise me-1"></i>Confirm & Submit</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 var _searchTimer;
 document.getElementById('searchDelivery').addEventListener('input', function() {
@@ -576,6 +733,7 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
         checkbox.className = 'form-check-input me-3';
         checkbox.value = lot.lot_id;
         checkbox.id = 'lotChk_' + lotId;
+        checkbox.dataset.backloaded = lot.backloaded_qty || 0;
         const label = document.createElement('label');
         label.className = 'form-check-label me-3 fw-bold';
         label.htmlFor = checkbox.id;
@@ -588,6 +746,15 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
         const availBadge = document.createElement('span');
         availBadge.className = 'badge bg-secondary me-3';
         availBadge.textContent = 'Avail: ' + lot.available_quantity;
+        const blBadge = document.createElement('span');
+        blBadge.className = 'badge bg-warning text-dark me-3';
+        if (lot.backloaded_qty > 0) {
+            var pcsPerCase = lotConversion || 1;
+            var blCs = Math.floor(lot.backloaded_qty / pcsPerCase);
+            blBadge.textContent = 'Returned: ' + (blCs > 0 ? blCs + ' CS' : lot.backloaded_qty + ' pcs');
+        } else {
+            blBadge.style.display = 'none';
+        }
         const qtyInput = document.createElement('input');
         qtyInput.type = 'number';
         qtyInput.className = 'form-control form-control-sm';
@@ -598,6 +765,7 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
         qtyInput.disabled = true;
         qtyInput.dataset.lotId = lotId;
         qtyInput.dataset.max = lot.available_quantity;
+        qtyInput.dataset.conv = lotConversion || '';
         qtyInput.id = 'lotQty_' + lotId;
         if (lotConversion && (lot.item_uom || 'PCS') !== 'CS') {
             const spacer = document.createElement('span');
@@ -621,6 +789,7 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
             wrapper.appendChild(checkbox);
             wrapper.appendChild(label);
             wrapper.appendChild(availBadge);
+            wrapper.appendChild(blBadge);
             wrapper.appendChild(qtyInput);
             wrapper.appendChild(spacer);
             wrapper.appendChild(caseInput);
@@ -660,6 +829,7 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
             wrapper.appendChild(checkbox);
             wrapper.appendChild(label);
             wrapper.appendChild(availBadge);
+            wrapper.appendChild(blBadge);
             wrapper.appendChild(qtyInput);
         }
         lotContainer.appendChild(wrapper);
@@ -673,7 +843,18 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
                 var warnEl = document.getElementById('lotWarn_' + lotId);
                 if (warnEl) warnEl.textContent = '';
             } else {
-                qtyInput.value = '';
+                var backloaded = parseInt(this.dataset.backloaded) || 0;
+                var max = parseInt(qtyInput.dataset.max) || 0;
+                var autoQty = backloaded > 0 ? backloaded : max;
+                if (lotConversion && autoQty > 0) {
+                    autoQty = Math.floor(autoQty / lotConversion) * lotConversion;
+                }
+                qtyInput.value = autoQty > 0 ? autoQty : '';
+                if (caseEl && lotConversion) {
+                    caseEl.value = autoQty > 0 ? Math.floor(autoQty / lotConversion) : '';
+                }
+                var warnEl = document.getElementById('lotWarn_' + lotId);
+                if (warnEl) warnEl.textContent = '';
                 qtyInput.focus();
             }
         });
@@ -719,12 +900,24 @@ document.getElementById('poSelect').addEventListener('change', function() {
             var delivered = item.delivered_quantity || 0;
             var balance = Math.max(0, qty - delivered);
             var available = availableByPoi[item.poi_id] || 0;
+            var backloadedCS = item.backloaded || 0;
+            var balanceCS = item.backload_balance || 0;
+            var consumedCS = backloadedCS - balanceCS;
+            var blHtml;
+            if (backloadedCS > 0 && consumedCS > 0) {
+                blHtml = '<span class="text-danger fw-bold"><s>' + backloadedCS + ' CS</s> - ' + balanceCS + ' CS</span>';
+            } else if (backloadedCS > 0) {
+                blHtml = '<span class="text-danger fw-bold">' + backloadedCS + ' CS</span>';
+            } else {
+                blHtml = '<span class="text-muted">0 CS</span>';
+            }
             var tr = document.createElement('tr');
             tr.dataset.poiId = item.poi_id;
             tr.innerHTML = '<td>' + (item.item_description || '-') + '</td>' +
                 '<td class="text-end">' + qty + '</td>' +
                 '<td class="text-end">' + produced + '</td>' +
                 '<td class="text-end">' + delivered + '</td>' +
+                '<td class="text-end">' + blHtml + '</td>' +
                 '<td class="text-end fw-bold">' + balance + '</td>' +
                 '<td class="text-end fw-bold text-success">' + available + '</td>';
             summaryBody.appendChild(tr);
@@ -813,8 +1006,26 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
 
     document.getElementById('selectedLotIds').value = lotPairs.join(',');
 
-    // Build preview
+    // Check DR number uniqueness before preview
     var drNumber = document.getElementById('modalDrNumber').value.trim();
+    if (drNumber) {
+        fetch('?controller=warehouse&action=checkDRNumber&dr_number=' + encodeURIComponent(drNumber))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.exists) {
+                    alert('DR number "' + drNumber + '" already used. Try another DR number.');
+                    return;
+                }
+                showDeliveryPreview();
+            })
+            .catch(function() {
+                showDeliveryPreview();
+            });
+    } else {
+        showDeliveryPreview();
+    }
+
+    function showDeliveryPreview() {
     var poOption = poSelect.options[poSelect.selectedIndex];
     var poText = poOption ? poOption.textContent.trim() : '-';
     var deliveryDate = document.querySelector('#createDeliveryModal input[name="delivery_date"]').value;
@@ -825,10 +1036,18 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
     document.getElementById('previewDate').textContent = deliveryDate;
     document.getElementById('previewRemarks').textContent = remarks;
 
+    var plateNo = document.querySelector('#createDeliveryModal input[name="plate_number"]').value.trim() || '-';
+    var vehicleType = document.querySelector('#createDeliveryModal select[name="vehicle_type"]').value || '-';
+    var logisticProvider = document.querySelector('#createDeliveryModal select[name="logistic_provider"]').value || '-';
+    document.getElementById('previewPlate').textContent = plateNo;
+    document.getElementById('previewVehicle').textContent = vehicleType;
+    document.getElementById('previewLogistic').textContent = logisticProvider;
+
     // Build lot details grouped by item
     var lotsHtml = '<table class="table table-sm table-bordered mb-0">';
-    lotsHtml += '<thead><tr><th>Item</th><th>Lot No.</th><th>Qty</th></tr></thead><tbody>';
+    lotsHtml += '<thead><tr><th>Item</th><th>Lot No.</th><th>Qty</th><th>Returned</th></tr></thead><tbody>';
     var totalQty = 0;
+    var totalReturned = 0;
     var itemNames = {};
     checkedBoxes.forEach(function(cb) {
         var lotId = cb.value;
@@ -840,10 +1059,16 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         var lotLabel = cb.parentNode.querySelector('label') ? cb.parentNode.querySelector('label').textContent.trim() : lotId;
         var qtyInput = document.getElementById('lotQty_' + lotId);
         var qty = parseInt(qtyInput.value) || parseInt(qtyInput.dataset.max) || 0;
+        var blPcs = parseInt(cb.dataset.backloaded) || 0;
+        var blText = blPcs > 0 ? blPcs + ' pcs' : '-';
         totalQty += qty;
-        lotsHtml += '<tr><td>' + itemName + '</td><td>' + lotLabel + '</td><td>' + qty + '</td></tr>';
+        totalReturned += blPcs;
+        lotsHtml += '<tr><td>' + itemName + '</td><td>' + lotLabel + '</td><td>' + qty + '</td><td>' + blText + '</td></tr>';
     });
     lotsHtml += '</tbody></table>';
+    if (totalReturned > 0) {
+        lotsHtml += '<div class="alert alert-warning py-1 px-2 mb-0 mt-2"><small><i class="bi bi-info-circle me-1"></i>Returned stock (' + totalReturned + ' pcs) will be consumed first.</small></div>';
+    }
     document.getElementById('previewLots').innerHTML = lotsHtml;
     document.getElementById('previewItem').textContent = Object.keys(itemNames).join(', ') || '-';
     document.getElementById('previewQty').textContent = totalQty;
@@ -851,6 +1076,7 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
     // Show preview modal
     var previewModal = new bootstrap.Modal(document.getElementById('deliveryPreviewModal'));
     previewModal.show();
+    }
 });
 
 var deliveryFormConfirmed = false;
@@ -972,7 +1198,7 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
         try { receipts = JSON.parse(this.dataset.receipts || '[]'); } catch(e) {}
         if (receipts.length > 0) {
             receipts.forEach(function(r) {
-                var path = r.file_path || '';
+                var path = (typeof URL_ROOT !== 'undefined' ? URL_ROOT : '/') + (r.file_path || '');
                 var receiptId = r.receipt_id || '';
                 var wrapper = document.createElement('div');
                 wrapper.className = 'position-relative d-inline-block';
@@ -988,6 +1214,21 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
             });
         } else {
             photoContainer.innerHTML = '<span class="text-muted">No attachments attached for this DR</span>';
+        }
+
+        var backloadContainer = document.getElementById('viewBackloadContainer');
+        backloadContainer.innerHTML = '';
+        var backloads = [];
+        try { backloads = JSON.parse(this.dataset.backloads || '[]'); } catch(e) {}
+        if (backloads.length > 0) {
+            var blHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Date</th><th>Lot</th><th>Qty Returned</th><th>Reason</th><th>By</th></tr></thead><tbody>';
+            backloads.forEach(function(bl) {
+                blHtml += '<tr><td>' + (bl.backload_date || '-') + '</td><td>' + (bl.lot_number || '-') + '</td><td>' + bl.quantity + '</td><td>' + (bl.reason || '-') + '</td><td>' + (bl.backloaded_by_name || '-') + '</td></tr>';
+            });
+            blHtml += '</tbody></table>';
+            backloadContainer.innerHTML = blHtml;
+        } else {
+            backloadContainer.innerHTML = '<span class="text-muted">No backloads recorded for this delivery</span>';
         }
     });
 });
@@ -1223,4 +1464,157 @@ function showToast(message, type) {
     document.body.appendChild(toast);
     setTimeout(function() { if (toast.parentNode) toast.remove(); }, 3000);
 }
+
+var backloadModal = null;
+document.querySelectorAll('.backloadBtn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var deliveryId = this.dataset.deliveryId;
+        document.getElementById('backloadDeliveryId').value = deliveryId;
+        document.getElementById('backloadDrNumber').textContent = this.dataset.dr || '-';
+        document.getElementById('backloadPoNumber').textContent = this.dataset.po || '-';
+        document.getElementById('backloadLotsBody').innerHTML = '<tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>';
+
+        fetch('?controller=warehouse&action=getDeliveryLotsForBackload&delivery_id=' + deliveryId)
+            .then(function(r) { return r.json(); })
+            .then(function(lots) {
+                var tbody = document.getElementById('backloadLotsBody');
+                if (lots.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No lots available for backload</td></tr>';
+                    return;
+                }
+                var html = '';
+                lots.forEach(function(lot, idx) {
+                    var conv = lot.uom_conversion || 0;
+                    var isCases = lot.item_uom !== 'CS' && conv > 0;
+                    var deliveredCS = isCases ? Math.floor(lot.delivered_qty / conv) : lot.delivered_qty;
+                    var returnedCS = isCases ? Math.floor(lot.already_backloaded / conv) : lot.already_backloaded;
+                    var maxCS = isCases ? Math.floor(lot.available_to_backload / conv) : lot.available_to_backload;
+                    var labelCS = isCases ? ' CS' : '';
+                    html += '<tr>';
+                    html += '<td>' + (lot.item_description || lot.item_code || '-') + '</td>';
+                    html += '<td>' + (lot.lot_number || '-') + '</td>';
+                    html += '<td>' + deliveredCS + labelCS + '</td>';
+                    html += '<td>' + returnedCS + labelCS + '</td>';
+                    html += '<td><strong>' + maxCS + labelCS + '</strong></td>';
+                    html += '<td><input type="number" name="backload_qty[]" class="form-control form-control-sm backload-cs-input" min="1" max="' + maxCS + '" placeholder="0" data-conv="' + conv + '" data-max-pcs="' + lot.available_to_backload + '" data-idx="' + idx + '"></td>';
+                    html += '<td class="text-muted" id="backloadPcs_' + idx + '">0 pcs</td>';
+                    html += '<td><input type="text" name="backload_reason[]" class="form-control form-control-sm" placeholder="Reason (e.g. dented box)"></td>';
+                    html += '<input type="hidden" name="lot_id[]" value="' + lot.lot_id + '">';
+                    html += '</tr>';
+                });
+                tbody.innerHTML = html;
+
+                tbody.querySelectorAll('.backload-cs-input').forEach(function(input) {
+                    input.addEventListener('input', function() {
+                        var conv = parseInt(this.dataset.conv) || 1;
+                        var maxPcs = parseInt(this.dataset.maxPcs) || 0;
+                        var cs = parseInt(this.value) || 0;
+                        var maxCS = Math.floor(maxPcs / conv);
+                        var pcs = cs * conv;
+                        var idx = this.dataset.idx;
+
+                        if (cs > maxCS && cs > 0) {
+                            this.value = maxCS;
+                            cs = maxCS;
+                            pcs = maxCS * conv;
+                            this.classList.add('is-invalid');
+                            var feedback = this.parentNode.querySelector('.invalid-feedback');
+                            if (!feedback) {
+                                feedback = document.createElement('div');
+                                feedback.className = 'invalid-feedback';
+                                this.parentNode.appendChild(feedback);
+                            }
+                            feedback.textContent = 'Cannot exceed delivered amount (' + maxCS + ' CS)';
+                        } else {
+                            this.classList.remove('is-invalid');
+                            var fb = this.parentNode.querySelector('.invalid-feedback');
+                            if (fb) fb.remove();
+                        }
+
+                        document.getElementById('backloadPcs_' + idx).textContent = pcs + ' pcs';
+                        var totalPcs = 0;
+                        tbody.querySelectorAll('.backload-cs-input').forEach(function(inp) {
+                            var c = parseInt(inp.dataset.conv) || 1;
+                            var v = parseInt(inp.value) || 0;
+                            totalPcs += v * c;
+                        });
+                        document.getElementById('backloadTotalPcs').textContent = totalPcs;
+                    });
+                });
+            });
+
+        backloadModal = new bootstrap.Modal(document.getElementById('backloadModal'));
+        backloadModal.show();
+    });
+});
+
+document.getElementById('submitBackloadBtn').addEventListener('click', function() {
+    var form = document.getElementById('backloadForm');
+    var lotIds = form.querySelectorAll('input[name="lot_id[]"]');
+    var csInputs = form.querySelectorAll('input[name="backload_qty[]"]');
+    var reasons = form.querySelectorAll('input[name="backload_reason[]"]');
+    var hasValid = false;
+    var previewRows = [];
+    var totalPcs = 0;
+
+    for (var i = 0; i < lotIds.length; i++) {
+        var cs = parseInt(csInputs[i].value) || 0;
+        var conv = parseInt(csInputs[i].dataset.conv) || 1;
+        var maxPcs = parseInt(csInputs[i].dataset.maxPcs) || 0;
+        var maxCS = Math.floor(maxPcs / conv);
+        var pcs = cs * conv;
+        var reason = reasons[i].value.trim();
+        var row = csInputs[i].closest('tr');
+        var itemDesc = row ? row.cells[0].textContent : '-';
+        var lotNum = row ? row.cells[1].textContent : '-';
+
+        if (cs > maxCS) {
+            alert('Return quantity for "' + lotNum + '" (' + cs + ' CS) exceeds the delivered amount (' + maxCS + ' CS). Please correct it.');
+            csInputs[i].focus();
+            return;
+        }
+
+        if (pcs > 0 && reason) {
+            hasValid = true;
+            totalPcs += pcs;
+            previewRows.push({ item: itemDesc, lot: lotNum, pcs: pcs, cs: cs, reason: reason });
+        } else if (pcs > 0 && !reason) {
+            alert('Please enter a reason for all returned quantities.');
+            reasons[i].focus();
+            return;
+        }
+    }
+
+    if (!hasValid) {
+        alert('Please enter a return quantity for at least one lot.');
+        return;
+    }
+
+    document.getElementById('prevBackloadDr').textContent = document.getElementById('backloadDrNumber').textContent;
+    document.getElementById('prevBackloadPo').textContent = document.getElementById('backloadPoNumber').textContent;
+    document.getElementById('prevBackloadTotal').textContent = totalPcs;
+
+    var tbody = document.getElementById('prevBackloadBody');
+    tbody.innerHTML = '';
+        previewRows.forEach(function(r) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + r.item + '</td><td>' + r.lot + '</td><td class="fw-bold">' + r.cs + ' CS (' + r.pcs + ' pcs)</td><td>' + r.reason + '</td>';
+            tbody.appendChild(tr);
+        });
+
+    var previewModal = new bootstrap.Modal(document.getElementById('backloadPreviewModal'));
+    previewModal.show();
+});
+
+document.getElementById('confirmBackloadBtn').addEventListener('click', function() {
+    bootstrap.Modal.getInstance(document.getElementById('backloadPreviewModal')).hide();
+    var form = document.getElementById('backloadForm');
+    var csInputs = form.querySelectorAll('input[name="backload_qty[]"]');
+    csInputs.forEach(function(input) {
+        var conv = parseInt(input.dataset.conv) || 1;
+        var cs = parseInt(input.value) || 0;
+        input.value = cs * conv;
+    });
+    form.submit();
+});
 </script>

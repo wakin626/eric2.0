@@ -4,6 +4,8 @@ namespace App\Controllers;
 use App\Models\WarehouseModel;
 use App\Models\AuditModel;
 use App\Helpers\Pagination;
+use App\Helpers\NotificationHelper;
+use App\Helpers\XlsxExport;
 
 class WarehouseController {
     private $warehouseModel;
@@ -14,7 +16,7 @@ class WarehouseController {
             exit;
         }
         $action = $_GET['action'] ?? '';
-        if ($action !== 'getPODetails' && $action !== 'getItemsByCustomer' && $action !== 'getExcessByCustomer' && $action !== 'excessProduction' && $action !== 'updateExcessNotes' && $action !== 'getLotsByPOItem' && ($_SESSION['department'] ?? '') !== 'warehouse') {
+        if ($action !== 'getPODetails' && $action !== 'getItemsByCustomer' && $action !== 'getExcessByCustomer' && $action !== 'getAdvanceLots' && $action !== 'backloadDelivery' && $action !== 'getDeliveryLotsForBackload' && $action !== 'excessProduction' && $action !== 'updateExcessNotes' && $action !== 'getLotsByPOItem' && $action !== 'getPOItemsForAssignment' && $action !== 'getActivePOsForAssignment' && $action !== 'getLastExcessLot' && $action !== 'assignExcess' && $action !== 'viewBackloads' && ($_SESSION['department'] ?? '') !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
         }
@@ -132,37 +134,9 @@ class WarehouseController {
                         $item['uom'] ?? 'PCS'
                     );
 
-                    // 1. Consume from excess_production (existing logic)
-                    $pendingExcess = $this->warehouseModel->getPendingExcessForItem($customer_id, $item['item_id']);
-                    $totalExcessAvailable = 0;
-                    foreach ($pendingExcess as $excess) {
-                        $totalExcessAvailable += $excess['remaining_quantity'];
-                    }
-
                     $currentProduced = 0;
-                    if ($totalExcessAvailable > 0) {
-                        $consumeQty = min($totalExcessAvailable, $item['quantity']);
-                        $conn->prepare("UPDATE purchase_order_items SET produced_quantity = :produced WHERE poi_id = :poi_id")
-                            ->execute(['produced' => $consumeQty, 'poi_id' => $poi_id]);
-                        $currentProduced = $consumeQty;
 
-                        $remainingToConsume = $consumeQty;
-                        foreach ($pendingExcess as $excess) {
-                            if ($remainingToConsume <= 0) break;
-                            $available = $excess['remaining_quantity'];
-                            $take = min($available, $remainingToConsume);
-                            $conn->prepare("UPDATE purchase_order_items SET produced_quantity = produced_quantity - :qty WHERE poi_id = :poi_id")
-                                ->execute(['qty' => $take, 'poi_id' => $excess['source_poi_id']]);
-                            $conn->prepare("UPDATE purchase_orders SET produced_quantity = (
-                                SELECT COALESCE(SUM(produced_quantity), 0) FROM purchase_order_items WHERE po_id = :po_id
-                            ) WHERE po_id = :po_id2")
-                                ->execute(['po_id' => $excess['source_po_id'], 'po_id2' => $excess['source_po_id']]);
-                            $this->warehouseModel->consumeExcess($excess['excess_id'], $take);
-                            $remainingToConsume -= $take;
-                        }
-                    }
-
-                    // 2. Consume from advance production (only for normal POs)
+                    // Consume from advance production (only for normal POs)
                     if ($production_type === 'normal' && $currentProduced < $item['quantity']) {
                         $advanceItems = $this->warehouseModel->getAvailableAdvanceProduction($customer_id, $item['item_id']);
                         $advanceTotal = 0;
@@ -212,6 +186,8 @@ class WarehouseController {
                 $customerLabel = $po['customer_name'] ?? 'customer #' . $customer_id;
                 $productionTypeLabel = (($cleanData['production_type'] ?? 'normal') === 'advance') ? 'advance production' : 'normal production';
                 AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Created purchase order ' . $poLabel . ' for ' . $customerLabel . ' (' . $productionTypeLabel . ')', null, $cleanData, 'purchase_order', $po_id);
+
+                NotificationHelper::poCreated($poLabel, $customerLabel, $po_id, $_SESSION['user_id']);
 
                 $_SESSION['success'] = 'Purchase Order ' . $_POST['customer_po_number'] . ' created successfully';
                 header('Location: ?controller=warehouse&action=purchaseOrders');
@@ -668,6 +644,17 @@ class WarehouseController {
         exit;
     }
 
+    public function getAdvanceLots() {
+        header('Content-Type: application/json');
+        $customer_id = $_GET['customer_id'] ?? null;
+        $item_id = $_GET['item_id'] ?? null;
+        if (!$customer_id || !$item_id) { echo json_encode([]); exit; }
+
+        $lots = $this->warehouseModel->getAdvanceLotsByCustomerItem($customer_id, $item_id);
+        echo json_encode($lots);
+        exit;
+    }
+
         public function getPODetails() {
         header('Content-Type: application/json');
         $id = $_GET['id'] ?? null;
@@ -743,8 +730,110 @@ class WarehouseController {
                 $del['receipt'] = ($did && isset($receipts[$did])) ? $receipts[$did] : null;
             }
             unset($del);
+            $item['backloaded'] = 0;
         }
         unset($item);
+
+        if (!empty($po_items)) {
+            $poiIds = array_column($po_items, 'poi_id');
+            $placeholders = implode(',', array_fill(0, count($poiIds), '?'));
+            $conn = \App\Core\BaseModel::getConnection();
+
+            $lotConvMap = [];
+            $lotPoiMap = [];
+            foreach ($deliveries as $d) {
+                $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                if (!is_array($lotItems)) continue;
+                foreach ($lotItems as $li) {
+                    $lid = intval($li['lot_id'] ?? 0);
+                    if ($lid && !isset($lotConvMap[$lid])) {
+                        $lotConvMap[$lid] = [
+                            'conv' => intval($li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? 0),
+                            'uom' => $li['item_uom'] ?? ''
+                        ];
+                        $lotPoiMap[$lid] = intval($li['poi_id'] ?? 0);
+                    }
+                }
+            }
+
+            $lotProdStmt = $conn->prepare("SELECT lot_id, poi_id, quantity_produced FROM production_lots WHERE poi_id IN ($placeholders) AND `is_removed` = 0");
+            $lotProdStmt->execute($poiIds);
+            $lotProduced = [];
+            while ($lr = $lotProdStmt->fetch()) {
+                $lid = intval($lr['lot_id']);
+                $lotProduced[$lid] = intval($lr['quantity_produced']);
+                if (!isset($lotPoiMap[$lid])) $lotPoiMap[$lid] = intval($lr['poi_id']);
+            }
+
+            $lotDelivered = [];
+            foreach ($deliveries as $d) {
+                $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                if (!is_array($lotItems)) continue;
+                foreach ($lotItems as $li) {
+                    $lid = intval($li['lot_id'] ?? 0);
+                    if ($lid) {
+                        $lotDelivered[$lid] = ($lotDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                    }
+                }
+            }
+
+            $blStmt = $conn->prepare("SELECT lot_id, poi_id, quantity, backload_date FROM backloads WHERE poi_id IN ($placeholders) AND `remove` = 0 ORDER BY backload_date ASC, backload_id ASC");
+            $blStmt->execute($poiIds);
+
+            $lotEvents = [];
+            while ($bl = $blStmt->fetch()) {
+                $lid = intval($bl['lot_id']);
+                $lotEvents[$lid][] = ['type' => 'backload', 'date' => $bl['backload_date'], 'qty' => intval($bl['quantity'])];
+            }
+            foreach ($deliveries as $d) {
+                $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+                if (!is_array($lotItems)) continue;
+                foreach ($lotItems as $li) {
+                    $lid = intval($li['lot_id'] ?? 0);
+                    if ($lid) {
+                        $lotEvents[$lid][] = ['type' => 'delivery', 'date' => $d['delivery_date'], 'qty' => intval($li['qty'] ?? 0)];
+                    }
+                }
+            }
+
+            $blCsMap = [];
+            $balanceMap = [];
+            foreach ($lotEvents as $lid => $events) {
+                usort($events, function($a, $b) {
+                    $cmp = strcmp($a['date'], $b['date']);
+                    if ($cmp !== 0) return $cmp;
+                    if ($a['type'] === 'backload' && $b['type'] !== 'backload') return -1;
+                    if ($a['type'] !== 'backload' && $b['type'] === 'backload') return 1;
+                    return 0;
+                });
+                $pool = 0;
+                $totalBackloaded = 0;
+                foreach ($events as $evt) {
+                    if ($evt['type'] === 'backload') {
+                        $pool += $evt['qty'];
+                        $totalBackloaded += $evt['qty'];
+                    } else {
+                        $pool = max(0, $pool - $evt['qty']);
+                    }
+                }
+                $active = $pool;
+                $pid = $lotPoiMap[$lid] ?? null;
+                if (!$pid) continue;
+                $convInfo = $lotConvMap[$lid] ?? null;
+                if ($convInfo && $convInfo['conv'] > 0 && $convInfo['uom'] !== 'CS') {
+                    $blCsMap[$pid] = ($blCsMap[$pid] ?? 0) + floor($totalBackloaded / $convInfo['conv']);
+                    $balanceMap[$pid] = ($balanceMap[$pid] ?? 0) + floor($active / $convInfo['conv']);
+                } else {
+                    $blCsMap[$pid] = ($blCsMap[$pid] ?? 0) + $totalBackloaded;
+                    $balanceMap[$pid] = ($balanceMap[$pid] ?? 0) + $active;
+                }
+            }
+            foreach ($po_items as &$item) {
+                $item['backloaded'] = $blCsMap[$item['poi_id']] ?? 0;
+                $item['backload_balance'] = $balanceMap[$item['poi_id']] ?? 0;
+            }
+            unset($item);
+        }
         
         echo json_encode(['po' => $po, 'po_items' => $po_items]);
         exit;
@@ -796,6 +885,17 @@ class WarehouseController {
         }
         $data['receipts_map'] = $receiptsMap;
 
+        $backloadsMap = [];
+        if (!empty($deliveryIds)) {
+            $placeholders = implode(',', array_fill(0, count($deliveryIds), '?'));
+            $blStmt = $conn->prepare("SELECT * FROM backloads WHERE delivery_id IN ($placeholders) AND `remove` = 0 ORDER BY date_created ASC");
+            $blStmt->execute($deliveryIds);
+            foreach ($blStmt->fetchAll() as $bl) {
+                $backloadsMap[$bl['delivery_id']][] = $bl;
+            }
+        }
+        $data['backloads_map'] = $backloadsMap;
+
         $poiIds = array_column($data['deliveries'], 'poi_id');
         $poiIds = array_filter($poiIds);
         $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
@@ -815,6 +915,30 @@ class WarehouseController {
         }));
         $data['page_title'] = 'Deliveries';
         $this->render('deliveries/index', $data);
+    }
+
+    public function viewBackloads() {
+        $search = $_GET['search'] ?? '';
+        $filterCustomer = $_GET['filter_customer'] ?? '';
+
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($filterCustomer) $filters['customer_id'] = $filterCustomer;
+
+        $allBackloads = $this->warehouseModel->getBackloads($filters);
+        $pagination = Pagination::paginate($allBackloads, 15);
+
+        $customers = $this->warehouseModel->getCustomers();
+
+        $data['backloads'] = $pagination['items'];
+        $data['page'] = $pagination['page'];
+        $data['totalPages'] = $pagination['totalPages'];
+        $data['total'] = $pagination['total'];
+        $data['search'] = $search;
+        $data['filterCustomer'] = $filterCustomer;
+        $data['customers'] = $customers;
+        $data['page_title'] = 'Backloads';
+        $this->render('deliveries/backloads', $data);
     }
 
     public function readyToDeliver() {
@@ -872,6 +996,88 @@ class WarehouseController {
         exit;
     }
 
+    public function getDeliveryLotsForBackload() {
+        header('Content-Type: application/json');
+        $delivery_id = $_GET['delivery_id'] ?? null;
+        if (!$delivery_id) { echo json_encode([]); exit; }
+
+        $lots = $this->warehouseModel->getDeliveryLotsForBackload($delivery_id);
+        echo json_encode($lots);
+        exit;
+    }
+
+    public function backloadDelivery() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?controller=warehouse&action=deliveries');
+            exit;
+        }
+        try {
+            $delivery_id = $_POST['delivery_id'] ?? null;
+            if (!$delivery_id) {
+                $_SESSION['error'] = 'Invalid delivery';
+                header('Location: ?controller=warehouse&action=deliveries');
+                exit;
+            }
+
+            $conn = \App\Core\BaseModel::getConnection();
+            $stmt = $conn->prepare("SELECT d.delivery_id, d.po_id, d.dr_number, po.customer_po_number
+                FROM deliveries d
+                INNER JOIN purchase_orders po ON d.po_id = po.po_id
+                WHERE d.delivery_id = :delivery_id AND d.`remove` = 0");
+            $stmt->execute(['delivery_id' => $delivery_id]);
+            $delivery = $stmt->fetch();
+            if (!$delivery) {
+                $_SESSION['error'] = 'Delivery not found';
+                header('Location: ?controller=warehouse&action=deliveries');
+                exit;
+            }
+
+            $lotIds = $_POST['lot_id'] ?? [];
+            $quantities = $_POST['backload_qty'] ?? [];
+            $reasons = $_POST['backload_reason'] ?? [];
+
+            $totalBackloaded = 0;
+            foreach ($lotIds as $idx => $lotId) {
+                $qty = intval($quantities[$idx] ?? 0);
+                if ($qty <= 0 || empty($reasons[$idx])) continue;
+
+                $lotId = intval($lotId);
+                $lotStmt = $conn->prepare("SELECT poi_id, lot_number FROM production_lots WHERE lot_id = :lot_id");
+                $lotStmt->execute(['lot_id' => $lotId]);
+                $lot = $lotStmt->fetch();
+                if (!$lot) continue;
+
+                $poiId = $lot['poi_id'];
+
+                $this->warehouseModel->createBackload([
+                    'delivery_id' => $delivery_id,
+                    'po_id' => $delivery['po_id'],
+                    'poi_id' => $poiId,
+                    'lot_id' => $lotId,
+                    'lot_number' => $lot['lot_number'],
+                    'quantity' => $qty,
+                    'reason' => $reasons[$idx],
+                    'backloaded_by' => $_SESSION['user_id'],
+                    'backload_date' => date('Y-m-d')
+                ]);
+                $totalBackloaded += $qty;
+            }
+
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Backloaded ' . $totalBackloaded . ' units from delivery #' . $delivery_id, null, ['quantity' => $totalBackloaded], 'delivery', $delivery_id);
+
+            NotificationHelper::backloadCreated($delivery['dr_number'], $delivery['customer_po_number'], $totalBackloaded, $_SESSION['user_id']);
+
+            $_SESSION['success'] = 'Backload recorded successfully (' . $totalBackloaded . ' units)';
+            header('Location: ?controller=warehouse&action=deliveries');
+            exit;
+        } catch (\Exception $e) {
+            error_log('backloadDelivery error: ' . $e->getMessage());
+            $_SESSION['error'] = 'Failed to create backload: ' . $e->getMessage();
+            header('Location: ?controller=warehouse&action=deliveries');
+            exit;
+        }
+    }
+
     public function createMultipleDelivery() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ?controller=warehouse&action=deliveries');
@@ -885,6 +1091,12 @@ class WarehouseController {
             $remarks = $_POST['remarks'] ?? '';
             if (empty($po_id) || empty($dr_number) || empty($lotIdsRaw)) {
                 $_SESSION['error'] = 'Missing required fields for delivery.';
+                header('Location: ?controller=warehouse&action=deliveries');
+                exit;
+            }
+            $drCheck = $this->warehouseModel->checkDRNumber($dr_number);
+            if ($drCheck['exists']) {
+                $_SESSION['error'] = 'DR number "' . htmlspecialchars($dr_number) . '" already exists. Please use a unique DR number.';
                 header('Location: ?controller=warehouse&action=deliveries');
                 exit;
             }
@@ -972,12 +1184,18 @@ class WarehouseController {
                 'delivery_date' => $delivery_date,
                 'delivery_quantity' => $totalQty,
                 'dr_number' => $dr_number,
+                'plate_number' => trim($_POST['plate_number'] ?? ''),
+                'vehicle_type' => trim($_POST['vehicle_type'] ?? ''),
+                'logistic_provider' => trim($_POST['logistic_provider'] ?? ''),
                 'lot_items' => json_encode($lotItems),
                 'remarks' => $remarks
             ]);
             $poDel = (!empty($_POST['po_id'])) ? $this->warehouseModel->getPurchaseOrderById($_POST['po_id']) : null;
             $deliveryLabel = $poDel['customer_po_number'] ?? $poDel['po_number'] ?? 'PO #' . ($_POST['po_id'] ?? '');
             AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Created delivery records for ' . $deliveryLabel . ($dr_number ? ' with DR ' . $dr_number : ''), null, ['lot_ids' => $_POST['lot_ids'] ?? []], 'delivery', null);
+
+            NotificationHelper::deliveryCreated($deliveryLabel, $dr_number, $totalQty, $_SESSION['user_id']);
+            NotificationHelper::siNumberNeeded($deliveryId, $deliveryLabel, $_SESSION['user_id']);
 
             $_SESSION['success'] = "Delivery recorded successfully for DR {$dr_number}.";
             header('Location: ?controller=warehouse&action=deliveries');
@@ -1105,6 +1323,11 @@ class WarehouseController {
             }
 
             AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', 'Reported delivery issue for delivery #' . $deliveryId . ' (' . $reportType . ')', null, $_POST, 'delivery_report', $deliveryId);
+
+            $deliveryRecord = $this->warehouseModel->getDeliveryById($deliveryId);
+            $drLabel = $deliveryRecord['dr_number'] ?? ('#' . $deliveryId);
+            NotificationHelper::deliveryReported($deliveryId, $drLabel, $remarks, $_SESSION['user_id']);
+
             echo json_encode(['success' => true]);
         } catch (\Exception $e) {
             error_log('reportDelivery error: ' . $e->getMessage());
@@ -1272,6 +1495,7 @@ class WarehouseController {
                     'unit_price' => $item['unit_price'] ?? 0,
                     'item_uom' => $item['item_uom'] ?? '',
                     'uom_conversion' => $item['uom_conversion'] ?? null,
+                    'actual_uom_conversion' => $lot['pcs_per_case'] ?? $item['uom_conversion'] ?? null,
                     'item_id' => $item['item_id'] ?? null,
                 ];
                 $totalQty += $remaining;
@@ -1327,6 +1551,326 @@ class WarehouseController {
         ];
         $data['page_title'] = 'Activity Logs';
         $this->render('activity_logs/index', $data);
+    }
+
+    public function reports() {
+        $customerId = $_GET['customer_id'] ?? null;
+        $weekOffset = max(0, intval($_GET['week_offset'] ?? 0));
+
+        $weeklyStats = $this->warehouseModel->getWeeklyDeliveryStats($customerId, $weekOffset);
+        $customers = $this->warehouseModel->getCustomersWithDeliveries();
+
+        $allStats = $this->warehouseModel->getWeeklyDeliveryStats(null, $weekOffset);
+        $startYearWeek = !empty($allStats) ? intval($allStats[0]['year_week']) : 0;
+
+        $weeklyDetails = [];
+        foreach ($weeklyStats as $ws) {
+            $yearWeek = $ws['year_week'];
+            $weeklyDetails[$yearWeek] = $this->warehouseModel->getDeliveryDetailsForWeek($yearWeek, $customerId);
+        }
+
+        $poItemSummary = $this->warehouseModel->getPoItemSummary();
+
+        $lotItems = $this->warehouseModel->getUniqueItemsForLots();
+        $selectedLotItem = $_GET['lot_item_id'] ?? null;
+        if ($selectedLotItem) {
+            $lotData = $this->warehouseModel->getLotsByItem($selectedLotItem);
+        } else {
+            $lotData = $this->warehouseModel->getAllLotsStockOnHand();
+        }
+
+        $data = [
+            'weeklyStats' => $weeklyStats,
+            'customers' => $customers,
+            'selectedCustomer' => $customerId,
+            'weeklyDetails' => $weeklyDetails,
+            'weekOffset' => $weekOffset,
+            'startYearWeek' => $startYearWeek,
+            'hasMoreWeeks' => count(array_filter($weeklyStats, fn($s) => intval($s['delivery_count']) > 0)) >= 12,
+            'poItemSummary' => $poItemSummary,
+            'lotItems' => $lotItems,
+            'selectedLotItem' => $selectedLotItem,
+            'lotData' => $lotData,
+            'page_title' => 'Warehouse Reports'
+        ];
+        $this->render('reports/index', $data);
+    }
+
+    public function deliveryReport() {
+        $filters = [
+            'search'      => $_GET['search'] ?? '',
+            'date_from'   => $_GET['date_from'] ?? '',
+            'date_to'     => $_GET['date_to'] ?? '',
+            'customer_id' => $_GET['customer_id'] ?? '',
+        ];
+        $deliveries = $this->warehouseModel->getDeliveryReportData($filters);
+        $customers = $this->warehouseModel->getDeliveryReportCustomers();
+
+        $data = [
+            'deliveries'      => $deliveries,
+            'customers'       => $customers,
+            'filters'         => $filters,
+            'page_title'      => 'Delivery Report'
+        ];
+        $this->render('reports/delivery_report', $data);
+    }
+
+    public function exportDeliveryReport() {
+        $filters = [
+            'search'      => $_GET['search'] ?? '',
+            'date_from'   => $_GET['date_from'] ?? '',
+            'date_to'     => $_GET['date_to'] ?? '',
+            'customer_id' => $_GET['customer_id'] ?? '',
+        ];
+        $deliveries = $this->warehouseModel->getDeliveryReportData($filters);
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="delivery_report_' . date('Y-m-d') . '.csv"');
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+
+        fputcsv($output, ['#', 'DR Number', 'SI Number', 'Customer', 'PO Number', 'Item Code', 'Item', 'Lot Number', 'Quantity', 'Cases', 'Plate No.', 'Vehicle', 'Logistic Provider', 'Type', 'Delivery Date', 'Delivered By', 'Remarks']);
+        $rowNum = 0;
+        foreach ($deliveries as $d) {
+            $lotItems = json_decode($d['lot_items'] ?? '[]', true);
+            if (!is_array($lotItems) || count($lotItems) === 0) {
+                $lotItems = [[
+                    'item_description' => $d['item_description'] ?? 'Unknown',
+                    'lot_number' => $d['lot_number'] ?? '—',
+                    'qty' => $d['delivery_quantity'] ?? 0,
+                    'actual_uom_conversion' => $d['actual_uom_conversion'] ?? null,
+                    'uom_conversion' => $d['uom_conversion'] ?? null,
+                    'item_uom' => $d['item_uom'] ?? ''
+                ]];
+            }
+            foreach ($lotItems as $li) {
+                $rowNum++;
+                $qty = intval($li['qty'] ?? 0);
+                $conv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;
+                $uom = $li['item_uom'] ?? '';
+                $cases = ($conv && $uom !== 'CS') ? floor($qty / $conv) . ' CS' : '';
+                $remarks = $d['report_remarks'] ?? $d['remarks'] ?? '';
+                fputcsv($output, [
+                    $rowNum,
+                    $d['dr_number'] ?? '',
+                    $d['si_number'] ?? '',
+                    $d['customer_name'] ?? '',
+                    $d['customer_po_number'] ?? '',
+                    $li['item_code'] ?? '',
+                    $li['item_description'] ?? '',
+                    $li['lot_number'] ?? '',
+                    $qty,
+                    $cases,
+                    $d['plate_number'] ?? '',
+                    $d['vehicle_type'] ?? '',
+                    $d['logistic_provider'] ?? '',
+                    $d['production_type'] ?? '',
+                    $d['delivery_date'] ?? '',
+                    $d['delivered_by_name'] ?? '',
+                    $remarks
+                ]);
+            }
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    public function exportReports() {
+        $customerId = $_GET['customer_id'] ?? null;
+        $weekOffset = max(0, intval($_GET['week_offset'] ?? 0));
+
+        $allStats = $this->warehouseModel->getWeeklyDeliveryStats($customerId, $weekOffset);
+
+        $poItemSummary = $this->warehouseModel->getPoItemSummary();
+
+        $lotItems = $this->warehouseModel->getUniqueItemsForLots();
+        $selectedLotItem = $_GET['lot_item_id'] ?? null;
+        $allLotData = [];
+        if ($selectedLotItem) {
+            $allLotData = $this->warehouseModel->getLotsByItem($selectedLotItem);
+        } else {
+            foreach ($lotItems as $li) {
+                $lots = $this->warehouseModel->getLotsByItem($li['item_id']);
+                $allLotData = array_merge($allLotData, $lots);
+            }
+        }
+
+        $filterSearch = $_GET['search'] ?? '';
+        $filterPo = $_GET['po_filter'] ?? '';
+        $filterItem = $_GET['item_filter'] ?? '';
+        $filterStatus = $_GET['status_filter'] ?? '';
+
+        $filteredItems = $poItemSummary;
+        if ($filterSearch !== '') {
+            $searchLower = strtolower($filterSearch);
+            $filteredItems = array_filter($filteredItems, fn($i) =>
+                str_contains(strtolower($i['customer_name'] ?? ''), $searchLower)
+                || str_contains(strtolower($i['customer_po_number'] ?? ''), $searchLower)
+                || str_contains(strtolower($i['item_description'] ?? ''), $searchLower)
+            );
+        }
+        if ($filterPo !== '') {
+            $filteredItems = array_filter($filteredItems, fn($i) => strtolower($i['customer_po_number']) === $filterPo);
+        }
+        if ($filterItem !== '') {
+            $filteredItems = array_filter($filteredItems, fn($i) => strtolower($i['item_description']) === $filterItem);
+        }
+        if ($filterStatus !== '') {
+            $filteredItems = array_filter($filteredItems, function($i) use ($filterStatus) {
+                $p = intval($i['produced_quantity']);
+                $d = intval($i['delivered_quantity']);
+                $q = intval($i['po_qty']);
+                if ($filterStatus === 'completed') return $d >= $q;
+                if ($filterStatus === 'in-progress') return $p > 0 && ($p < $q || $d < $q);
+                if ($filterStatus === 'pending') return $p === 0;
+                return true;
+            });
+        }
+        $filteredItems = array_values($filteredItems);
+
+        $xlsx = new XlsxExport();
+
+        $weekFrom = ($weekOffset * 12) + 1;
+
+        $xlsx->addSheet('Weekly Delivery Graph');
+        $xlsx->addRow(['WEEKLY DELIVERY GRAPH'], 1);
+        $xlsx->addMerge('A', 1, 'E', 1);
+        $weekHeaderRow = $xlsx->addRow(['Week', 'Year', 'Date Range', 'Deliveries', 'Cases'], 2);
+        $xlsx->setAutoFilter('A', $weekHeaderRow, 'E', $weekHeaderRow);
+        $weekNum = $weekFrom;
+        foreach ($allStats as $ws) {
+            $yw = $ws['year_week'];
+            $year = intval(floor($yw / 100));
+            $week = intval($yw % 100);
+            $jan4 = mktime(0, 0, 0, 1, 4, $year);
+            $dayOffset = ($week - 1) * 7 - date('w', $jan4) + 1;
+            $mon = date('M d', mktime(0, 0, 0, 1, 4 + $dayOffset, $year));
+            $sun = date('M d', mktime(0, 0, 0, 1, 4 + $dayOffset + 6, $year));
+            $xlsx->addRow([$weekNum, $year, $mon . ' - ' . $sun, intval($ws['delivery_count']), intval($ws['total_cases'])]);
+            $weekNum++;
+        }
+        $xlsx->autoFitColumns();
+
+        $xlsx->addSheet('PO Item Summary');
+        $xlsx->addRow(['PO ITEM SUMMARY'], 1);
+        $xlsx->addMerge('A', 1, 'I', 1);
+        $poHeaderRow = $xlsx->addRow(['Customer', 'PO Number', 'Item Code', 'Item', 'PO Qty', 'Produced', 'Delivered', 'Balance', 'Status'], 2);
+        $xlsx->setAutoFilter('A', $poHeaderRow, 'I', $poHeaderRow);
+        foreach ($filteredItems as $item) {
+            $ordered = intval($item['po_qty']);
+            $produced = intval($item['produced_quantity']);
+            $delivered = intval($item['delivered_quantity']);
+            $balance = $ordered - $delivered;
+            if ($delivered >= $ordered) {
+                $status = 'Completed';
+            } elseif ($produced > 0) {
+                $status = 'In Progress';
+            } else {
+                $status = 'Pending';
+            }
+            $xlsx->addRow([
+                $item['customer_name'] ?? '',
+                $item['customer_po_number'] ?? '',
+                $item['item_code'] ?? '',
+                $item['item_description'] ?? '',
+                $ordered, $produced, $delivered, $balance, $status
+            ]);
+        }
+        $xlsx->autoFitColumns();
+
+        $xlsx->addSheet('Stock on Hand');
+        $xlsx->addRow(['STOCK ON HAND'], 1);
+        $xlsx->addMerge('A', 1, 'G', 1);
+        $sohHeaderRow = $xlsx->addRow(['Customer', 'PO Number', 'Lot Number', 'Stock on Hand (cs)', 'Delivered (cs)', 'Expiration Date', 'Created By'], 2);
+        $xlsx->setAutoFilter('A', $sohHeaderRow, 'G', $sohHeaderRow);
+        foreach ($allLotData as $lot) {
+            $stockOnHandPcs = max(0, $lot['quantity_produced'] - $lot['quantity_delivered']);
+            $conv = intval($lot['uom_conversion'] ?? 0);
+            $stockCs = $conv > 0 ? floor($stockOnHandPcs / $conv) : $stockOnHandPcs;
+            $deliveredCs = $conv > 0 ? floor($lot['quantity_delivered'] / $conv) : $lot['quantity_delivered'];
+            $stockLabel = $conv > 0 ? $stockCs . ' cs' : $stockOnHandPcs . ' pcs';
+            $deliveredLabel = $conv > 0 ? $deliveredCs . ' cs' : $lot['quantity_delivered'] . ' pcs';
+            $expiry = $lot['lot_date'] ? date('M Y', strtotime($lot['lot_date'] . ' +3 years')) : '-';
+            $xlsx->addRow([
+                $lot['customer_name'] ?? '',
+                $lot['customer_po_number'] ?? '',
+                $lot['lot_number'] ?? '',
+                $stockLabel,
+                $deliveredLabel,
+                $expiry,
+                $lot['created_by_name'] ?? '-'
+            ]);
+        }
+        $xlsx->autoFitColumns();
+
+        $xlsx->download('warehouse_reports_' . date('Y-m-d') . '.xlsx');
+    }
+
+    public function getPOItemsForAssignment() {
+        header('Content-Type: application/json');
+        $po_id = $_GET['po_id'] ?? null;
+        if (!$po_id) {
+            echo json_encode([]);
+            exit;
+        }
+        $items = $this->warehouseModel->getPurchaseOrderItems($po_id);
+        echo json_encode($items);
+        exit;
+    }
+
+    public function getLastExcessLot() {
+        header('Content-Type: application/json');
+        $poi_id = $_GET['poi_id'] ?? null;
+        if (!$poi_id) {
+            echo json_encode(null);
+            exit;
+        }
+        $lot = $this->warehouseModel->getLastExcessLotForPOItem($poi_id);
+        echo json_encode($lot);
+        exit;
+    }
+
+    public function getActivePOsForAssignment() {
+        header('Content-Type: application/json');
+        $customer_id = $_GET['customer_id'] ?? null;
+        if (!$customer_id) {
+            echo json_encode([]);
+            exit;
+        }
+        $pos = $this->warehouseModel->getActivePOsByCustomer($customer_id);
+        echo json_encode($pos);
+        exit;
+    }
+
+    public function assignExcess() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
+            exit;
+        }
+
+        $excess_id = $_POST['excess_id'] ?? null;
+        $target_po_id = $_POST['target_po_id'] ?? null;
+        $qty = $_POST['quantity'] ?? null;
+        $lot_id = $_POST['lot_id'] ?? null;
+
+        if (!$excess_id || !$target_po_id || !$qty) {
+            echo json_encode(['success' => false, 'message' => 'Missing required fields']);
+            exit;
+        }
+
+        try {
+            $result = $this->warehouseModel->assignExcessToPO($excess_id, $target_po_id, (int)$qty, $lot_id ? (int)$lot_id : null, $_SESSION['user_id']);
+            if ($result['success']) {
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Assigned excess #' . $excess_id . ' to PO #' . $target_po_id . ' (qty: ' . $qty . ')' . ($lot_id ? ' from lot #' . $lot_id : ''), null, ['excess_id' => $excess_id, 'target_po_id' => $target_po_id, 'quantity' => $qty, 'lot_id' => $lot_id], 'excess_production', $excess_id);
+            }
+            echo json_encode($result);
+        } catch (\Exception $e) {
+            error_log('assignExcess error: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'An error occurred: ' . $e->getMessage()]);
+        }
+        exit;
     }
 
     private function render($view, $data = []) {
