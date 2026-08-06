@@ -52,8 +52,18 @@
                     $lotLines = [];
                     $qtyLines = [];
                     if ($hasLotItems) {
-                        $liCount = count($lotItems);
-                        foreach ($lotItems as $idx => $li) {
+                        $groupedLotItems = [];
+                        foreach ($lotItems as $li) {
+                            $key = $li['lot_number'] ?? uniqid();
+                            if (!isset($groupedLotItems[$key])) {
+                                $groupedLotItems[$key] = $li;
+                                $groupedLotItems[$key]['qty'] = 0;
+                            }
+                            $groupedLotItems[$key]['qty'] += intval($li['qty'] ?? 0);
+                        }
+                        $groupedArr = array_values($groupedLotItems);
+                        $liCount = count($groupedArr);
+                        foreach ($groupedArr as $idx => $li) {
                             $sep = $idx < $liCount - 1 ? ' border-bottom pb-2 mb-2' : '';
                             $itemLines[] = '<div class="' . $sep . '"><small>' . htmlspecialchars($li['item_description'] ?? $li['item_code'] ?? '-') . '</small></div>';
                             $lotLines[] = '<div class="' . $sep . '"><small class="text-muted">' . htmlspecialchars($li['lot_number'] ?? '-') . '</small></div>';
