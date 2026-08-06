@@ -533,13 +533,24 @@ class FinanceController {
         $lotItems = json_decode($delivery['lot_items'] ?? '[]', true);
         if (!is_array($lotItems)) $lotItems = [];
 
+        // Group lot_items by lot_number to avoid duplicate rows
+        $groupedLotItems = [];
+        foreach ($lotItems as $li) {
+            $key = $li['lot_number'] ?? uniqid();
+            if (!isset($groupedLotItems[$key])) {
+                $groupedLotItems[$key] = $li;
+                $groupedLotItems[$key]['qty'] = 0;
+            }
+            $groupedLotItems[$key]['qty'] += intval($li['qty'] ?? 0);
+        }
+
         $items = [];
         $grandTotalQty = 0;
         $grandTotalAmount = 0;
         $vatType = $priceList['vat_type'] ?? 'non_vat';
 
-        foreach ($lotItems as $li) {
-            $liQty = $li['qty'] ?? 0;
+        foreach ($groupedLotItems as $li) {
+            $liQty = $li['qty'];
             $itemPrice = $priceList['price_per_piece'] ?? 0;
             $itemAmount = round($liQty * $itemPrice, 2);
             $conv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;
@@ -626,13 +637,24 @@ class FinanceController {
         $lotItems = json_decode($delivery['lot_items'] ?? '[]', true);
         if (!is_array($lotItems)) $lotItems = [];
 
+        // Group lot_items by lot_number to avoid duplicate rows
+        $groupedLotItems = [];
+        foreach ($lotItems as $li) {
+            $key = $li['lot_number'] ?? uniqid();
+            if (!isset($groupedLotItems[$key])) {
+                $groupedLotItems[$key] = $li;
+                $groupedLotItems[$key]['qty'] = 0;
+            }
+            $groupedLotItems[$key]['qty'] += intval($li['qty'] ?? 0);
+        }
+
         $items = [];
         $grandTotalQty = 0;
         $grandTotalAmount = 0;
         $vatType = $priceList['vat_type'] ?? 'non_vat';
 
-        foreach ($lotItems as $li) {
-            $liQty = $li['qty'] ?? 0;
+        foreach ($groupedLotItems as $li) {
+            $liQty = $li['qty'];
             $itemPrice = $priceList['price_per_piece'] ?? 0;
             $itemAmount = round($liQty * $itemPrice, 2);
             $conv = $li['actual_uom_conversion'] ?? $li['uom_conversion'] ?? null;

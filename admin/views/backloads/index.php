@@ -35,7 +35,8 @@
                     <th>Customer</th>
                     <th>Item</th>
                     <th>Lot Number</th>
-                    <th>Qty Returned</th>
+                    <th>Cases</th>
+                    <th>Qty Returned (pcs)</th>
                     <th>Reason</th>
                     <th>Recorded By</th>
                 </tr>
@@ -43,7 +44,7 @@
             <tbody>
                 <?php if (empty($backloads)): ?>
                     <tr>
-                        <td colspan="9" class="text-center text-muted py-4">No backloads found.</td>
+                        <td colspan="10" class="text-center text-muted py-4">No backloads found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($backloads as $bl): ?>
@@ -54,7 +55,8 @@
                             <td><?= htmlspecialchars($bl['customer_name']) ?></td>
                             <td><?= htmlspecialchars($bl['item_description'] ?? $bl['item_code']) ?></td>
                             <td><span class="badge bg-dark"><?= htmlspecialchars($bl['lot_number']) ?></span></td>
-                            <td class="fw-bold text-danger"><?= number_format($bl['quantity']) ?></td>
+                            <td><?= $bl['cases'] !== null ? number_format($bl['cases']) . ' CS' : '-' ?></td>
+                            <td class="fw-bold text-danger"><?= number_format($bl['quantity']) ?> pcs</td>
                             <td><?= htmlspecialchars($bl['reason']) ?></td>
                             <td><?= htmlspecialchars($bl['backloaded_by_name']) ?></td>
                         </tr>

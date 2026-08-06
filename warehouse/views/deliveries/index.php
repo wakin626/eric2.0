@@ -92,10 +92,15 @@
                             $lotUom = $li['item_uom'] ?? '';
                             if (!empty($lotUom)) $grouped[$key]['uom'] = $lotUom;
                             if ($lotConv && $lotUom !== 'CS') {
-                                $grouped[$key]['cases'] += floor(($li['qty'] ?? 0) / $lotConv);
                                 $grouped[$key]['conv'] = $lotConv;
                             }
                         }
+                        foreach ($grouped as $key => &$info) {
+                            if ($info['conv'] && $info['uom'] !== 'CS') {
+                                $info['cases'] = floor($info['qty'] / $info['conv']);
+                            }
+                        }
+                        unset($info);
                         $parts = [];
                         $caseParts = [];
                         foreach ($grouped as $desc => $info) {
@@ -310,12 +315,12 @@
                             </div>
                             <div class="row">
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">Plate No.</label>
-                                    <input type="text" name="plate_number" class="form-control" placeholder="e.g. ABC 1234">
+                                    <label class="form-label">Plate No. *</label>
+                                    <input type="text" name="plate_number" class="form-control" placeholder="e.g. ABC 1234" required>
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">Vehicle Type</label>
-                                    <select name="vehicle_type" class="form-select">
+                                    <label class="form-label">Vehicle Type *</label>
+                                    <select name="vehicle_type" class="form-select" required>
                                         <option value="">Select Vehicle</option>
                                         <option value="4 Wheels">4 Wheels</option>
                                         <option value="6 Wheels">6 Wheels</option>
@@ -323,8 +328,8 @@
                                     </select>
                                 </div>
                                 <div class="col-md-4 mb-3">
-                                    <label class="form-label">Logistic Provider</label>
-                                    <select name="logistic_provider" class="form-select">
+                                    <label class="form-label">Logistic Provider *</label>
+                                    <select name="logistic_provider" class="form-select" required>
                                         <option value="">Select Provider</option>
                                         <option value="FLJJ">FLJJ</option>
                                         <option value="RPI">RPI</option>
@@ -722,142 +727,230 @@ function renderLotCheckboxes(lots, lotRow, lotContainer, itemName, poiId) {
     lots.forEach(function(l) { lotCounts[l.lot_number] = (lotCounts[l.lot_number] || 0) + 1; });
     for (var i = 0; i < lots.length; i++) {
         var lot = lots[i];
-        if (document.getElementById('lotChk_' + lot.lot_id)) continue;
+        if (document.getElementById('lotChkAvail_' + lot.lot_id)) continue;
         const lotId = lot.lot_id;
         const lotConversion = lot.pcs_per_case || stdConversion || null;
-        const wrapper = document.createElement('div');
-        wrapper.className = 'd-flex align-items-center flex-wrap mb-3 p-3 border rounded bg-light lot-wrapper';
-        wrapper.dataset.poiId = poiId;
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'form-check-input me-3';
-        checkbox.value = lot.lot_id;
-        checkbox.id = 'lotChk_' + lotId;
-        checkbox.dataset.backloaded = lot.backloaded_qty || 0;
-        const label = document.createElement('label');
-        label.className = 'form-check-label me-3 fw-bold';
-        label.htmlFor = checkbox.id;
-        label.style.whiteSpace = 'nowrap';
-        if (lotCounts[lot.lot_number] > 1 && lotConversion) {
-            label.textContent = lot.lot_number + ' (' + lotConversion + ' CS)';
-        } else {
-            label.textContent = lot.lot_number;
-        }
-        const availBadge = document.createElement('span');
-        availBadge.className = 'badge bg-secondary me-3';
-        availBadge.textContent = 'Avail: ' + lot.available_quantity;
-        const blBadge = document.createElement('span');
-        blBadge.className = 'badge bg-warning text-dark me-3';
-        if (lot.backloaded_qty > 0) {
-            var pcsPerCase = lotConversion || 1;
-            var blCs = Math.floor(lot.backloaded_qty / pcsPerCase);
-            blBadge.textContent = 'Returned: ' + (blCs > 0 ? blCs + ' CS' : lot.backloaded_qty + ' pcs');
-        } else {
-            blBadge.style.display = 'none';
-        }
-        const qtyInput = document.createElement('input');
-        qtyInput.type = 'number';
-        qtyInput.className = 'form-control form-control-sm';
-        qtyInput.style.width = '110px';
-        qtyInput.min = '1';
-        qtyInput.max = lot.available_quantity;
-        qtyInput.placeholder = 'Qty';
-        qtyInput.disabled = true;
-        qtyInput.dataset.lotId = lotId;
-        qtyInput.dataset.max = lot.available_quantity;
-        qtyInput.dataset.conv = lotConversion || '';
-        qtyInput.id = 'lotQty_' + lotId;
-        if (lotConversion && (lot.item_uom || 'PCS') !== 'CS') {
-            const spacer = document.createElement('span');
-            spacer.className = 'mx-4';
-            spacer.textContent = '';
-            const caseInput = document.createElement('input');
-            caseInput.type = 'number';
-            caseInput.className = 'form-control form-control-sm';
-            caseInput.style.width = '80px';
-            caseInput.min = '0';
-            caseInput.placeholder = 'Case';
-            caseInput.disabled = true;
-            caseInput.dataset.lotId = lotId;
-            caseInput.dataset.conv = lotConversion;
-            caseInput.id = 'lotCase_' + lotId;
-            caseInput.title = 'Enter cases to auto-calculate qty (conversion: ' + lotConversion + ' PCS/case)';
-            const caseLabel = document.createElement('small');
-            caseLabel.className = 'text-muted ms-2';
-            caseLabel.style.whiteSpace = 'nowrap';
-            caseLabel.textContent = 'Case';
-            wrapper.appendChild(checkbox);
-            wrapper.appendChild(label);
-            wrapper.appendChild(availBadge);
-            wrapper.appendChild(blBadge);
-            wrapper.appendChild(qtyInput);
-            wrapper.appendChild(spacer);
-            wrapper.appendChild(caseInput);
-            wrapper.appendChild(caseLabel);
+        const backloadedQty = lot.backloaded_qty || 0;
+        const availQty = lot.available_quantity || 0;
+        const availMax = availQty;
 
-            var _converting = false;
-            caseInput.addEventListener('input', function() {
-                if (_converting) return;
-                _converting = true;
+        const outerWrapper = document.createElement('div');
+        outerWrapper.className = 'mb-3 p-3 border rounded bg-light lot-wrapper';
+        outerWrapper.dataset.poiId = poiId;
+
+        const lotLabel = (lotCounts[lot.lot_number] > 1 && lotConversion)
+            ? lot.lot_number + ' (' + lotConversion + ' CS)'
+            : lot.lot_number;
+
+        // --- Available sub-row ---
+        const availRow = document.createElement('div');
+        availRow.className = 'd-flex align-items-center flex-wrap mb-1';
+        const availChk = document.createElement('input');
+        availChk.type = 'checkbox';
+        availChk.className = 'form-check-input me-2';
+        availChk.id = 'lotChkAvail_' + lotId;
+        availChk.dataset.lotId = lotId;
+        availChk.dataset.type = 'avail';
+        const availLabel = document.createElement('label');
+        availLabel.className = 'form-check-label me-2 fw-bold';
+        availLabel.htmlFor = availChk.id;
+        availLabel.style.whiteSpace = 'nowrap';
+        availLabel.textContent = lotLabel;
+        const availBadge = document.createElement('span');
+        availBadge.className = 'badge bg-secondary me-2';
+        if (lotConversion && availQty > 0) {
+            availBadge.textContent = 'Avail: ' + Math.floor(availQty / lotConversion) + ' CS / ' + availQty + ' pcs';
+        } else {
+            availBadge.textContent = 'Avail: ' + availQty + ' pcs';
+        }
+        const availCaseInput = document.createElement('input');
+        availCaseInput.type = 'number';
+        availCaseInput.className = 'form-control form-control-sm';
+        availCaseInput.style.width = '70px';
+        availCaseInput.min = '0';
+        availCaseInput.placeholder = '';
+        availCaseInput.disabled = true;
+        availCaseInput.dataset.lotId = lotId;
+        availCaseInput.dataset.conv = lotConversion || '';
+        availCaseInput.id = 'lotCaseAvail_' + lotId;
+        availCaseInput.title = 'Cases (conversion: ' + (lotConversion || '?') + ' PCS/case)';
+        const availCaseLabel = document.createElement('small');
+        availCaseLabel.className = 'text-muted me-2';
+        availCaseLabel.style.whiteSpace = 'nowrap';
+        availCaseLabel.textContent = 'CS';
+        const availQtyInput = document.createElement('input');
+        availQtyInput.type = 'number';
+        availQtyInput.className = 'form-control form-control-sm';
+        availQtyInput.style.width = '90px';
+        availQtyInput.min = '0';
+        availQtyInput.max = availMax;
+        availQtyInput.placeholder = 'Qty';
+        availQtyInput.disabled = true;
+        availQtyInput.dataset.lotId = lotId;
+        availQtyInput.dataset.max = availMax;
+        availQtyInput.dataset.conv = lotConversion || '';
+        availQtyInput.id = 'lotQtyAvail_' + lotId;
+        const availPcsLabel = document.createElement('small');
+        availPcsLabel.className = 'text-muted';
+        availPcsLabel.style.whiteSpace = 'nowrap';
+        availPcsLabel.textContent = 'pcs';
+        availRow.appendChild(availChk);
+        availRow.appendChild(availLabel);
+        availRow.appendChild(availBadge);
+        availRow.appendChild(availCaseInput);
+        availRow.appendChild(availCaseLabel);
+        availRow.appendChild(availQtyInput);
+        availRow.appendChild(availPcsLabel);
+        outerWrapper.appendChild(availRow);
+
+        // --- Returned sub-row (only if backloaded_qty > 0) ---
+        var retRow = null;
+        var retChk = null;
+        if (backloadedQty > 0) {
+            retRow = document.createElement('div');
+            retRow.className = 'd-flex align-items-center flex-wrap';
+            retRow.id = 'retRow_' + lotId;
+            retChk = document.createElement('input');
+            retChk.type = 'checkbox';
+            retChk.className = 'form-check-input me-2';
+            retChk.id = 'lotChkRet_' + lotId;
+            retChk.dataset.lotId = lotId;
+            retChk.dataset.type = 'ret';
+            var retLabel = document.createElement('label');
+            retLabel.className = 'form-check-label me-2 fw-bold text-warning';
+            retLabel.htmlFor = retChk.id;
+            retLabel.style.whiteSpace = 'nowrap';
+            retLabel.textContent = lotLabel;
+            var retBadge = document.createElement('span');
+            retBadge.className = 'badge bg-warning text-dark me-2';
+            if (lotConversion && backloadedQty > 0) {
+                retBadge.textContent = 'Returned: ' + Math.floor(backloadedQty / lotConversion) + ' CS / ' + backloadedQty + ' pcs';
+            } else {
+                retBadge.textContent = 'Returned: ' + backloadedQty + ' pcs';
+            }
+            var retCaseInput = document.createElement('input');
+            retCaseInput.type = 'number';
+            retCaseInput.className = 'form-control form-control-sm';
+            retCaseInput.style.width = '70px';
+            retCaseInput.min = '0';
+            retCaseInput.placeholder = '';
+            retCaseInput.disabled = true;
+            retCaseInput.dataset.lotId = lotId;
+            retCaseInput.dataset.conv = lotConversion || '';
+            retCaseInput.id = 'lotCaseRet_' + lotId;
+            retCaseInput.title = 'Returned cases (conversion: ' + (lotConversion || '?') + ' PCS/case)';
+            var retCaseLabel = document.createElement('small');
+            retCaseLabel.className = 'text-muted me-2';
+            retCaseLabel.style.whiteSpace = 'nowrap';
+            retCaseLabel.textContent = 'CS';
+            var retQtyInput = document.createElement('input');
+            retQtyInput.type = 'number';
+            retQtyInput.className = 'form-control form-control-sm';
+            retQtyInput.style.width = '90px';
+            retQtyInput.min = '0';
+            retQtyInput.max = backloadedQty;
+            retQtyInput.placeholder = 'Qty';
+            retQtyInput.disabled = true;
+            retQtyInput.dataset.lotId = lotId;
+            retQtyInput.dataset.max = backloadedQty;
+            retQtyInput.dataset.conv = lotConversion || '';
+            retQtyInput.id = 'lotQtyRet_' + lotId;
+            var retPcsLabel = document.createElement('small');
+            retPcsLabel.className = 'text-muted';
+            retPcsLabel.style.whiteSpace = 'nowrap';
+            retPcsLabel.textContent = 'pcs';
+            retRow.appendChild(retChk);
+            retRow.appendChild(retLabel);
+            retRow.appendChild(retBadge);
+            retRow.appendChild(retCaseInput);
+            retRow.appendChild(retCaseLabel);
+            retRow.appendChild(retQtyInput);
+            retRow.appendChild(retPcsLabel);
+            outerWrapper.appendChild(retRow);
+        }
+
+        // --- Warning div ---
+        const warnEl = document.createElement('div');
+        warnEl.className = 'w-100 text-danger small mt-1';
+        warnEl.id = 'lotWarn_' + lotId;
+        outerWrapper.appendChild(warnEl);
+
+        lotContainer.appendChild(outerWrapper);
+
+        // --- Case conversion listeners ---
+        function bindConversion(qtyId, caseId, lotConv, lotRef, maxQty) {
+            if (!lotConv) return;
+            var qEl = document.getElementById(qtyId);
+            var cEl = document.getElementById(caseId);
+            if (!qEl || !cEl) return;
+            var maxCases = maxQty > 0 ? Math.floor(maxQty / lotConv) : 0;
+            cEl.max = maxCases > 0 ? maxCases : '';
+            var _conv = false;
+            cEl.addEventListener('input', function() {
+                if (_conv) return; _conv = true;
                 var cases = parseInt(this.value) || 0;
-                qtyInput.value = cases * lotConversion;
-                var warnEl = document.getElementById('lotWarn_' + lotId);
-                if (warnEl) warnEl.textContent = '';
-                _converting = false;
-            });
-            qtyInput.addEventListener('input', function() {
-                if (_converting) return;
-                _converting = true;
-                var qty = parseInt(this.value) || 0;
-                caseInput.value = lotConversion ? Math.floor(qty / lotConversion) : '';
-                var warnEl = document.getElementById('lotWarn_' + lotId);
-                if (warnEl) {
-                    if (qty > 0 && lotConversion && qty % lotConversion !== 0) {
-                        var remainder = qty % lotConversion;
-                        warnEl.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-triangle"></i> ' + qty + ' pcs is not exact — ' + remainder + ' pc' + (remainder > 1 ? 's' : '') + ' excess. Use ' + (qty - remainder) + ' or ' + (qty + (lotConversion - remainder)) + ' pcs.</small>';
+                var pcs = cases * lotConv;
+                qEl.value = pcs;
+                var w = document.getElementById('lotWarn_' + lotRef);
+                if (w) {
+                    if (maxCases > 0 && cases > maxCases) {
+                        w.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-circle"></i> ' + cases + ' CS (' + pcs + ' pcs) exceeds available ' + maxCases + ' CS (' + maxQty + ' pcs).</small>';
+                    } else if (pcs > 0 && pcs % lotConv !== 0) {
+                        var rem = pcs % lotConv;
+                        w.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-triangle"></i> ' + pcs + ' pcs is not exact — ' + rem + ' pc' + (rem > 1 ? 's' : '') + ' excess. Use ' + (pcs - rem) + ' or ' + (pcs + (lotConv - rem)) + ' pcs.</small>';
                     } else {
-                        warnEl.textContent = '';
+                        w.textContent = '';
                     }
                 }
-                _converting = false;
+                _conv = false;
             });
-            const warnEl = document.createElement('div');
-            warnEl.className = 'w-100';
-            warnEl.id = 'lotWarn_' + lotId;
-            wrapper.appendChild(warnEl);
-        } else {
-            wrapper.appendChild(checkbox);
-            wrapper.appendChild(label);
-            wrapper.appendChild(availBadge);
-            wrapper.appendChild(blBadge);
-            wrapper.appendChild(qtyInput);
+            qEl.addEventListener('input', function() {
+                if (_conv) return; _conv = true;
+                var qty = parseInt(this.value) || 0;
+                cEl.value = lotConv ? Math.floor(qty / lotConv) : '';
+                var w = document.getElementById('lotWarn_' + lotRef);
+                if (w) {
+                    if (maxQty > 0 && qty > maxQty) {
+                        w.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-circle"></i> ' + qty + ' pcs exceeds available ' + maxQty + ' pcs.</small>';
+                    } else if (qty > 0 && lotConv && qty % lotConv !== 0) {
+                        var rem = qty % lotConv;
+                        w.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-triangle"></i> ' + qty + ' pcs is not exact — ' + rem + ' pc' + (rem > 1 ? 's' : '') + ' excess. Use ' + (qty - rem) + ' or ' + (qty + (lotConv - rem)) + ' pcs.</small>';
+                    } else {
+                        w.textContent = '';
+                    }
+                }
+                _conv = false;
+            });
         }
-        lotContainer.appendChild(wrapper);
-        checkbox.addEventListener('change', function() {
-            qtyInput.disabled = !this.checked;
-            var caseEl = document.getElementById('lotCase_' + lotId);
-            if (caseEl) caseEl.disabled = !this.checked;
-            if (!this.checked) {
-                qtyInput.value = '';
-                if (caseEl) caseEl.value = '';
-                var warnEl = document.getElementById('lotWarn_' + lotId);
-                if (warnEl) warnEl.textContent = '';
-            } else {
-                var backloaded = parseInt(this.dataset.backloaded) || 0;
-                var max = parseInt(qtyInput.dataset.max) || 0;
-                var autoQty = backloaded > 0 ? backloaded : max;
-                if (lotConversion && autoQty > 0) {
-                    autoQty = Math.floor(autoQty / lotConversion) * lotConversion;
-                }
-                qtyInput.value = autoQty > 0 ? autoQty : '';
-                if (caseEl && lotConversion) {
-                    caseEl.value = autoQty > 0 ? Math.floor(autoQty / lotConversion) : '';
-                }
-                var warnEl = document.getElementById('lotWarn_' + lotId);
-                if (warnEl) warnEl.textContent = '';
-                qtyInput.focus();
+
+        if (lotConversion) {
+            bindConversion('lotQtyAvail_' + lotId, 'lotCaseAvail_' + lotId, lotConversion, lotId, availMax);
+            if (backloadedQty > 0) {
+                bindConversion('lotQtyRet_' + lotId, 'lotCaseRet_' + lotId, lotConversion, lotId, backloadedQty);
             }
-        });
+        }
+
+        // --- Checkbox enable/disable listeners ---
+        function bindChkEnable(chk, qtyId, caseId) {
+            chk.addEventListener('change', function() {
+                var q = document.getElementById(qtyId);
+                if (q) q.disabled = !this.checked;
+                var c = document.getElementById(caseId);
+                if (c) c.disabled = !this.checked;
+                if (!this.checked) {
+                    if (q) q.value = '';
+                    if (c) c.value = '';
+                    var w = document.getElementById('lotWarn_' + chk.dataset.lotId);
+                    if (w) w.textContent = '';
+                } else {
+                    if (c) c.focus();
+                }
+            });
+        }
+        bindChkEnable(availChk, 'lotQtyAvail_' + lotId, 'lotCaseAvail_' + lotId);
+        if (backloadedQty > 0) {
+            bindChkEnable(retChk, 'lotQtyRet_' + lotId, 'lotCaseRet_' + lotId);
+        }
     }
 }
 
@@ -968,41 +1061,69 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         return;
     }
 
-    const checkedBoxes = document.querySelectorAll('#lotCheckboxContainer input[type="checkbox"]:checked');
-    if (checkedBoxes.length === 0) {
-        alert('Please select at least one lot');
-        return;
-    }
-
-    const lotPairs = [];
+    // Collect lot selections from available and returned checkboxes
+    const lotData = {}; // keyed by lotId
     let hasError = false;
-    checkedBoxes.forEach(function(cb) {
-        const lotId = cb.value;
-        const lotLabel = cb.parentNode.querySelector('label') ? cb.parentNode.querySelector('label').textContent.trim() : lotId;
-        const qtyInput = document.getElementById('lotQty_' + lotId);
-        let qty = parseInt(qtyInput.value) || 0;
+
+    function processCheckbox(chk, type) {
+        if (!chk.checked) return;
+        const lotId = chk.dataset.lotId;
+        if (!lotData[lotId]) lotData[lotId] = { avail: 0, ret: 0, conv: 0, label: '' };
+
+        // Get label from parent
+        const parentRow = chk.parentNode;
+        const lbl = parentRow.querySelector('label');
+        lotData[lotId].label = lbl ? lbl.textContent.trim() : lotId;
+
+        const qtyInput = document.getElementById('lotQty' + (type === 'avail' ? 'Avail' : 'Ret') + '_' + lotId);
+        const caseInput = document.getElementById('lotCase' + (type === 'avail' ? 'Avail' : 'Ret') + '_' + lotId);
+        const qty = parseInt(qtyInput.value) || 0;
         const max = parseInt(qtyInput.dataset.max) || 0;
+        const conv = parseInt(qtyInput.dataset.conv) || 0;
+
         if (qty <= 0) {
             hasError = true;
-            alert('Please enter a quantity for ' + lotLabel);
+            alert('Please enter a quantity for ' + lotData[lotId].label + (type === 'ret' ? ' (Returned)' : ''));
             return;
         }
         if (qty > max) {
             hasError = true;
-            alert('Quantity ' + qty + ' exceeds available ' + max + ' for ' + lotLabel);
+            alert((type === 'ret' ? 'Returned' : 'Available') + ' quantity ' + qty + ' exceeds max ' + max + ' for ' + lotData[lotId].label);
             return;
         }
-        const caseInput = document.getElementById('lotCase_' + lotId);
-        const actualConv = caseInput ? parseInt(caseInput.dataset.conv) || 0 : 0;
-        if (actualConv > 0 && qty % actualConv !== 0) {
+        if (conv > 0 && qty % conv !== 0) {
             hasError = true;
-            var remainder = qty % actualConv;
-            alert('Quantity for ' + lotLabel + ' is ' + qty + ' pcs, but ' + actualConv + ' pcs/case means ' + remainder + ' pc' + (remainder > 1 ? 's' : '') + ' excess.\n\nUse ' + (qty - remainder) + ' or ' + (qty + (actualConv - remainder)) + ' pcs instead.');
+            var rem = qty % conv;
+            alert('Quantity for ' + lotData[lotId].label + (type === 'ret' ? ' (Returned)' : '') + ' is ' + qty + ' pcs, but ' + conv + ' pcs/case means ' + rem + ' pc' + (rem > 1 ? 's' : '') + ' excess.\n\nUse ' + (qty - rem) + ' or ' + (qty + (conv - rem)) + ' pcs instead.');
             return;
         }
-        lotPairs.push(lotId + ':' + qty + ':' + actualConv);
+
+        if (type === 'avail') lotData[lotId].avail = qty;
+        else lotData[lotId].ret = qty;
+        if (conv > 0) lotData[lotId].conv = conv;
+    }
+
+    document.querySelectorAll('#lotCheckboxContainer input[type="checkbox"]').forEach(function(chk) {
+        var type = chk.dataset.type;
+        if (type === 'avail') processCheckbox(chk, 'avail');
+        else if (type === 'ret') processCheckbox(chk, 'ret');
     });
+
     if (hasError) return;
+
+    // Build lotPairs: lotId:totalQty:returnedQty:conv
+    const lotPairs = [];
+    for (var lotId in lotData) {
+        var d = lotData[lotId];
+        var total = d.avail + d.ret;
+        if (total <= 0) continue;
+        lotPairs.push(lotId + ':' + total + ':' + d.ret + ':' + d.conv);
+    }
+
+    if (lotPairs.length === 0) {
+        alert('Please select at least one lot');
+        return;
+    }
 
     document.getElementById('selectedLotIds').value = lotPairs.join(',');
 
@@ -1049,21 +1170,36 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
     var totalQty = 0;
     var totalReturned = 0;
     var itemNames = {};
-    checkedBoxes.forEach(function(cb) {
-        var lotId = cb.value;
-        var wrapper = cb.closest('.lot-wrapper');
+    var previewedLots = {};
+    document.querySelectorAll('#lotCheckboxContainer input[type="checkbox"]:checked').forEach(function(chk) {
+        var type = chk.dataset.type;
+        var lotId = chk.dataset.lotId;
+        if (!lotId || previewedLots[lotId]) return;
+        var wrapper = chk.closest('.lot-wrapper');
         var poiId = wrapper ? wrapper.dataset.poiId : '';
         var header = document.querySelector('#lotCheckboxContainer .lot-header[data-poi-id="' + poiId + '"]');
         var itemName = header ? header.textContent.trim() : '-';
         itemNames[itemName] = true;
-        var lotLabel = cb.parentNode.querySelector('label') ? cb.parentNode.querySelector('label').textContent.trim() : lotId;
-        var qtyInput = document.getElementById('lotQty_' + lotId);
-        var qty = parseInt(qtyInput.value) || parseInt(qtyInput.dataset.max) || 0;
-        var blPcs = parseInt(cb.dataset.backloaded) || 0;
-        var blText = blPcs > 0 ? blPcs + ' pcs' : '-';
-        totalQty += qty;
-        totalReturned += blPcs;
-        lotsHtml += '<tr><td>' + itemName + '</td><td>' + lotLabel + '</td><td>' + qty + '</td><td>' + blText + '</td></tr>';
+
+        var availChk = document.getElementById('lotChkAvail_' + lotId);
+        var retChk = document.getElementById('lotChkRet_' + lotId);
+        var availQty = 0, retQty = 0;
+        if (availChk && availChk.checked) {
+            var q = document.getElementById('lotQtyAvail_' + lotId);
+            availQty = parseInt(q.value) || 0;
+        }
+        if (retChk && retChk.checked) {
+            var r = document.getElementById('lotQtyRet_' + lotId);
+            retQty = parseInt(r.value) || 0;
+        }
+        var lotTotal = availQty + retQty;
+        if (lotTotal <= 0) return;
+        previewedLots[lotId] = true;
+
+        var lotLabel = wrapper.querySelector('label') ? wrapper.querySelector('label').textContent.trim() : lotId;
+        totalQty += lotTotal;
+        totalReturned += retQty;
+        lotsHtml += '<tr><td>' + itemName + '</td><td>' + lotLabel + '</td><td>' + lotTotal + '</td><td>' + (retQty > 0 ? retQty + ' pcs' : '-') + '</td></tr>';
     });
     lotsHtml += '</tbody></table>';
     if (totalReturned > 0) {
@@ -1139,7 +1275,9 @@ document.getElementById('drConfirmYesBtn').addEventListener('click', function() 
         })
         .catch(function() {
             alert('Error: Could not verify DR number. Please try again.');
-        });
+    }).catch(function(err) {
+        console.error('Promise.all error:', err);
+    });
 });
 
 document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
@@ -1221,9 +1359,10 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
         var backloads = [];
         try { backloads = JSON.parse(this.dataset.backloads || '[]'); } catch(e) {}
         if (backloads.length > 0) {
-            var blHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Date</th><th>Lot</th><th>Qty Returned</th><th>Reason</th><th>By</th></tr></thead><tbody>';
+            var blHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Date</th><th>Lot</th><th>Qty Returned</th><th>Cases</th><th>Reason</th></tr></thead><tbody>';
             backloads.forEach(function(bl) {
-                blHtml += '<tr><td>' + (bl.backload_date || '-') + '</td><td>' + (bl.lot_number || '-') + '</td><td>' + bl.quantity + '</td><td>' + (bl.reason || '-') + '</td><td>' + (bl.backloaded_by_name || '-') + '</td></tr>';
+                var casesText = (bl.cases !== null && bl.cases !== undefined) ? bl.cases + ' CS' : '-';
+                blHtml += '<tr><td>' + (bl.backload_date || '-') + '</td><td>' + (bl.lot_number || '-') + '</td><td>' + bl.quantity + '</td><td>' + casesText + '</td><td>' + (bl.reason || '-') + '</td></tr>';
             });
             blHtml += '</tbody></table>';
             backloadContainer.innerHTML = blHtml;
@@ -1500,6 +1639,7 @@ document.querySelectorAll('.backloadBtn').forEach(function(btn) {
                     html += '<td class="text-muted" id="backloadPcs_' + idx + '">0 pcs</td>';
                     html += '<td><input type="text" name="backload_reason[]" class="form-control form-control-sm" placeholder="Reason (e.g. dented box)"></td>';
                     html += '<input type="hidden" name="lot_id[]" value="' + lot.lot_id + '">';
+                    html += '<input type="hidden" name="backload_cases[]" class="backload-cases-hidden" data-idx="' + idx + '" value="">';
                     html += '</tr>';
                 });
                 tbody.innerHTML = html;
@@ -1530,6 +1670,9 @@ document.querySelectorAll('.backloadBtn').forEach(function(btn) {
                             var fb = this.parentNode.querySelector('.invalid-feedback');
                             if (fb) fb.remove();
                         }
+
+                        var casesHidden = tbody.querySelector('.backload-cases-hidden[data-idx="' + idx + '"]');
+                        if (casesHidden) casesHidden.value = cs > 0 ? cs : '';
 
                         document.getElementById('backloadPcs_' + idx).textContent = pcs + ' pcs';
                         var totalPcs = 0;

@@ -538,6 +538,7 @@ class WarehouseController {
         $filters = [];
         if (!empty($_GET['customer_id'])) $filters['customer_id'] = $_GET['customer_id'];
         if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
+        $this->warehouseModel->syncExcessProduction();
         $data['excess'] = $this->warehouseModel->getAllExcess($filters);
         $data['advance'] = $this->warehouseModel->getAllAdvanceProduction($filters);
         $data['customers'] = $this->warehouseModel->getCustomers();
@@ -766,6 +767,7 @@ class WarehouseController {
             }
 
             $lotDelivered = [];
+            $lotReturned = [];
             foreach ($deliveries as $d) {
                 $lotItems = json_decode($d['lot_items'] ?? '[]', true);
                 if (!is_array($lotItems)) continue;
@@ -773,59 +775,47 @@ class WarehouseController {
                     $lid = intval($li['lot_id'] ?? 0);
                     if ($lid) {
                         $lotDelivered[$lid] = ($lotDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                        $lotReturned[$lid] = ($lotReturned[$lid] ?? 0) + intval($li['returned_qty'] ?? 0);
                     }
                 }
             }
 
-            $blStmt = $conn->prepare("SELECT lot_id, poi_id, quantity, backload_date FROM backloads WHERE poi_id IN ($placeholders) AND `remove` = 0 ORDER BY backload_date ASC, backload_id ASC");
+            $blStmt = $conn->prepare("SELECT lot_id, poi_id, quantity FROM backloads WHERE poi_id IN ($placeholders) AND `remove` = 0");
             $blStmt->execute($poiIds);
 
-            $lotEvents = [];
+            $lotBackloaded = [];
             while ($bl = $blStmt->fetch()) {
                 $lid = intval($bl['lot_id']);
-                $lotEvents[$lid][] = ['type' => 'backload', 'date' => $bl['backload_date'], 'qty' => intval($bl['quantity'])];
-            }
-            foreach ($deliveries as $d) {
-                $lotItems = json_decode($d['lot_items'] ?? '[]', true);
-                if (!is_array($lotItems)) continue;
-                foreach ($lotItems as $li) {
-                    $lid = intval($li['lot_id'] ?? 0);
-                    if ($lid) {
-                        $lotEvents[$lid][] = ['type' => 'delivery', 'date' => $d['delivery_date'], 'qty' => intval($li['qty'] ?? 0)];
-                    }
-                }
+                $lotBackloaded[$lid] = ($lotBackloaded[$lid] ?? 0) + intval($bl['quantity']);
             }
 
             $blCsMap = [];
             $balanceMap = [];
-            foreach ($lotEvents as $lid => $events) {
-                usort($events, function($a, $b) {
-                    $cmp = strcmp($a['date'], $b['date']);
-                    if ($cmp !== 0) return $cmp;
-                    if ($a['type'] === 'backload' && $b['type'] !== 'backload') return -1;
-                    if ($a['type'] !== 'backload' && $b['type'] === 'backload') return 1;
-                    return 0;
-                });
-                $pool = 0;
+            foreach ($poiIds as $pid) {
                 $totalBackloaded = 0;
-                foreach ($events as $evt) {
-                    if ($evt['type'] === 'backload') {
-                        $pool += $evt['qty'];
-                        $totalBackloaded += $evt['qty'];
-                    } else {
-                        $pool = max(0, $pool - $evt['qty']);
+                $totalActive = 0;
+                foreach ($lotBackloaded as $lid => $blQty) {
+                    if (($lotPoiMap[$lid] ?? null) != $pid) continue;
+                    $totalBackloaded += $blQty;
+                    $produced = $lotProduced[$lid] ?? 0;
+                    $delivered = $lotDelivered[$lid] ?? 0;
+                    $consumed = max(0, $delivered - $produced);
+                    $active = max(0, $blQty - $consumed);
+                    $totalActive += $active;
+                }
+                $convInfo = null;
+                foreach ($lotBackloaded as $lid => $blQty) {
+                    if (($lotPoiMap[$lid] ?? null) == $pid) {
+                        $convInfo = $lotConvMap[$lid] ?? null;
+                        break;
                     }
                 }
-                $active = $pool;
-                $pid = $lotPoiMap[$lid] ?? null;
-                if (!$pid) continue;
-                $convInfo = $lotConvMap[$lid] ?? null;
                 if ($convInfo && $convInfo['conv'] > 0 && $convInfo['uom'] !== 'CS') {
                     $blCsMap[$pid] = ($blCsMap[$pid] ?? 0) + floor($totalBackloaded / $convInfo['conv']);
-                    $balanceMap[$pid] = ($balanceMap[$pid] ?? 0) + floor($active / $convInfo['conv']);
+                    $balanceMap[$pid] = ($balanceMap[$pid] ?? 0) + floor($totalActive / $convInfo['conv']);
                 } else {
                     $blCsMap[$pid] = ($blCsMap[$pid] ?? 0) + $totalBackloaded;
-                    $balanceMap[$pid] = ($balanceMap[$pid] ?? 0) + $active;
+                    $balanceMap[$pid] = ($balanceMap[$pid] ?? 0) + $totalActive;
                 }
             }
             foreach ($po_items as &$item) {
@@ -1034,6 +1024,7 @@ class WarehouseController {
 
             $lotIds = $_POST['lot_id'] ?? [];
             $quantities = $_POST['backload_qty'] ?? [];
+            $casesArr = $_POST['backload_cases'] ?? [];
             $reasons = $_POST['backload_reason'] ?? [];
 
             $totalBackloaded = 0;
@@ -1056,6 +1047,7 @@ class WarehouseController {
                     'lot_id' => $lotId,
                     'lot_number' => $lot['lot_number'],
                     'quantity' => $qty,
+                    'cases' => intval($casesArr[$idx] ?? 0) ?: null,
                     'reason' => $reasons[$idx],
                     'backloaded_by' => $_SESSION['user_id'],
                     'backload_date' => date('Y-m-d')
@@ -1086,10 +1078,13 @@ class WarehouseController {
         try {
             $po_id = $_POST['po_id'] ?? null;
             $dr_number = trim($_POST['dr_number'] ?? '');
+            $plate_number = trim($_POST['plate_number'] ?? '');
+            $vehicle_type = trim($_POST['vehicle_type'] ?? '');
+            $logistic_provider = trim($_POST['logistic_provider'] ?? '');
             $lotIdsRaw = $_POST['lot_ids'] ?? '';
             $delivery_date = $_POST['delivery_date'] ?? date('Y-m-d');
             $remarks = $_POST['remarks'] ?? '';
-            if (empty($po_id) || empty($dr_number) || empty($lotIdsRaw)) {
+            if (empty($po_id) || empty($dr_number) || empty($lotIdsRaw) || empty($plate_number) || empty($vehicle_type) || empty($logistic_provider)) {
                 $_SESSION['error'] = 'Missing required fields for delivery.';
                 header('Location: ?controller=warehouse&action=deliveries');
                 exit;
@@ -1106,11 +1101,14 @@ class WarehouseController {
             $firstPoiId = null;
             foreach ($pairs as $pair) {
                 $parts = explode(':', $pair);
-                if (count($parts) < 2 || count($parts) > 3) continue;
+                if (count($parts) < 2) continue;
                 $lotId = intval($parts[0]);
                 $deliveryQty = intval($parts[1]);
-                $actualConversion = (!empty($parts[2]) && is_numeric($parts[2])) ? intval($parts[2]) : null;
+                $returnedQty = (count($parts) >= 3) ? intval($parts[2]) : 0;
+                $actualConversion = (count($parts) >= 4 && !empty($parts[3]) && is_numeric($parts[3])) ? intval($parts[3]) : null;
                 if ($lotId <= 0 || $deliveryQty <= 0) continue;
+                if ($returnedQty < 0) $returnedQty = 0;
+                if ($returnedQty > $deliveryQty) $returnedQty = $deliveryQty;
                 $lot = $this->warehouseModel->getLotById($lotId);
                 if (!$lot) continue;
                 $poiId = $lot['poi_id'] ?? null;
@@ -1127,15 +1125,20 @@ class WarehouseController {
                         $totalRemaining += $rem;
                     }
                     if ($deliveryQty > $totalRemaining) $deliveryQty = $totalRemaining;
+                    if ($returnedQty > $deliveryQty) $returnedQty = $deliveryQty;
                     $toSplit = $deliveryQty;
+                    $toSplitRet = $returnedQty;
                     $siblingCount = count($siblings);
                     foreach ($siblings as $idx => $sib) {
                         $sibId = $sib['lot_id'];
                         if ($idx === $siblingCount - 1) {
                             $sibQty = $toSplit;
+                            $sibRet = $toSplitRet;
                         } else {
                             $sibQty = ($totalRemaining > 0) ? round($deliveryQty * $remMap[$sibId] / $totalRemaining) : 0;
+                            $sibRet = ($deliveryQty > 0) ? round($returnedQty * $sibQty / $deliveryQty) : 0;
                             $toSplit -= $sibQty;
+                            $toSplitRet -= $sibRet;
                         }
                         if ($sibQty > 0) {
                             $item = $this->warehouseModel->getItemByPoiId($poiId);
@@ -1146,6 +1149,7 @@ class WarehouseController {
                                 'item_code' => $item['item_code'] ?? '',
                                 'item_description' => $item['item_description'] ?? '',
                                 'qty' => $sibQty,
+                                'returned_qty' => $sibRet,
                                 'item_uom' => $item['item_uom'] ?? '',
                                 'uom_conversion' => $item['uom_conversion'] ?? null,
                                 'actual_uom_conversion' => $actualConversion,
@@ -1156,6 +1160,7 @@ class WarehouseController {
                 } else {
                     $remaining = $this->warehouseModel->getLotRemaining($lotId);
                     if ($deliveryQty > $remaining) $deliveryQty = $remaining;
+                    if ($returnedQty > $deliveryQty) $returnedQty = $deliveryQty;
                     if ($deliveryQty <= 0) continue;
                     $item = $this->warehouseModel->getItemByPoiId($poiId);
                     $lotItems[] = [
@@ -1165,6 +1170,7 @@ class WarehouseController {
                         'item_code' => $item['item_code'] ?? '',
                         'item_description' => $item['item_description'] ?? '',
                         'qty' => $deliveryQty,
+                        'returned_qty' => $returnedQty,
                         'item_uom' => $item['item_uom'] ?? '',
                         'uom_conversion' => $item['uom_conversion'] ?? null,
                         'actual_uom_conversion' => $actualConversion,
@@ -1177,6 +1183,20 @@ class WarehouseController {
                 header('Location: ?controller=warehouse&action=deliveries');
                 exit;
             }
+            // Group lot_items by lot_number to merge same lots
+            $groupedLotItems = [];
+            foreach ($lotItems as $li) {
+                $key = $li['lot_number'] ?? uniqid();
+                if (!isset($groupedLotItems[$key])) {
+                    $groupedLotItems[$key] = $li;
+                    $groupedLotItems[$key]['qty'] = 0;
+                }
+                $groupedLotItems[$key]['qty'] += intval($li['qty'] ?? 0);
+                if (isset($li['returned_qty'])) {
+                    $groupedLotItems[$key]['returned_qty'] = ($groupedLotItems[$key]['returned_qty'] ?? 0) + intval($li['returned_qty']);
+                }
+            }
+            $lotItems = array_values($groupedLotItems);
             $deliveryId = $this->warehouseModel->createDelivery([
                 'po_id' => $po_id,
                 'poi_id' => $firstPoiId,
@@ -1184,9 +1204,9 @@ class WarehouseController {
                 'delivery_date' => $delivery_date,
                 'delivery_quantity' => $totalQty,
                 'dr_number' => $dr_number,
-                'plate_number' => trim($_POST['plate_number'] ?? ''),
-                'vehicle_type' => trim($_POST['vehicle_type'] ?? ''),
-                'logistic_provider' => trim($_POST['logistic_provider'] ?? ''),
+                'plate_number' => $plate_number,
+                'vehicle_type' => $vehicle_type,
+                'logistic_provider' => $logistic_provider,
                 'lot_items' => json_encode($lotItems),
                 'remarks' => $remarks
             ]);
@@ -1506,6 +1526,17 @@ class WarehouseController {
                 echo json_encode(['error' => 'No available lots found']);
                 exit;
             }
+            // Group lot_items by lot_number to merge same lots
+            $groupedLotItems = [];
+            foreach ($lotItems as $li) {
+                $key = $li['lot_number'] ?? uniqid();
+                if (!isset($groupedLotItems[$key])) {
+                    $groupedLotItems[$key] = $li;
+                    $groupedLotItems[$key]['qty'] = 0;
+                }
+                $groupedLotItems[$key]['qty'] += intval($li['qty'] ?? 0);
+            }
+            $lotItems = array_values($groupedLotItems);
             $this->warehouseModel->createDelivery([
                 'po_id' => $po_id,
                 'poi_id' => $firstPoiId,

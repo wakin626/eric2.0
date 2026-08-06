@@ -193,11 +193,11 @@
                 $qty = $d['delivery_quantity'] ?? 0;
                 $conv = $d['actual_uom_conversion'] ?? $d['uom_conversion'] ?? null;
                 $itemUom = $d['item_uom'] ?? '';
-                $cases = ($conv && $itemUom !== 'CS') ? floor($qty / $conv) : 0;
+                $cases = ($conv && $itemUom !== 'CASE') ? floor($qty / $conv) : 0;
 
                 $descParts = [];
                 if (!empty($d['item_description'])) $descParts[] = $d['item_description'];
-                if ($cases > 0) $descParts[] = $cases . ' CS';
+                if ($cases > 0) $descParts[] = $cases . ' CASE';
                 if (!empty($d['lot_number'])) $descParts[] = $d['lot_number'];
                 $fullDesc = implode(' | ', $descParts);
             ?>

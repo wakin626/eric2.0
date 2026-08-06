@@ -1031,7 +1031,7 @@ class WarehouseModel extends BaseModel {
                 ORDER BY delivery_date ASC, delivery_id ASC");
         $stmt->execute(['po_id' => $po_id]);
         $jsonDelivered = [];
-        $deliveryEvents = [];
+        $returnedConsumed = [];
         while ($r = $stmt->fetch()) {
             $items = json_decode($r['lot_items'], true);
             if (!is_array($items)) continue;
@@ -1040,53 +1040,25 @@ class WarehouseModel extends BaseModel {
                     $lid = intval($li['lot_id']);
                     $qty = intval($li['qty'] ?? 0);
                     $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + $qty;
-                    $deliveryEvents[$lid][] = ['type' => 'delivery', 'date' => $r['delivery_date'], 'qty' => $qty];
+                    $returnedConsumed[$lid] = ($returnedConsumed[$lid] ?? 0) + intval($li['returned_qty'] ?? 0);
                 }
             }
         }
 
         $jsonBackloaded = [];
-        $backloadEvents = [];
-        $blStmt = $conn->prepare("SELECT b.lot_id, b.quantity, b.backload_date
-                FROM backloads b WHERE b.po_id = :po_id AND b.`remove` = 0
-                ORDER BY b.backload_date ASC, b.backload_id ASC");
+        $blStmt = $conn->prepare("SELECT b.lot_id, b.quantity
+                FROM backloads b WHERE b.po_id = :po_id AND b.`remove` = 0");
         $blStmt->execute(['po_id' => $po_id]);
         while ($bl = $blStmt->fetch()) {
             $lid = intval($bl['lot_id']);
-            $qty = intval($bl['quantity']);
-            $jsonBackloaded[$lid] = ($jsonBackloaded[$lid] ?? 0) + $qty;
-            $backloadEvents[$lid][] = ['type' => 'backload', 'date' => $bl['backload_date'], 'qty' => $qty];
+            $jsonBackloaded[$lid] = ($jsonBackloaded[$lid] ?? 0) + intval($bl['quantity']);
         }
 
-        $lotActiveBackloaded = [];
-        $allLotIds = array_unique(array_merge(array_keys($deliveryEvents), array_keys($backloadEvents)));
-        foreach ($allLotIds as $lid) {
-            $events = array_merge($deliveryEvents[$lid] ?? [], $backloadEvents[$lid] ?? []);
-            usort($events, function($a, $b) {
-                $cmp = strcmp($a['date'], $b['date']);
-                if ($cmp !== 0) return $cmp;
-                if ($a['type'] === 'backload' && $b['type'] !== 'backload') return -1;
-                if ($a['type'] !== 'backload' && $b['type'] === 'backload') return 1;
-                return 0;
-            });
-            $pool = 0;
-            foreach ($events as $evt) {
-                if ($evt['type'] === 'backload') {
-                    $pool += $evt['qty'];
-                } else {
-                    $pool = max(0, $pool - $evt['qty']);
-                }
-            }
-            $lotActiveBackloaded[$lid] = $pool;
-        }
-
-        // Get normal PO items
         $stmtPoi = $conn->prepare("SELECT poi_id, item_id FROM purchase_order_items WHERE po_id = :po_id");
         $stmtPoi->execute(['po_id' => $po_id]);
         $normalItems = $stmtPoi->fetchAll();
         $normalPoiIds = array_column($normalItems, 'poi_id');
 
-        // Get advance items consumed by this PO, mapped to normal poi_id
         $stmtAdv = $conn->prepare("SELECT advance_poi_id, normal_poi_id FROM advance_production_consumption WHERE normal_po_id = :po_id");
         $stmtAdv->execute(['po_id' => $po_id]);
         $advanceMap = [];
@@ -1094,10 +1066,7 @@ class WarehouseModel extends BaseModel {
             $advanceMap[$row['advance_poi_id']] = $row['normal_poi_id'];
         }
 
-        // All poi_ids to fetch lots from
-        $allPoiIds = array_merge($normalPoiIds, array_keys($advanceMap));
-        $allPoiIds = array_unique($allPoiIds);
-
+        $allPoiIds = array_unique(array_merge($normalPoiIds, array_keys($advanceMap)));
         if (empty($allPoiIds)) return [];
 
         $placeholders = implode(',', array_fill(0, count($allPoiIds), '?'));
@@ -1105,22 +1074,22 @@ class WarehouseModel extends BaseModel {
                 WHERE l.poi_id IN ($placeholders) AND l.`is_removed` = 0");
         $stmt2->execute(array_values($allPoiIds));
         $lots = $stmt2->fetchAll();
-        $result = [];
+
         $merged = [];
         foreach ($lots as $lot) {
-            // Remap advance lots to normal PO's poi_id so JS groups them correctly
             if (isset($advanceMap[$lot['poi_id']])) {
                 $lot['poi_id'] = $advanceMap[$lot['poi_id']];
             }
-            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lot['lot_id']] ?? 0) + ($jsonBackloaded[$lot['lot_id']] ?? 0));
-            $lot['backloaded_qty'] = $lotActiveBackloaded[$lot['lot_id']] ?? 0;
+            $lid = $lot['lot_id'];
+            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lid] ?? 0) + ($jsonBackloaded[$lid] ?? 0));
+            $lot['backloaded_qty'] = max(0, ($jsonBackloaded[$lid] ?? 0) - ($returnedConsumed[$lid] ?? 0));
             if ($lot['available_quantity'] <= 0) continue;
 
             $key = $lot['lot_number'] . '_' . $lot['poi_id'];
             if (isset($merged[$key])) {
                 $merged[$key]['available_quantity'] += $lot['available_quantity'];
                 $merged[$key]['quantity_produced'] += $lot['quantity_produced'];
-                $merged[$key]['backloaded_qty'] = ($merged[$key]['backloaded_qty'] ?? 0) + ($lot['backloaded_qty'] ?? 0);
+                $merged[$key]['backloaded_qty'] += $lot['backloaded_qty'];
             } else {
                 $merged[$key] = $lot;
             }
@@ -1142,66 +1111,50 @@ class WarehouseModel extends BaseModel {
         $stmt = $conn->prepare($sql);
         $stmt->execute(['poi_id' => $poi_id]);
         $lots = $stmt->fetchAll();
-        $stmt2 = $conn->prepare("SELECT delivery_id, delivery_date, lot_items FROM deliveries 
-                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0
-                ORDER BY delivery_date ASC, delivery_id ASC");
+
+        $stmt2 = $conn->prepare("SELECT delivery_id, lot_items FROM deliveries 
+                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0");
         $stmt2->execute(['po_id' => $po_id]);
         $jsonDelivered = [];
-        $deliveryEvents = [];
+        $returnedConsumed = [];
         while ($r = $stmt2->fetch()) {
             $items = json_decode($r['lot_items'], true);
             if (!is_array($items)) continue;
             foreach ($items as $li) {
                 if (isset($li['lot_id'])) {
                     $lid = intval($li['lot_id']);
-                    $qty = intval($li['qty'] ?? 0);
-                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + $qty;
-                    $deliveryEvents[$lid][] = ['type' => 'delivery', 'date' => $r['delivery_date'], 'qty' => $qty];
+                    $jsonDelivered[$lid] = ($jsonDelivered[$lid] ?? 0) + intval($li['qty'] ?? 0);
+                    $returnedConsumed[$lid] = ($returnedConsumed[$lid] ?? 0) + intval($li['returned_qty'] ?? 0);
                 }
             }
         }
+
         $jsonBackloaded = [];
-        $backloadEvents = [];
-        $blStmt = $conn->prepare("SELECT b.lot_id, b.quantity, b.backload_date
+        $blStmt = $conn->prepare("SELECT b.lot_id, b.quantity
                 FROM backloads b INNER JOIN deliveries d ON b.delivery_id = d.delivery_id
-                WHERE d.po_id = :po_id AND b.`remove` = 0
-                ORDER BY b.backload_date ASC, b.backload_id ASC");
+                WHERE d.po_id = :po_id AND b.`remove` = 0");
         $blStmt->execute(['po_id' => $po_id]);
         while ($bl = $blStmt->fetch()) {
             $lid = intval($bl['lot_id']);
-            $qty = intval($bl['quantity']);
-            $jsonBackloaded[$lid] = ($jsonBackloaded[$lid] ?? 0) + $qty;
-            $backloadEvents[$lid][] = ['type' => 'backload', 'date' => $bl['backload_date'], 'qty' => $qty];
+            $jsonBackloaded[$lid] = ($jsonBackloaded[$lid] ?? 0) + intval($bl['quantity']);
         }
 
-        $lotActiveBackloaded = [];
-        $allLotIds = array_unique(array_merge(array_keys($deliveryEvents), array_keys($backloadEvents)));
-        foreach ($allLotIds as $lid) {
-            $events = array_merge($deliveryEvents[$lid] ?? [], $backloadEvents[$lid] ?? []);
-            usort($events, function($a, $b) {
-                $cmp = strcmp($a['date'], $b['date']);
-                if ($cmp !== 0) return $cmp;
-                if ($a['type'] === 'backload' && $b['type'] !== 'backload') return -1;
-                if ($a['type'] !== 'backload' && $b['type'] === 'backload') return 1;
-                return 0;
-            });
-            $pool = 0;
-            foreach ($events as $evt) {
-                if ($evt['type'] === 'backload') {
-                    $pool += $evt['qty'];
-                } else {
-                    $pool = max(0, $pool - $evt['qty']);
-                }
-            }
-            $lotActiveBackloaded[$lid] = $pool;
-        }
-
-        $result = [];
+        $merged = [];
         foreach ($lots as $lot) {
-            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lot['lot_id']] ?? 0) + ($jsonBackloaded[$lot['lot_id']] ?? 0));
-            $lot['backloaded_qty'] = $lotActiveBackloaded[$lot['lot_id']] ?? 0;
-            if ($lot['available_quantity'] > 0) $result[] = $lot;
+            $lid = $lot['lot_id'];
+            $lot['available_quantity'] = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lid] ?? 0) + ($jsonBackloaded[$lid] ?? 0));
+            $lot['backloaded_qty'] = max(0, ($jsonBackloaded[$lid] ?? 0) - ($returnedConsumed[$lid] ?? 0));
+            if ($lot['available_quantity'] <= 0) continue;
+            $key = $lot['lot_number'] . '_' . $lot['poi_id'];
+            if (isset($merged[$key])) {
+                $merged[$key]['available_quantity'] += $lot['available_quantity'];
+                $merged[$key]['quantity_produced'] += $lot['quantity_produced'];
+                $merged[$key]['backloaded_qty'] += $lot['backloaded_qty'];
+            } else {
+                $merged[$key] = $lot;
+            }
         }
+        $result = array_values($merged);
         usort($result, function($a, $b) { return strcmp($a['lot_number'], $b['lot_number']); });
         return $result;
     }
@@ -1651,6 +1604,21 @@ class WarehouseModel extends BaseModel {
                 }
                 unset($li);
 
+                // Group lot_items by lot_number to merge same lots
+                $groupedLotItems = [];
+                foreach ($lotItems as $li) {
+                    $key = $li['lot_number'] ?? uniqid();
+                    if (!isset($groupedLotItems[$key])) {
+                        $groupedLotItems[$key] = $li;
+                        $groupedLotItems[$key]['qty'] = 0;
+                    }
+                    $groupedLotItems[$key]['qty'] += intval($li['qty'] ?? 0);
+                    if (isset($li['returned_qty'])) {
+                        $groupedLotItems[$key]['returned_qty'] = ($groupedLotItems[$key]['returned_qty'] ?? 0) + intval($li['returned_qty']);
+                    }
+                }
+                $lotItems = array_values($groupedLotItems);
+
                 // Recalculate delivery_quantity
                 $newDeliveryQty = 0;
                 foreach ($lotItems as $li) {
@@ -2073,25 +2041,63 @@ class WarehouseModel extends BaseModel {
 
     public function syncExcessProduction() {
         $conn = self::getConnection();
-        $stmt = $conn->query("SELECT ep.excess_id, ep.customer_id, ep.item_id, ep.source_poi_id, ep.status
-            FROM excess_production ep WHERE ep.status != 'consumed'");
-        $records = $stmt->fetchAll();
 
-        foreach ($records as $rec) {
-            $actualStmt = $conn->prepare("SELECT SUM(GREATEST(0, poi.produced_quantity - poi.quantity)) as total_excess
-                FROM purchase_order_items poi
-                INNER JOIN purchase_orders po ON poi.po_id = po.po_id
-                WHERE po.customer_id = :customer_id AND poi.item_id = :item_id AND po.`remove` = 0");
-            $actualStmt->execute(['customer_id' => $rec['customer_id'], 'item_id' => $rec['item_id']]);
-            $result = $actualStmt->fetch();
-            $totalExcess = intval($result['total_excess'] ?? 0);
+        $excessStmt = $conn->query("SELECT poi.item_id, po.customer_id,
+                SUM(GREATEST(0, poi.produced_quantity - poi.quantity)) as total_excess
+            FROM purchase_order_items poi
+            INNER JOIN purchase_orders po ON poi.po_id = po.po_id
+            WHERE po.`remove` = 0
+            GROUP BY po.customer_id, poi.item_id
+            HAVING total_excess > 0");
+        $excessRows = $excessStmt->fetchAll();
 
-            if ($totalExcess <= 0) {
+        $existingStmt = $conn->query("SELECT excess_id, customer_id, item_id, excess_quantity
+            FROM excess_production WHERE status != 'consumed'");
+        $existingRecords = $existingStmt->fetchAll();
+        $existingMap = [];
+        foreach ($existingRecords as $er) {
+            $key = $er['customer_id'] . '_' . $er['item_id'];
+            $existingMap[$key] = $er;
+        }
+
+        $seenKeys = [];
+        foreach ($excessRows as $row) {
+            $key = $row['customer_id'] . '_' . $row['item_id'];
+            $seenKeys[$key] = true;
+            $totalExcess = intval($row['total_excess']);
+
+            if (isset($existingMap[$key])) {
+                $conn->prepare("UPDATE excess_production SET excess_quantity = :qty, status = 'pending' WHERE excess_id = :excess_id")
+                    ->execute(['qty' => $totalExcess, 'excess_id' => $existingMap[$key]['excess_id']]);
+            } else {
+                $bestPoi = $conn->prepare("SELECT poi.poi_id, poi.po_id
+                    FROM purchase_order_items poi
+                    INNER JOIN purchase_orders po ON poi.po_id = po.po_id
+                    WHERE po.customer_id = :customer_id AND poi.item_id = :item_id
+                      AND poi.produced_quantity > poi.quantity AND po.`remove` = 0
+                    ORDER BY (poi.produced_quantity - poi.quantity) DESC
+                    LIMIT 1");
+                $bestPoi->execute(['customer_id' => $row['customer_id'], 'item_id' => $row['item_id']]);
+                $best = $bestPoi->fetch();
+
+                if ($best) {
+                    $conn->prepare("INSERT INTO excess_production (customer_id, item_id, source_po_id, source_poi_id, excess_quantity, notes)
+                        VALUES (:customer_id, :item_id, :source_po_id, :source_poi_id, :excess_quantity, 'Auto-synced from production data')")
+                        ->execute([
+                            'customer_id' => $row['customer_id'],
+                            'item_id' => $row['item_id'],
+                            'source_po_id' => $best['po_id'],
+                            'source_poi_id' => $best['poi_id'],
+                            'excess_quantity' => $totalExcess,
+                        ]);
+                }
+            }
+        }
+
+        foreach ($existingMap as $key => $rec) {
+            if (!isset($seenKeys[$key])) {
                 $conn->prepare("DELETE FROM excess_production WHERE excess_id = :excess_id")
                     ->execute(['excess_id' => $rec['excess_id']]);
-            } else {
-                $conn->prepare("UPDATE excess_production SET excess_quantity = :qty, status = 'pending' WHERE excess_id = :excess_id")
-                    ->execute(['qty' => $totalExcess, 'excess_id' => $rec['excess_id']]);
             }
         }
     }
@@ -2457,8 +2463,10 @@ class WarehouseModel extends BaseModel {
                     SUM(pl.quantity_produced) as quantity_produced,
                     po.customer_po_number,
                     c.customer_name,
-                    u.full_name as created_by_name,
-                    i.uom_conversion
+                    MIN(u.full_name) as created_by_name,
+                    i.uom_conversion,
+                    i.item_description,
+                    i.item_code
                 FROM production_lots pl
                 LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
                 LEFT JOIN items i ON poi.item_id = i.item_id
@@ -2467,7 +2475,7 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN users u ON pl.created_by = u.user_id
                 WHERE pl.is_removed = 0
                   AND poi.item_id = :item_id
-                GROUP BY pl.lot_number, pl.po_id, po.customer_po_number, c.customer_name, u.full_name, i.uom_conversion
+                GROUP BY pl.lot_number, pl.po_id, po.customer_po_number, c.customer_name, i.uom_conversion, i.item_description, i.item_code
                 ORDER BY MIN(pl.lot_date) DESC, pl.lot_number DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['item_id' => $itemId]);
@@ -2508,14 +2516,15 @@ class WarehouseModel extends BaseModel {
         $sql = "SELECT 
                     pl.lot_number,
                     pl.po_id,
-                    pl.lot_id,
-                    pl.poi_id,
-                    pl.lot_date,
-                    pl.created_by,
-                    pl.quantity_produced,
+                    poi.item_id,
+                    MIN(pl.lot_id) as lot_id,
+                    MIN(pl.poi_id) as poi_id,
+                    MIN(pl.lot_date) as lot_date,
+                    MIN(pl.created_by) as created_by,
+                    SUM(pl.quantity_produced) as quantity_produced,
                     po.customer_po_number,
                     c.customer_name,
-                    u.full_name as created_by_name,
+                    MIN(u.full_name) as created_by_name,
                     i.uom_conversion,
                     i.item_code,
                     i.item_description
@@ -2526,7 +2535,8 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN customers c ON po.customer_id = c.customer_id
                 LEFT JOIN users u ON pl.created_by = u.user_id
                 WHERE pl.is_removed = 0
-                ORDER BY i.item_description ASC, pl.lot_date DESC, pl.lot_number DESC";
+                GROUP BY pl.lot_number, pl.po_id, poi.item_id, po.customer_po_number, c.customer_name, i.uom_conversion, i.item_code, i.item_description
+                ORDER BY i.item_description ASC, MIN(pl.lot_date) DESC, pl.lot_number DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         $lots = $stmt->fetchAll();
@@ -2542,10 +2552,31 @@ class WarehouseModel extends BaseModel {
             $allBackloaded[intval($bl['lot_id'])] = intval($bl['total_backloaded']);
         }
 
+        $lotIdMap = self::getConnection()->prepare(
+            "SELECT pl.lot_id, pl.lot_number, pl.po_id, poi.item_id
+                FROM production_lots pl
+                LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
+                WHERE pl.is_removed = 0"
+        );
+        $lotIdMap->execute();
+        $allLotIds = $lotIdMap->fetchAll();
+
+        $deliveredByKey = [];
+        foreach ($allLotIds as $lid) {
+            $key = $lid['lot_number'] . '_' . $lid['po_id'] . '_' . $lid['item_id'];
+            $deliveredByKey[$key] = ($deliveredByKey[$key] ?? 0) + ($allDelivered[intval($lid['lot_id'])] ?? 0);
+        }
+
         foreach ($lots as &$lot) {
-            $lotId = intval($lot['lot_id']);
-            $lot['quantity_delivered'] = $allDelivered[$lotId] ?? 0;
-            $lot['quantity_backloaded'] = $allBackloaded[$lotId] ?? 0;
+            $key = $lot['lot_number'] . '_' . $lot['po_id'] . '_' . $lot['item_id'];
+            $lot['quantity_delivered'] = $deliveredByKey[$key] ?? 0;
+            $lotBackloaded = 0;
+            foreach ($allLotIds as $lid) {
+                if ($lid['lot_number'] === $lot['lot_number'] && $lid['po_id'] == $lot['po_id'] && $lid['item_id'] == $lot['item_id']) {
+                    $lotBackloaded += $allBackloaded[intval($lid['lot_id'])] ?? 0;
+                }
+            }
+            $lot['quantity_backloaded'] = $lotBackloaded;
         }
         return $lots;
     }
@@ -2805,8 +2836,8 @@ class WarehouseModel extends BaseModel {
         $conn = self::getConnection();
         $conn->beginTransaction();
         try {
-            $conn->prepare("INSERT INTO backloads (delivery_id, po_id, poi_id, lot_id, lot_number, quantity, reason, backloaded_by, backload_date)
-                VALUES (:delivery_id, :po_id, :poi_id, :lot_id, :lot_number, :quantity, :reason, :backloaded_by, :backload_date)")
+            $conn->prepare("INSERT INTO backloads (delivery_id, po_id, poi_id, lot_id, lot_number, quantity, `cases`, reason, backloaded_by, backload_date)
+                VALUES (:delivery_id, :po_id, :poi_id, :lot_id, :lot_number, :quantity, :cases, :reason, :backloaded_by, :backload_date)")
                 ->execute([
                     'delivery_id' => $data['delivery_id'],
                     'po_id' => $data['po_id'],
@@ -2814,6 +2845,7 @@ class WarehouseModel extends BaseModel {
                     'lot_id' => $data['lot_id'],
                     'lot_number' => $data['lot_number'] ?? '',
                     'quantity' => $data['quantity'],
+                    'cases' => $data['cases'] ?? null,
                     'reason' => $data['reason'] ?? '',
                     'backloaded_by' => $data['backloaded_by'],
                     'backload_date' => $data['backload_date'] ?? date('Y-m-d')

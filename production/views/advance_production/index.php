@@ -290,6 +290,9 @@
                     <div id="singleItemGroup">
                         <input type="hidden" name="poi_id" id="updatePoiIdInput" value="">
                         <label class="form-label mb-2">Lot Entries</label>
+                        <div class="alert alert-warning py-1 px-2 mb-2 d-none no-conversion-warning">
+                            <i class="bi bi-exclamation-triangle"></i> This item has no case conversion. The value you enter in PCS to CASE will be saved as the default.
+                        </div>
                         <div id="singleLotContainer">
                             <div class="lot-entry mb-2 border rounded p-2 bg-light">
                                 <div class="row g-2 align-items-end single-lot-row">
@@ -346,6 +349,9 @@
                     <!-- Bulk items mode -->
                     <div id="bulkItemsGroup" class="d-none">
                         <label class="form-label mb-2">Items</label>
+                        <div class="alert alert-warning py-1 px-2 mb-2 d-none no-conversion-warning">
+                            <i class="bi bi-exclamation-triangle"></i> This item has no case conversion. The value you enter in PCS to CASE will be saved as the default.
+                        </div>
                         <div id="bulkItemsContainer"></div>
                         <button type="button" class="btn btn-primary btn-sm mt-2" id="addBulkItemBtn"><i class="bi bi-plus"></i> Add Item</button>
                     </div>
@@ -605,6 +611,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function checkConversionWarning(item) {
+        var warnings = document.querySelectorAll('.no-conversion-warning');
+        var hasNoConversion = !item || !item.uom_conversion || item.uom_conversion == 0 || item.uom_conversion === '';
+        warnings.forEach(function(el) {
+            if (hasNoConversion) {
+                el.classList.remove('d-none');
+            } else {
+                el.classList.add('d-none');
+            }
+        });
+    }
+
     function updateBulkRowInfo(selectEl) {
         const entry = selectEl.closest('.lot-entry');
         const row = selectEl.closest('.bulk-item-row');
@@ -615,8 +633,10 @@ document.addEventListener('DOMContentLoaded', function() {
             var conv = selected.getAttribute('data-conv') || '';
             var pcsInput = entry.querySelector('input[name="pcs_per_case[]"]');
             if (pcsInput) pcsInput.value = conv;
+            checkConversionWarning({ uom_conversion: conv });
         } else {
             infoInput.value = '';
+            checkConversionWarning(null);
         }
     }
 
@@ -756,6 +776,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         window._currentBulkItems = [];
                         const item = items[0];
                         window._currentSingleItem = item;
+                        checkConversionWarning(item);
                         document.getElementById('updatePoiIdInput').disabled = false;
                         document.getElementById('updatePoiIdInput').value = item.poi_id;
                         document.getElementById('updateItemName').textContent = item.item_description || '-';

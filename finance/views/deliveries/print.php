@@ -116,12 +116,11 @@
             text-align: left;
         }
 
-        /* ─── BODY: Item Row ─── */
+        /* ─── BODY: Item Row (two lines per item) ─── */
         .print-item-desc {
             position: absolute;
-            top: 3.95in;
             left: 0.76in;
-            width: 4.2in;
+            width: 6.5in;
             font-family: Calibri, sans-serif;
             font-size: 11pt;
             text-align: left;
@@ -130,63 +129,39 @@
             text-overflow: clip;
         }
 
-        .print-item-cases {
-            position: absolute;
-            top: 3.39in;
-            left: 4.09in;
-            width: 0.7in;
-            font-family: Calibri, sans-serif;
-            font-size: 10pt;
-            text-align: center;
-        }
-
         .print-item-lot {
             position: absolute;
-            top: 3.39in;
-            left: 3.50in;
-            width: 0.8in;
+            left: 1.50in;
+            width: 1.0in;
             font-family: Calibri, sans-serif;
             font-size: 10pt;
-            text-align: center;
+            text-align: left;
         }
 
-        .print-item-unit {
+        .print-item-cases-pcs {
             position: absolute;
-            top: 3.39in;
-            left: 4.56in;
-            width: 0.6in;
+            left: 2.60in;
+            width: 2.5in;
             font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            text-align: center;
-        }
-
-        .print-item-qty {
-            position: absolute;
-            top: 3.39in;
-            left: 4.81in;
-            width: 0.8in;
-            font-family: Calibri, sans-serif;
-            font-size: 11pt;
-            text-align: right;
+            font-size: 10pt;
+            text-align: left;
         }
 
         .print-item-price {
             position: absolute;
-            top: 3.39in;
             left: 5.60in;
             width: 0.8in;
             font-family: Calibri, sans-serif;
-            font-size: 11pt;
+            font-size: 10pt;
             text-align: right;
         }
 
         .print-item-amount {
             position: absolute;
-            top: 3.50in;
             left: 6.46in;
             width: 1.1in;
             font-family: Calibri, sans-serif;
-            font-size: 11pt;
+            font-size: 10pt;
             text-align: right;
         }
 
@@ -348,20 +323,30 @@
     <div class="print-po-number"><?= htmlspecialchars($po_number) ?></div>
     <div class="print-dr-number"><?= htmlspecialchars($dr_number) ?></div>
 
-    <!-- BODY: Item Rows -->
+    <!-- BODY: Item Rows (grouped by item description) -->
     <?php
-    $rowTop = 3.45;
-    $rowHeight = 0.30;
-    foreach ($items as $idx => $item):
+    $currentTop = 3.45;
+    $prevDesc = null;
+    foreach ($items as $item):
+        $isNewGroup = ($item['item_description'] !== $prevDesc);
+        if ($isNewGroup):
     ?>
-    <div class="print-item-desc" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_description']) ?></div>
-    <div class="print-item-lot" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['lot_number'] ?? '') ?></div>
-    <div class="print-item-cases" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= $item['cases'] > 0 ? $item['cases'] . ' CS' : '' ?></div>
-    <div class="print-item-unit" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= htmlspecialchars($item['item_uom']) ?></div>
-    <div class="print-item-qty" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['qty']) ?></div>
-    <div class="print-item-price" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['price'], 2) ?></div>
-    <div class="print-item-amount" style="top: <?= $rowTop + ($idx * $rowHeight) ?>in;"><?= number_format($item['amount'], 2) ?></div>
-    <?php endforeach; ?>
+    <div class="print-item-desc" style="top: <?= $currentTop ?>in;"><?= htmlspecialchars($item['item_description']) ?></div>
+    <?php
+            $currentTop += 0.22;
+            $prevDesc = $item['item_description'];
+        endif;
+        if ($item['cases'] > 0) {
+            $casesPcs = $item['cases'] . ' Case (' . number_format($item['qty']) . ' pcs)';
+        } else {
+            $casesPcs = '(' . number_format($item['qty']) . ' pcs)';
+        }
+    ?>
+    <div class="print-item-lot" style="top: <?= $currentTop ?>in;"><?= htmlspecialchars($item['lot_number'] ?? '') ?></div>
+    <div class="print-item-cases-pcs" style="top: <?= $currentTop ?>in;"><?= $casesPcs ?></div>
+    <div class="print-item-price" style="top: <?= $currentTop ?>in;"><?= number_format($item['price'], 2) ?></div>
+    <div class="print-item-amount" style="top: <?= $currentTop ?>in;"><?= number_format($item['amount'], 2) ?></div>
+    <?php $currentTop += 0.25; endforeach; ?>
 
     <!-- LEFT COLUMNS: VAT Breakdown -->
     <div class="print-vatable-sales"><?= $vatable_sales > 0 ? number_format($vatable_sales, 2) : '-' ?></div>

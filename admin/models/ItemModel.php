@@ -106,6 +106,12 @@ class ItemModel extends BaseModel {
         return $stmt->execute(['id' => $id]);
     }
 
+    public function updateConversion($item_id, $conversion) {
+        $sql = "UPDATE {$this->table} SET uom_conversion = :conv WHERE item_id = :id AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        return $stmt->execute(['conv' => $conversion, 'id' => $item_id]);
+    }
+
     public function toggleStatus($id) {
         $sql = "UPDATE {$this->table} SET status = NOT status WHERE item_id = :id AND `remove` = 0";
         $stmt = self::getConnection()->prepare($sql);

@@ -166,6 +166,7 @@ class ProductionController {
                             ];
                             $this->warehouseModel->updateItemProducedQuantity($poi_id, $addedQty, $_SESSION['user_id'], $lot, $itemDesc, $autoStsRef, $extraStsData);
                             $this->checkAndRecordExcess($poi_id, $po_id, $conn);
+                            $this->saveItemConversionIfNeeded($poi_id, intval($pcsPerCases[$i] ?? 0));
                             $poLabel = $poi['customer_po_number'] ?? $poi['po_number'] ?? 'PO item #' . $poi_id;
                             $lotText = $lot ? ' for lot ' . $lot : '';
                             $lotQtyText = $lot ? ' (lot quantity ' . $previousLotQty . ' → ' . $newLotQty . ')' : '';
@@ -186,7 +187,6 @@ class ProductionController {
                         }
                     }
                 } else {
-                    $poi_id = $_POST['poi_id'] ?? null;
                     $quantities = $_POST['added_quantity'] ?? [];
                     $lot_numbers = $_POST['lot_number'] ?? [];
                     if (!is_array($quantities)) $quantities = [$quantities];
@@ -222,6 +222,7 @@ class ProductionController {
                             ];
                             $this->warehouseModel->updateItemProducedQuantity($poi_id, $addedQty, $_SESSION['user_id'], $lot, $itemDesc, $autoStsRef, $extraStsData);
                             $this->checkAndRecordExcess($poi_id, $po_id, $conn);
+                            $this->saveItemConversionIfNeeded($poi_id, intval($pcsPerCases[$i] ?? 0));
                             $poLabel = $poi['customer_po_number'] ?? $poi['po_number'] ?? 'PO item #' . $poi_id;
                             $lotText = $lot ? ' for lot ' . $lot : '';
                             $lotQtyText = $lot ? ' (lot quantity ' . $previousLotQty . ' → ' . $newLotQty . ')' : '';
@@ -616,5 +617,18 @@ class ProductionController {
         include __DIR__ . "/../views/{$view}.php";
         $content = ob_get_clean();
         include __DIR__ . "/../views/layouts/main.php";
+    }
+
+    private function saveItemConversionIfNeeded($poi_id, $pcs_per_case) {
+        if ($pcs_per_case <= 0) return;
+        $conn = \App\Core\BaseModel::getConnection();
+        $stmt = $conn->prepare("SELECT poi.item_id, i.uom_conversion FROM purchase_order_items poi JOIN items i ON poi.item_id = i.item_id WHERE poi.poi_id = :poi_id AND i.`remove` = 0");
+        $stmt->execute(['poi_id' => $poi_id]);
+        $row = $stmt->fetch();
+        if (!$row) return;
+        if (empty($row['uom_conversion']) || $row['uom_conversion'] == 0) {
+            $update = $conn->prepare("UPDATE items SET uom_conversion = :conv WHERE item_id = :id AND `remove` = 0");
+            $update->execute(['conv' => $pcs_per_case, 'id' => $row['item_id']]);
+        }
     }
 }
