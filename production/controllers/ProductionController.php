@@ -187,6 +187,7 @@ class ProductionController {
                         }
                     }
                 } else {
+                    $poi_id = $_POST['poi_id'] ?? null;
                     $quantities = $_POST['added_quantity'] ?? [];
                     $lot_numbers = $_POST['lot_number'] ?? [];
                     if (!is_array($quantities)) $quantities = [$quantities];
