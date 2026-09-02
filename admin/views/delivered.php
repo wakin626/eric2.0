@@ -48,11 +48,7 @@
                     <option value="<?= htmlspecialchars($u) ?>" <?= ($filterDeliveredBy ?? '') === $u ? 'selected' : '' ?>><?= htmlspecialchars($u) ?></option>
                 <?php endforeach; ?>
             </select>
-            <select name="filter_type" class="form-select form-select-sm filter-select" style="width:130px" onchange="this.form.submit()">
-                <option value="">All Types</option>
-                <option value="normal" <?= ($filterType ?? '') === 'normal' ? 'selected' : '' ?>>Normal</option>
-                <option value="advance" <?= ($filterType ?? '') === 'advance' ? 'selected' : '' ?>>Advance</option>
-            </select>
+
             <input type="date" name="filter_date" class="form-control form-control-sm" style="width:150px" value="<?= htmlspecialchars($filterDate ?? '') ?>" title="Filter by Delivery Date" onchange="this.form.submit()">
         </form>
         <a href="?controller=admin&action=delivered" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
@@ -66,7 +62,7 @@
             <input type="hidden" name="filter_dr" value="<?= htmlspecialchars($filterDR ?? '') ?>">
             <input type="hidden" name="filter_po" value="<?= htmlspecialchars($filterPo ?? '') ?>">
             <input type="hidden" name="filter_delivered_by" value="<?= htmlspecialchars($filterDeliveredBy ?? '') ?>">
-            <input type="hidden" name="filter_type" value="<?= htmlspecialchars($filterType ?? '') ?>">
+
             <input type="hidden" name="filter_date" value="<?= htmlspecialchars($filterDate ?? '') ?>">
             <?php if ($filterReports ?? false): ?>
             <input type="hidden" name="filter_reports" value="1">
@@ -91,7 +87,6 @@
                     <th>Quantity</th>
                     <th>Delivery Date</th>
                     <th>Cases</th>
-                    <th>Type</th>
                     <th>Remarks</th>
                     <th>Report / Edit</th>
                     <th>Delivered By</th>
@@ -197,13 +192,6 @@
                         ?>
                     </td>
                     <td>
-                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
-                            <span class="badge bg-info">Advance</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Normal</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
                         <?php if (!empty($d['remarks'])): ?>
                             <span><?= htmlspecialchars($d['remarks']) ?></span>
                         <?php else: ?>
@@ -254,7 +242,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php else: ?>
-                <tr><td colspan="13" class="text-center text-muted py-4">No delivery records found</td></tr>
+                <tr><td colspan="12" class="text-center text-muted py-4">No delivery records found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -265,7 +253,7 @@
 <?php
 $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages);
 $pageParams = 'controller=admin&action=delivered';
-foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 'filter_delivered_by', 'filter_type', 'filter_date', 'filter_reports'] as $p) {
+foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 'filter_delivered_by', 'filter_date', 'filter_reports'] as $p) {
     $val = $GLOBALS['_GET'][$p] ?? $$p ?? '';
     if ($val !== '') $pageParams .= '&' . $p . '=' . urlencode($val);
 }

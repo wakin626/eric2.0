@@ -115,14 +115,14 @@ $formatValues = function($json) use ($humanize, $display) {
             <?php if (!$departmentLocked): ?>
             <select name="department" class="form-select form-select-sm" style="width:140px">
                 <option value="">All Depts</option>
-                <?php foreach (['admin', 'warehouse', 'production', 'finance'] as $d): ?>
+                <?php foreach (['admin', 'warehouse', 'production', 'finance', 'qc', 'qa'] as $d): ?>
                     <option value="<?= $d ?>" <?= ($filters['department'] ?? '') === $d ? 'selected' : '' ?>><?= ucfirst($d) ?></option>
                 <?php endforeach; ?>
             </select>
 
             <select name="module" class="form-select form-select-sm" style="width:140px">
                 <option value="">All Modules</option>
-                <?php foreach (['auth', 'admin', 'warehouse', 'production', 'finance'] as $m): ?>
+                <?php foreach (['auth', 'admin', 'warehouse', 'production', 'finance', 'qc', 'qa'] as $m): ?>
                     <option value="<?= $m ?>" <?= ($filters['module'] ?? '') === $m ? 'selected' : '' ?>><?= ucfirst($m) ?></option>
                 <?php endforeach; ?>
             </select>

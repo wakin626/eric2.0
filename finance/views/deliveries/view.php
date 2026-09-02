@@ -14,7 +14,10 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-receipt me-2"></i>Sales Invoice Information</span>
                 <?php if (!empty($delivery['si_number'])): ?>
-                    <span class="badge bg-success fs-6"><?= htmlspecialchars($delivery['si_number']) ?></span>
+                    <span class="badge bg-success fs-6 me-2"><?= htmlspecialchars($delivery['si_number']) ?></span>
+                    <button type="button" class="btn btn-sm btn-outline-warning" onclick="openEditSIModal()" title="Edit SI Number">
+                        <i class="bi bi-pencil"></i>
+                    </button>
                 <?php endif; ?>
             </div>
             <div class="card-body">
@@ -56,6 +59,39 @@
                         <div class="modal-footer">
                             <button type="submit" class="btn btn-primary px-4">
                                 <i class="bi bi-check-circle me-1"></i>Save & Continue
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($delivery['si_number'])): ?>
+        <div class="modal fade" id="editSIModal" tabindex="-1" aria-labelledby="editSIModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning">
+                        <h5 class="modal-title" id="editSIModalLabel"><i class="bi bi-pencil-square me-2"></i>Edit Sales Invoice Number</h5>
+                        <button type="button" class="btn-close" aria-label="Close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="?controller=finance&action=saveSINumber" onsubmit="return confirmSIEdit();">
+                        <div class="modal-body">
+                            <input type="hidden" name="delivery_id" value="<?= $delivery['delivery_id'] ?>">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">SI Number</label>
+                                <input type="text" name="si_number" id="editSINumberInput" class="form-control form-control-lg" placeholder="e.g. SI-00001" required>
+                                <div class="form-text">Update the SI number for this delivery. This will reflect across all modules.</div>
+                            </div>
+                            <div class="alert alert-warning py-2 mb-0">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>Warning:</strong> Changing the SI number will update it everywhere (Finance, Admin, Warehouse reports).
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-check-circle me-1"></i>Update SI Number
                             </button>
                         </div>
                     </form>
@@ -229,5 +265,25 @@ document.addEventListener('DOMContentLoaded', function() {
     var modal = new bootstrap.Modal(document.getElementById('siModal'));
     modal.show();
 });
+</script>
+<?php endif; ?>
+
+<?php if (!empty($delivery['si_number'])): ?>
+<script>
+function openEditSIModal() {
+    var currentSI = '<?= addslashes($delivery['si_number']) ?>';
+    document.getElementById('editSINumberInput').value = currentSI;
+    var modal = new bootstrap.Modal(document.getElementById('editSIModal'));
+    modal.show();
+}
+
+function confirmSIEdit() {
+    var newSI = document.getElementById('editSINumberInput').value.trim();
+    var currentSI = '<?= addslashes($delivery['si_number']) ?>';
+    if (newSI === currentSI) {
+        return true;
+    }
+    return confirm('Are you sure you want to change the SI number from "' + currentSI + '" to "' + newSI + '"?\n\nThis change will reflect across Finance, Admin, and Warehouse modules.');
+}
 </script>
 <?php endif; ?>

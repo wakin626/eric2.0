@@ -12,6 +12,12 @@
         <select id="filterItem" class="form-select form-select-sm filter-select" style="width:200px">
             <option value="">All Items</option>
         </select>
+        <select id="filterSI" class="form-select form-select-sm filter-select" style="width:200px">
+            <option value="">All SI Numbers</option>
+            <?php foreach (($allSINumbers ?? []) as $si): ?>
+                <option value="<?= htmlspecialchars($si) ?>" <?= ($filterSI ?? '') === $si ? 'selected' : '' ?>><?= htmlspecialchars($si) ?></option>
+            <?php endforeach; ?>
+        </select>
         <a href="?controller=finance&action=deliveries" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
         <div class="search-box" style="width: 250px;">
             <form method="GET" class="d-flex align-items-center">
@@ -19,6 +25,7 @@
                 <input type="hidden" name="action" value="deliveries">
                 <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
                 <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
+                <input type="hidden" name="filter_si" value="<?= htmlspecialchars($filterSI ?? '') ?>">
                 <i class="bi bi-search"></i>
                 <input type="text" name="search" id="searchDelivery" class="form-control" placeholder="Search sales invoice..." value="<?= htmlspecialchars($search ?? '') ?>">
             </form>
@@ -38,7 +45,6 @@
                     <th>Quantity</th>
                     <th class="sortable" data-sort="dr_number">DR No. <i class="bi bi-chevron-expand"></i></th>
                     <th>SI Number</th>
-                    <th>Type</th>
                     <th class="sortable" data-sort="by">Delivered By <i class="bi bi-chevron-expand"></i></th>
                     <th class="text-center">Actions</th>
                 </tr>
@@ -78,11 +84,7 @@
                 ?>
                 <tr data-date="<?= date('Y-m-d', strtotime($d['delivery_date'])) ?>">
                     <td><strong class="text-primary">
-                    <?php
-                    $dPoiId = $d['poi_id'] ?? null;
-                    $dNormalCr = $dPoiId ? (($normal_consumption_records ?? [])[$dPoiId] ?? []) : [];
-                    if (!empty($dNormalCr)):
-                    ?><span style="opacity:0.75"><?= htmlspecialchars($dNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?>
+                    <?= htmlspecialchars($d['customer_po_number'] ?? '-') ?>
                     </strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><?= implode('', $itemLines) ?></td>
@@ -94,13 +96,6 @@
                             <strong class="text-success"><?= htmlspecialchars($siNumber) ?></strong>
                         <?php else: ?>
                             <span class="text-muted">—</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
-                            <span class="badge bg-info">Advance</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Normal</span>
                         <?php endif; ?>
                     </td>
                     <td><?= htmlspecialchars($d['delivered_by_name'] ?? '-') ?></td>
@@ -125,7 +120,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($deliveries)): ?>
-                <tr><td colspan="11" class="text-center text-muted py-4">No sales invoices found</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No sales invoices found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -134,7 +129,7 @@
 
 <?php if ($totalPages > 1): ?>
 <?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
-<?php $paginationParams = http_build_query(array_filter(['controller'=>'finance','action'=>'deliveries','search'=>$search??'','filter_customer'=>$filterCustomer??'','filter_item'=>$filterItem??''])); ?>
+<?php $paginationParams = http_build_query(array_filter(['controller'=>'finance','action'=>'deliveries','search'=>$search??'','filter_customer'=>$filterCustomer??'','filter_item'=>$filterItem??'','filter_si'=>$filterSI??''])); ?>
 <?php $paginationBase = '?' . $paginationParams . (strpos($paginationParams, '&') !== false ? '&' : '') . 'page='; ?>
 <nav>
     <ul class="pagination justify-content-center mt-4">
@@ -168,6 +163,8 @@ function applyDeliveryFilters() {
     if (c && c.value) params.set('filter_customer', c.value);
     var i = document.getElementById('filterItem');
     if (i && i.value) params.set('filter_item', i.value);
+    var si = document.getElementById('filterSI');
+    if (si && si.value) params.set('filter_si', si.value);
     window.location.href = '?' + params.toString();
 }
 
@@ -187,6 +184,7 @@ function populateDeliveryFilters() {
 
 document.getElementById('filterCustomer').addEventListener('change', applyDeliveryFilters);
 document.getElementById('filterItem').addEventListener('change', applyDeliveryFilters);
+document.getElementById('filterSI').addEventListener('change', applyDeliveryFilters);
 
 var _searchTimer;
 document.getElementById('searchDelivery').addEventListener('input', function() {

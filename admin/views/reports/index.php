@@ -122,12 +122,11 @@ $pendingCount = 0;
 $poNumbers = [];
 $itemNames = [];
 foreach ($poItems as $item) {
-    $produced = intval($item['produced_quantity']);
     $delivered = intval($item['delivered_quantity']);
     $ordered = intval($item['po_qty']);
     if ($delivered >= $ordered) {
         $completedCount++;
-    } elseif ($produced > 0) {
+    } elseif ($delivered > 0) {
         $inProgressCount++;
     } else {
         $pendingCount++;
@@ -161,12 +160,11 @@ if ($filterItem !== '') {
 }
 if ($filterStatus !== '') {
     $filteredItems = array_filter($filteredItems, function($i) use ($filterStatus) {
-        $p = intval($i['produced_quantity']);
         $d = intval($i['delivered_quantity']);
         $q = intval($i['po_qty']);
         if ($filterStatus === 'completed') return $p >= $q && $d >= $q;
-        if ($filterStatus === 'in-progress') return $p > 0 && ($p < $q || $d < $q);
-        if ($filterStatus === 'pending') return $p === 0;
+        if ($filterStatus === 'in-progress') return $d > 0 && $d < $q;
+        if ($filterStatus === 'pending') return $d === 0;
         return true;
     });
 }
@@ -288,7 +286,6 @@ if (!empty($_GET['lot_item_id'])) $baseUrl .= '&lot_item_id=' . urlencode($_GET[
                         <th>Item Code</th>
                         <th>Item</th>
                         <th class="text-end">PO Qty</th>
-                        <th class="text-end">Produced</th>
                         <th class="text-end">Delivered</th>
                         <th class="text-end">Balance</th>
                         <th class="text-center">Status</th>
@@ -300,14 +297,13 @@ if (!empty($_GET['lot_item_id'])) $baseUrl .= '&lot_item_id=' . urlencode($_GET[
                     <?php else: ?>
                         <?php foreach ($pageItems as $item):
                             $ordered = intval($item['po_qty']);
-                            $produced = intval($item['produced_quantity']);
                             $delivered = intval($item['delivered_quantity']);
                             $balance = $ordered - $delivered;
                             $uomConv = intval($item['uom_conversion'] ?? 0);
-                            if ($produced >= $ordered && $delivered >= $ordered) {
+                            if ($delivered >= $ordered) {
                                 $status = 'Completed';
                                 $badgeClass = 'bg-success';
-                            } elseif ($produced > 0) {
+                            } elseif ($delivered > 0) {
                                 $status = 'In Progress';
                                 $badgeClass = 'bg-warning text-dark';
                             } else {
@@ -321,7 +317,6 @@ if (!empty($_GET['lot_item_id'])) $baseUrl .= '&lot_item_id=' . urlencode($_GET[
                                 <td><?= htmlspecialchars($item['item_code'] ?? '') ?></td>
                                 <td><?= htmlspecialchars($item['item_description']) ?></td>
                                 <td class="text-end"><?= number_format($ordered) ?><?php if ($uomConv > 0): ?> <small class="text-muted">/ <?= number_format(intval($ordered / $uomConv)) ?> cs</small><?php endif; ?></td>
-                                <td class="text-end"><?= number_format($produced) ?><?php if ($uomConv > 0): ?> <small class="text-muted">/ <?= number_format(intval($produced / $uomConv)) ?> cs</small><?php endif; ?></td>
                                 <td class="text-end"><?= number_format($delivered) ?><?php if ($uomConv > 0): ?> <small class="text-muted">/ <?= number_format(intval($delivered / $uomConv)) ?> cs</small><?php endif; ?></td>
                                 <td class="text-end"><?= number_format($balance) ?><?php if ($uomConv > 0): ?> <small class="text-muted">/ <?= number_format(intval($balance / $uomConv)) ?> cs</small><?php endif; ?></td>
                                 <td class="text-center"><span class="badge <?= $badgeClass ?>"><?= $status ?></span></td>

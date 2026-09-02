@@ -20,7 +20,7 @@
                     <th class="sortable" data-sort="po_number">PO Number</th>
                     <th>Customer</th>
                     <th>Item</th>
-                    <th class="sortable" data-sort="produced">Produced PO QTY</th>
+                    <th>Delivery Progress</th>
                     <th class="sortable" data-sort="available">Available</th>
                     <th>Type</th>
                     <th class="sortable" data-sort="date">Date Created</th>
@@ -33,16 +33,7 @@
                 ?>
                 <tr>
                     <td><strong class="text-primary">
-                    <?php
-                    $allNormalCr = [];
-                    if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
-                        foreach ($items as $item) {
-                            $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
-                            foreach ($ncrRecords as $ncr) { $allNormalCr[] = $ncr; }
-                        }
-                    }
-                    if (!empty($allNormalCr)):
-                    ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($po['customer_po_number']) ?>
+                    <?= htmlspecialchars($po['customer_po_number']) ?>
                     </strong></td>
                     <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
                     <td>
@@ -59,16 +50,19 @@
                         <?php if (!empty($items)): ?>
                             <?php foreach ($items as $idx => $item):
                                 $qty = $item['quantity'] ?? 0;
-                                $itemProduced = $item['produced_quantity'] ?? 0;
-                                $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
+                                $itemDelivered = intval($item['delivered_quantity'] ?? 0);
+                                $itemPercent = $qty > 0 ? min(100, round(($itemDelivered / $qty) * 100)) : 0;
+                                $statusLabel = $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $qty ? 'Fully Delivered' : 'Partial (' . ($qty - $itemDelivered) . ' left)');
+                                $statusClass = $itemDelivered >= $qty ? 'bg-success' : ($itemDelivered > 0 ? 'bg-warning text-dark' : 'bg-secondary');
                                 $isExcess = $itemProduced > $qty;
                             ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
                                 <div class="d-flex align-items-center">
                                     <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                        <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
+                                        <div class="progress-bar <?= $itemDelivered >= $qty ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                     </div>
-                                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
+                                    <small class="text-muted text-nowrap"><?= $itemDelivered ?>/<?= $qty ?> pcs</small>
+                                    <span class="badge <?= $statusClass ?> text-nowrap"><?= $statusLabel ?></span>
                                 </div>
                             <?php endforeach; ?>
                         <?php else: ?>
@@ -92,13 +86,7 @@
                             <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
-                    <td>
-                        <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
-                            <span class="badge bg-info">Advance</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Normal</span>
-                        <?php endif; ?>
-                    </td>
+                    <td><span class="badge bg-secondary">Normal</span></td>
                     <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-outline-primary" onclick="viewPODetails(<?= $po['po_id'] ?>)" title="View Details">
@@ -229,7 +217,7 @@ function viewPODetails(poId) {
                                 <th>Description</th>
                                 <th>UOM</th>
                                 <th>Quantity</th>
-                                <th>Production Progress</th>
+                                <th>Delivery Progress</th>
                                 <th>Delivered</th>
                                 <th>Remaining</th>
                             </tr>
@@ -238,12 +226,10 @@ function viewPODetails(poId) {
             if (items && items.length > 0) {
                 items.forEach(item => {
                     const qty = item.quantity || 0;
-                    const itemProduced = item.produced_quantity || 0;
                     const itemDelivered = item.delivered_quantity || 0;
                     const remaining = Math.max(0, qty - itemDelivered);
-                    const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                    const isExcess = itemProduced > qty;
-                    const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                    const itemPercent = qty > 0 ? Math.min(100, Math.round((itemDelivered / qty) * 100)) : 0;
+                    const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
                     const barWidth = Math.min(itemPercent, 100);
                     var conv = item.uom_conversion || null;
                     var deliveredText = itemDelivered + ' PCS' + (conv ? ' / ' + Math.floor(itemDelivered / conv) + ' CS' : '');
@@ -257,7 +243,7 @@ function viewPODetails(poId) {
                                 <div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">
                                     <div class="progress-bar ${barClass}" style="width: ${barWidth}%"></div>
                                 </div>
-                                <small class="text-muted">${itemProduced} pcs</small>
+                                <small class="text-muted">${itemDelivered}/${qty} pcs</small>
                             </div>
                         </td>
                         <td><small class="text-muted">${deliveredText}</small></td>

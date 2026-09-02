@@ -11,8 +11,6 @@ use App\Helpers\NotificationHelper;
 class FinanceController {
     private $financeModel;
     private $priceListModel;
-    private $warehouseModel;
-
     public function __construct() {
         if (!isset($_SESSION['user_id'])) {
             header('Location: ?controller=auth&action=login');
@@ -26,7 +24,6 @@ class FinanceController {
         }
         $this->financeModel = new FinanceModel();
         $this->priceListModel = new PriceListModel();
-        $this->warehouseModel = new \App\Models\WarehouseModel();
     }
 
     public function index() {
@@ -70,15 +67,6 @@ class FinanceController {
         $data['allCustomers'] = $allCustomers;
         $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
 
-        $allPoiIds = [];
-        foreach ($data['po_items_map'] as $items) {
-            foreach ($items as $item) { $allPoiIds[] = $item['poi_id'] ?? $item['poi_id']; }
-        }
-        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
         $data['page_title'] = 'Customer PO';
         $this->render('purchase_orders/index', $data);
     }
@@ -98,15 +86,6 @@ class FinanceController {
         $data['search'] = $search;
         $data['po_items_map'] = $this->financeModel->getAllPurchaseOrderItems();
 
-        $allPoiIds = [];
-        foreach ($data['po_items_map'] as $items) {
-            foreach ($items as $item) { $allPoiIds[] = $item['poi_id'] ?? $item['poi_id']; }
-        }
-        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
         $data['page_title'] = 'Ready to Deliver';
         $this->render('purchase_orders/ready_to_deliver', $data);
     }
@@ -115,19 +94,23 @@ class FinanceController {
         $search = $_GET['search'] ?? '';
         $filterCustomer = $_GET['filter_customer'] ?? '';
         $filterItem = $_GET['filter_item'] ?? '';
+        $filterSI = $_GET['filter_si'] ?? '';
 
-        $hasFilter = $search || $filterCustomer || $filterItem;
+        $hasFilter = $search || $filterCustomer || $filterItem || $filterSI;
         if ($hasFilter) {
             $filters = [];
             if ($search) $filters['search'] = $search;
             if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
             if ($filterItem) $filters['item_description'] = $filterItem;
+            if ($filterSI) $filters['si_number'] = $filterSI;
             $allDeliveries = $this->financeModel->getAllDeliveriesFiltered($filters);
             $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
+            $allSINumbers = array_values(array_unique(array_filter(array_column($allDeliveries, 'si_number'))));
             $pagination = ['items' => $allDeliveries, 'page' => 1, 'perPage' => count($allDeliveries), 'total' => count($allDeliveries), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
         } else {
             $allDeliveries = $this->financeModel->getAllDeliveries();
             $allCustomers = array_values(array_unique(array_filter(array_column($allDeliveries, 'customer_name'))));
+            $allSINumbers = array_values(array_unique(array_filter(array_column($allDeliveries, 'si_number'))));
             $pagination = Pagination::paginate($allDeliveries, 10);
         }
 
@@ -138,14 +121,9 @@ class FinanceController {
         $data['search'] = $search;
         $data['filterCustomer'] = $filterCustomer;
         $data['filterItem'] = $filterItem;
+        $data['filterSI'] = $filterSI;
         $data['allCustomers'] = $allCustomers;
-
-        $poiIds = array_column($data['deliveries'], 'poi_id');
-        $poiIds = array_filter($poiIds);
-        $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
+        $data['allSINumbers'] = $allSINumbers;
 
         $data['page_title'] = 'Sales Invoice';
         $this->render('deliveries/index', $data);

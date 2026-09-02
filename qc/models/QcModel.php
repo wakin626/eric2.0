@@ -10,6 +10,8 @@ class QcModel extends BaseModel {
                     eu.full_name as edited_by_name, ph.date_edited,
                     ph.qc_remark, ph.qc_inspected_by, ph.qc_inspected_at,
                     ph.qc_inspector_name,
+                    ph.qa_remark, ph.qa_inspected_at,
+                    ph.qa_inspector_name,
                     poi.quantity as ordered_quantity
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 

@@ -50,22 +50,6 @@ class FinanceModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['po_id' => $po_id]);
         $rows = $stmt->fetchAll();
-        if (!empty($rows)) {
-            $conn = self::getConnection();
-            $advStmt = $conn->prepare("SELECT normal_poi_id, SUM(quantity) as adv_consumed FROM advance_production_consumption WHERE normal_po_id = ? GROUP BY normal_poi_id");
-            $advStmt->execute([$po_id]);
-            $advMap = [];
-            foreach ($advStmt->fetchAll() as $row) {
-                $advMap[$row['normal_poi_id']] = intval($row['adv_consumed']);
-            }
-            foreach ($rows as &$item) {
-                $pid = $item['poi_id'] ?? null;
-                if ($pid && isset($advMap[$pid])) {
-                    $item['produced_quantity'] = intval($item['produced_quantity']) + $advMap[$pid];
-                }
-            }
-            unset($item);
-        }
         return $rows;
     }
 
@@ -231,24 +215,6 @@ class FinanceModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         $all = $stmt->fetchAll();
-        $conn = self::getConnection();
-        $poIds = array_unique(array_column($all, 'po_id'));
-        if (!empty($poIds)) {
-            $placeholders = implode(',', array_fill(0, count($poIds), '?'));
-            $advStmt = $conn->prepare("SELECT normal_poi_id, SUM(quantity) as adv_consumed FROM advance_production_consumption WHERE normal_po_id IN ($placeholders) GROUP BY normal_poi_id");
-            $advStmt->execute(array_values($poIds));
-            $advMap = [];
-            foreach ($advStmt->fetchAll() as $row) {
-                $advMap[$row['normal_poi_id']] = intval($row['adv_consumed']);
-            }
-            foreach ($all as &$item) {
-                $pid = $item['poi_id'] ?? null;
-                if ($pid && isset($advMap[$pid])) {
-                    $item['produced_quantity'] = intval($item['produced_quantity']) + $advMap[$pid];
-                }
-            }
-            unset($item);
-        }
         $map = [];
         foreach ($all as $item) {
             $map[$item['po_id']][] = $item;
@@ -366,12 +332,14 @@ class FinanceModel extends BaseModel {
                        OR po.customer_po_number LIKE :search2
                        OR c.customer_name LIKE :search3
                        OR i.item_description LIKE :search4
-                       OR u.full_name LIKE :search5)";
+                       OR u.full_name LIKE :search5
+                       OR d.si_number LIKE :search6)";
             $params['search1'] = $like;
             $params['search2'] = $like;
             $params['search3'] = $like;
             $params['search4'] = $like;
             $params['search5'] = $like;
+            $params['search6'] = $like;
         }
         if (!empty($filters['customer_name'])) {
             $sql .= " AND c.customer_name LIKE :filter_customer";
@@ -380,6 +348,10 @@ class FinanceModel extends BaseModel {
         if (!empty($filters['item_description'])) {
             $sql .= " AND i.item_description LIKE :filter_item";
             $params['filter_item'] = '%' . $filters['item_description'] . '%';
+        }
+        if (!empty($filters['si_number'])) {
+            $sql .= " AND d.si_number LIKE :filter_si";
+            $params['filter_si'] = '%' . $filters['si_number'] . '%';
         }
 
         $sql .= " ORDER BY d.date_created DESC";

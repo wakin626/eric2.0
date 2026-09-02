@@ -56,13 +56,6 @@ class NotificationHelper {
         self::create('finance', 'Sales Invoice Needed', 'DR for ' . $poLabel . ' is missing an SI number.', 'finance', $url, $createdBy);
     }
 
-    public static function excessDetected($poLabel, $itemCode, $excessQty, $createdBy) {
-        $url = '?controller=warehouse&action=excessProduction';
-        self::create('production', 'Excess Production Detected', $poLabel . ' — ' . $itemCode . ': ' . $excessQty . ' pcs excess produced.', 'production', $url, $createdBy);
-        self::create('production', 'Excess Production Detected', $poLabel . ' — ' . $itemCode . ': ' . $excessQty . ' pcs excess produced.', 'warehouse', $url, $createdBy);
-        self::create('production', 'Excess Production Detected', $poLabel . ' — ' . $itemCode . ': ' . $excessQty . ' pcs excess produced.', 'admin', $url, $createdBy);
-    }
-
     public static function qcInspectionNeeded($poLabel, $lotNumber, $createdBy) {
         $url = '?controller=qc';
         self::create('qc', 'QC Inspection Needed', $poLabel . ' — Lot ' . $lotNumber . ' is ready for inspection.', 'qc', $url, $createdBy);

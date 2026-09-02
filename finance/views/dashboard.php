@@ -66,11 +66,7 @@
                 ?>
                 <tr>
                     <td><strong class="text-primary">
-                    <?php
-                    $dPoiId = $d['poi_id'] ?? null;
-                    $dNormalCr = $dPoiId ? (($normal_consumption_records ?? [])[$dPoiId] ?? []) : [];
-                    if (!empty($dNormalCr)):
-                    ?><span style="opacity:0.75"><?= htmlspecialchars($dNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($d['customer_po_number'] ?? '-') ?>
+                    <?= htmlspecialchars($d['customer_po_number'] ?? '-') ?>
                     </strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><?= implode('<br>', $itemLines) ?></td>
@@ -177,8 +173,7 @@ function viewPODetails(poId) {
                     const itemDelivered = item.delivered_quantity || 0;
                     const remaining = Math.max(0, qty - itemDelivered);
                     const itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                    const isExcess = itemProduced > qty;
-                    const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                    const barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
                     const barWidth = Math.min(itemPercent, 100);
                     var conv = item.uom_conversion || null;
                     var deliveredText = itemDelivered + ' PCS' + (conv ? ' / ' + Math.floor(itemDelivered / conv) + ' CS' : '');

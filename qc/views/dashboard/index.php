@@ -94,6 +94,7 @@
                     <th class="sortable" data-sort="status">Status <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
                     <th>QC Remark</th>
+                    <th>QA Remark</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -166,6 +167,19 @@
                         <?php endif; ?>
                     </td>
                     <td>
+                        <?php if (!empty($h['qa_remark'])): ?>
+                            <div>
+                                <small><?= nl2br(htmlspecialchars($h['qa_remark'])) ?></small>
+                                <br><small class="text-muted">
+                                    <i class="bi bi-person me-1"></i><?= htmlspecialchars($h['qa_inspector_name'] ?? '') ?>
+                                    &middot; <?= date('m/d/Y g:i A', strtotime($h['qa_inspected_at'])) ?>
+                                </small>
+                            </div>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
                         <?php if (!empty($h['qc_remark'])): ?>
                             <button class="btn btn-sm btn-outline-warning" onclick="openEditRemarkModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>', '<?= htmlspecialchars(addslashes($h['item_description'] ?? ''), ENT_QUOTES) ?>', '<?= htmlspecialchars(addslashes($h['qc_remark'] ?? ''), ENT_QUOTES) ?>', '<?= htmlspecialchars(addslashes($h['qc_inspector_name'] ?? ''), ENT_QUOTES) ?>')">
                                 <i class="bi bi-pencil me-1"></i>Edit
@@ -179,7 +193,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="12" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="13" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

@@ -198,7 +198,7 @@
                 $descParts = [];
                 if (!empty($d['item_description'])) $descParts[] = $d['item_description'];
                 if ($cases > 0) $descParts[] = $cases . ' CASE';
-                if (!empty($d['lot_number'])) $descParts[] = $d['lot_number'];
+                if (!empty($d['lot_number'])) $descParts[] = 'Lot # ' . $d['lot_number'];
                 $fullDesc = implode(' | ', $descParts);
             ?>
             <div class="dr-row">

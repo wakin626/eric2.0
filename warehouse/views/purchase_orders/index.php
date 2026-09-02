@@ -15,6 +15,11 @@
             <option value="">All Items</option>
         </select>
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Date Created" value="<?= htmlspecialchars($filterDate ?? '') ?>">
+        <select class="form-select form-select-sm" style="width:180px" onchange="location.href='?controller=warehouse&action=purchaseOrders&delivery_status=' + encodeURIComponent(this.value)">
+            <option value="">All POs</option>
+            <option value="open" <?= ($filterDeliveryStatus ?? '') === 'open' ? 'selected' : '' ?>>Open POs</option>
+            <option value="closed" <?= ($filterDeliveryStatus ?? '') === 'closed' ? 'selected' : '' ?>>Closed POs</option>
+        </select>
         <a href="?controller=warehouse&action=purchaseOrders" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
     </div>
     <div class="search-box" style="width: 300px;">
@@ -38,7 +43,7 @@
                         <th class="sortable" data-sort="po_number">PO Number <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
                         <th>Item</th>
-                        <th>Produced PO QTY</th>
+                        <th>Delivery Progress</th>
                         <th>Type</th>
                         <th class="sortable" data-sort="created_by">Created By <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="date">Date Created <i class="bi bi-chevron-expand"></i></th>
@@ -48,100 +53,68 @@
                 <tbody id="poTableBody">
                     <?php foreach ($purchase_orders as $po):
                         $items = $po_items_map[$po['po_id']] ?? [];
+                        $itemCount = max(1, count($items));
                     ?>
+                    <?php if (empty($items)): ?>
                     <tr>
                         <td><strong class="text-primary">
-                        <?php
-                        $allNormalCr = [];
-                        if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
-                            foreach ($items as $item) {
-                                $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
-                                foreach ($ncrRecords as $ncr) {
-                                    $allNormalCr[] = $ncr;
-                                }
-                            }
-                        }
-                        if (!empty($allNormalCr)):
-                        ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= $po['customer_po_number'] ?>
+                        <?= $po['customer_po_number'] ?>
                         </strong></td>
                         <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
+                        <td><small class="text-muted">-</small></td>
+                        <td><small class="text-muted">-</small></td>
                         <td>
-                            <?php if (!empty($items)): ?>
-                                <?php foreach ($items as $idx => $item): ?>
-                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <div class="d-flex align-items-center" style="min-height: 20px;">
-                                        <small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <small class="text-muted">-</small>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if (!empty($items)): ?>
-                                <?php foreach ($items as $idx => $item):
-                                    $qty = $item['quantity'] ?? 0;
-                                    $itemProduced = $item['produced_quantity'] ?? 0;
-                                    $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
-                                    $isExcess = $itemProduced > $qty;
-                                    $isAdvance = ($po['production_type'] ?? 'normal') === 'advance';
-                                    $poiId = $item['poi_id'];
-                                    $consumedTotal = 0;
-                                    $consumedBy = [];
-                                    $crRecords = ($consumption_records ?? [])[$poiId] ?? [];
-                                    if (!empty($crRecords)) {
-                                        foreach ($crRecords as $cr) {
-                                            $consumedTotal += $cr['quantity'];
-                                            $consumedBy[] = htmlspecialchars($cr['normal_po_number']) . ' (' . $cr['quantity'] . ' pcs)';
-                                        }
-                                    }
-                                    $isFullyConsumed = $isAdvance && $consumedTotal > 0 && $consumedTotal >= $itemProduced;
-                                ?>
-                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <div class="d-flex align-items-center" style="min-height: 20px;">
-                                    <?php if ($isFullyConsumed): ?>
-                                        <div>
-                                            <span class="badge bg-info"><i class="bi bi-arrow-left-right me-1"></i>Consumed</span>
-                                            <br><small class="text-muted">To: <?= implode(', ', $consumedBy) ?></small>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="d-flex align-items-center flex-wrap gap-1" style="min-height: 20px;">
-                                            <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                                <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
-                                            </div>
-                                            <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
-                                             <?php if ($isExcess): ?>
-                                                <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
-                                            <?php endif; ?>
-                                            <?php if ($consumedTotal > 0): ?>
-                                                <br><small class="text-info"><i class="bi bi-arrow-left-right"></i> Consumed: <?= implode(', ', $consumedBy) ?></small>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <small class="text-muted">-</small>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
-                                <span class="badge bg-info">Advance</span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary">Normal</span>
-                            <?php endif; ?>
+                            <span class="badge bg-secondary">Normal</span>
                         </td>
                         <td><?= htmlspecialchars($po['requested_by_name'] ?? '-') ?></td>
                         <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
-        <td class="text-center">
-            <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
-                <i class="bi bi-eye"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-success edit-po-btn" data-po-id="<?= $po['po_id'] ?>">
-                <i class="bi bi-pencil"></i>
-            </button>
-        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-eye"></i></button>
+                            <button type="button" class="btn btn-sm btn-success edit-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-pencil"></i></button>
+                        </td>
                     </tr>
+                    <?php else: ?>
+                    <?php foreach ($items as $idx => $item):
+                        $qty = $item['quantity'] ?? 0;
+                        $itemDelivered = intval($item['delivered_quantity'] ?? 0);
+                        $itemPercent = $qty > 0 ? min(100, round(($itemDelivered / $qty) * 100)) : 0;
+                        $statusLabel = $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $qty ? 'Fully Delivered' : 'Partial (' . ($qty - $itemDelivered) . ' left)');
+                        $statusClass = $itemDelivered >= $qty ? 'bg-success' : ($itemDelivered > 0 ? 'bg-warning text-dark' : 'bg-secondary');
+                    ?>
+                    <tr>
+                        <?php if ($idx === 0): ?>
+                        <td rowspan="<?= $itemCount ?>"><strong class="text-primary">
+                        <?= $po['customer_po_number'] ?>
+                        </strong></td>
+                        <td rowspan="<?= $itemCount ?>"><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
+                        <?php endif; ?>
+                        <td><small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small></td>
+                        <td>
+                            <div class="d-flex align-items-center flex-wrap gap-1" style="min-height: 20px;">
+                                <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
+                                    <div class="progress-bar <?= $itemDelivered >= $qty ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
+                                </div>
+                                <small class="text-muted text-nowrap"><?= $itemDelivered ?>/<?= $qty ?> pcs</small>
+                                <span class="badge <?= $statusClass ?> text-nowrap"><?= $statusLabel ?></span>
+                                <?php if ($isExcess): ?>
+                                    <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <?php if ($idx === 0): ?>
+                        <td rowspan="<?= $itemCount ?>">
+                            <span class="badge bg-secondary">Normal</span>
+                        </td>
+                        <td rowspan="<?= $itemCount ?>"><?= htmlspecialchars($po['requested_by_name'] ?? '-') ?></td>
+                        <td rowspan="<?= $itemCount ?>"><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
+                        <td rowspan="<?= $itemCount ?>" class="text-center">
+                            <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-eye"></i></button>
+                            <button type="button" class="btn btn-sm btn-success edit-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-pencil"></i></button>
+                        </td>
+                        <?php endif; ?>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
                     <tr><td colspan="8" class="text-center text-muted py-4">No purchase orders found</td></tr>
@@ -244,7 +217,6 @@
                             <label class="form-label">Production Process</label>
                             <select name="production_type" id="productionType" class="form-select" required>
                                 <option value="normal">Normal Production</option>
-                                <option value="advance">Advance Production</option>
                             </select>
                         </div>
                     </div>
@@ -279,7 +251,6 @@
                                 <div class="col-2">
                                     <label class="form-label">Qty</label>
                                     <input type="number" name="quantity[]" class="form-control" min="1" placeholder="Qty" required>
-                                    <small class="excess-badge text-danger fw-bold d-none"></small>
                                 </div>
                                 <div class="col-1 text-end">
                                     <button type="button" class="btn btn-outline-danger btn-sm remove-item mt-4"><i class="bi bi-trash"></i></button>
@@ -321,7 +292,6 @@
                 </table>
                 <strong>Items:</strong>
                 <div id="prevCItems"></div>
-                <div id="prevCAdvanceLots" class="mt-3"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancel</button>
@@ -446,7 +416,6 @@
                             <label class="form-label">Production Process</label>
                             <select name="production_type" id="editProductionType" class="form-select" required>
                                 <option value="normal">Normal Production</option>
-                                <option value="advance">Advance Production</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -516,30 +485,13 @@ function makeSearchable(row) {
 
     function rebuildList() {
         list.innerHTML = '';
-        var opts = Array.from(select.options);
-        opts.sort(function(a, b) {
-            if (!a.value) return -1;
-            if (!b.value) return 1;
-            var aEx = a.dataset.hasExcess ? 1 : 0;
-            var bEx = b.dataset.hasExcess ? 1 : 0;
-            return bEx - aEx;
-        });
-        opts.forEach(function(opt) {
+        Array.from(select.options).forEach(function(opt) {
             var li = document.createElement('li');
             li.textContent = opt.textContent;
             li.dataset.value = opt.value;
             if (opt.disabled) li.classList.add('disabled');
             if (opt.value === select.value) li.classList.add('active');
             if (!opt.value) li.style.display = 'none';
-            if (opt.dataset.hasExcess) {
-                li.classList.add('has-excess');
-                li.style.backgroundColor = '#fff3c4';
-                li.style.color = '#5c4a00';
-                li.style.fontWeight = '700';
-                li.style.borderLeft = '4px solid #f5c518';
-                li.addEventListener('mouseenter', function() { li.style.backgroundColor = '#ffe082'; });
-                li.addEventListener('mouseleave', function() { li.style.backgroundColor = '#fff3c4'; });
-            }
             list.appendChild(li);
         });
     }
@@ -692,7 +644,6 @@ const customerName = document.getElementById('customerName');
 const customerAddress = document.getElementById('customerAddress');
 const customerTin = document.getElementById('customerTin');
 const customerTerms = document.getElementById('customerTerms');
-window._customerExcess = {};
 
 customerSelect.addEventListener('change', function() {
     const option = this.options[this.selectedIndex];
@@ -709,7 +660,6 @@ customerSelect.addEventListener('change', function() {
             if (idx > 0) row.remove();
         });
         updateRemoveButtons();
-        window._customerExcess = {};
         return;
     }
     customerCode.value = option.dataset.code || '';
@@ -736,38 +686,16 @@ customerSelect.addEventListener('change', function() {
     updateRemoveButtons();
 
     var itemsPromise = fetch('?controller=warehouse&action=getItemsByCustomer&customer_id=' + this.value).then(function(r) { return r.json(); });
-    var excessPromise = fetch('?controller=warehouse&action=getExcessByCustomer&customer_id=' + this.value).then(function(r) { return r.json(); });
 
-    Promise.all([itemsPromise, excessPromise]).then(function(results) {
-        var items = results[0];
-        var excessItems = results[1];
-
-        window._customerAdvance = {};
-        window._customerAdvanceQty = {};
-        var advanceIds = [];
-        excessItems.forEach(function(e) {
-            if (e.advance_remaining > 0) {
-                window._customerAdvance[e.item_id] = 'Advance available: ' + e.advance_remaining + ' pcs (must consume all)';
-                window._customerAdvanceQty[e.item_id] = parseInt(e.advance_remaining);
-                advanceIds.push(Number(e.item_id));
-            }
-        });
-
-        var advanceList = items.filter(function(i) { return advanceIds.indexOf(Number(i.item_id)) !== -1; });
-        var regularList = items.filter(function(i) { return advanceIds.indexOf(Number(i.item_id)) === -1; });
-        var sorted = advanceList.concat(regularList);
-
+    itemsPromise.then(function(items) {
         var html = '<option value="">Select Item</option>';
-        sorted.forEach(function(item) {
-            var hasAdvance = advanceIds.indexOf(Number(item.item_id)) !== -1;
+        items.forEach(function(item) {
             html += '<option value="' + item.item_id + '"'
-                + (hasAdvance ? ' data-has-excess="true"' : '')
                 + ' data-code="' + (item.item_code || '') + '"'
                 + ' data-description="' + (item.item_description || '') + '"'
                 + ' data-uom="' + (item.item_uom || '') + '"'
                 + ' data-price="' + (item.item_amount || 0) + '">'
                 + item.item_code + ' - ' + item.item_description
-                + (hasAdvance ? ' (Has Available Qty)' : '')
                 + '</option>';
         });
         document.querySelectorAll('.item-select').forEach(function(sel) {
@@ -804,34 +732,12 @@ function updateItemDropdowns() {
     refreshSearchables();
 }
 
-function updateProductionType() {
-    var prodSelect = document.getElementById('productionType');
-    if (!prodSelect) return;
-    var advanceOption = prodSelect.querySelector('option[value="advance"]');
-    if (!advanceOption) return;
-    var hasAdvanceItem = false;
-    document.querySelectorAll('#itemsContainer .item-row').forEach(function(row) {
-        var itemId = row.querySelector('[name="item_id[]"]').value;
-        if (itemId && window._customerAdvance && window._customerAdvance[itemId]) {
-            hasAdvanceItem = true;
-        }
-    });
-    if (hasAdvanceItem) {
-        advanceOption.disabled = true;
-        if (prodSelect.value === 'advance') prodSelect.value = 'normal';
-    } else {
-        advanceOption.disabled = false;
-    }
-}
-
 function setupItemRow(row) {
     const select = row.querySelector('.item-select');
     const codeInput = row.querySelector('.item-code');
     const descInput = row.querySelector('.item-description');
     const uomInput = row.querySelector('.item-uom');
     const priceInput = row.querySelector('.unit-price');
-    const qtyInput = row.querySelector('[name="quantity[]"]');
-    const excessBadge = row.querySelector('.excess-badge');
 
     if (uomInput && !uomInput.value) uomInput.value = 'PCS';
 
@@ -842,27 +748,6 @@ function setupItemRow(row) {
         uomInput.value = selected.dataset.uom || 'PCS';
         priceInput.value = selected.dataset.price || '';
         updateItemDropdowns();
-
-        var itemId = this.value;
-        if (itemId && window._customerAdvance && window._customerAdvance[itemId]) {
-            var advQty = window._customerAdvanceQty[itemId] || 0;
-            qtyInput.value = advQty;
-            qtyInput.min = advQty;
-            if (excessBadge) {
-                excessBadge.textContent = window._customerAdvance[itemId];
-                excessBadge.classList.remove('d-none');
-            }
-        } else {
-            qtyInput.value = '';
-            qtyInput.min = 1;
-            if (excessBadge) {
-                excessBadge.textContent = '';
-                excessBadge.classList.add('d-none');
-            }
-        }
-
-        updateProductionType();
-
     });
 
     const removeButton = row.querySelector('.remove-item');
@@ -872,7 +757,6 @@ function setupItemRow(row) {
             row.remove();
             updateRemoveButtons();
             updateItemDropdowns();
-            updateProductionType();
         }
     });
 
@@ -934,16 +818,6 @@ document.getElementById('createPOForm').addEventListener('submit', function(e) {
 
     if (items.length === 0) { alert('Please add at least one item.'); return; }
 
-    if (prodType !== 'advance') {
-        for (var i = 0; i < items.length; i++) {
-            var advQty = window._customerAdvanceQty[items[i].item_id];
-            if (advQty && parseInt(items[i].quantity) < advQty) {
-                alert('Item ' + (items[i].item_code || items[i].item_id) + ' has advance production available (' + advQty + ' pcs). You must order at least ' + advQty + ' pcs to consume all advance lots.');
-                return;
-            }
-        }
-    }
-
     document.getElementById('itemsJson').value = JSON.stringify(items);
 
     var customerName = document.getElementById('customerName').value || '-';
@@ -957,7 +831,7 @@ document.getElementById('createPOForm').addEventListener('submit', function(e) {
     document.getElementById('prevCPONumber').textContent = poNumber;
     document.getElementById('prevCPODate').textContent = poDate;
     document.getElementById('prevCTerms').textContent = terms + ' days';
-    document.getElementById('prevCProdType').textContent = prodType === 'advance' ? 'Advance' : 'Normal';
+    document.getElementById('prevCProdType').textContent = 'Normal';
 
     var itemsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item Code</th><th>Description</th><th>UOM</th><th>Qty</th></tr></thead><tbody>';
     items.forEach(function(item) {
@@ -968,36 +842,7 @@ document.getElementById('createPOForm').addEventListener('submit', function(e) {
     itemsHtml += '</tbody></table>';
     document.getElementById('prevCItems').innerHTML = itemsHtml;
 
-    document.getElementById('prevCAdvanceLots').innerHTML = '';
-
     new bootstrap.Modal(document.getElementById('createPreviewModal')).show();
-
-    if (prodType !== 'advance' && window._customerAdvance && Object.keys(window._customerAdvance).length > 0) {
-        var advanceItemIds = [];
-        items.forEach(function(item) {
-            if (window._customerAdvance[item.item_id]) advanceItemIds.push(item.item_id);
-        });
-
-        var allLots = [];
-        var fetches = advanceItemIds.map(function(itemId) {
-            return fetch('?controller=warehouse&action=getAdvanceLots&customer_id=' + customerId + '&item_id=' + itemId)
-                .then(function(r) { return r.json(); })
-                .then(function(lots) {
-                    lots.forEach(function(lot) { allLots.push(lot); });
-                });
-        });
-
-        Promise.all(fetches).then(function() {
-            if (allLots.length === 0) return;
-            var lotHtml = '<strong>Advance Production Lots to be Consumed:</strong>';
-            lotHtml += '<table class="table table-sm table-bordered mb-0 mt-2"><thead><tr><th>Advance PO</th><th>Lot Number</th><th>Available Qty</th></tr></thead><tbody>';
-            allLots.forEach(function(lot) {
-                lotHtml += '<tr><td>' + (lot.customer_po_number || '-') + '</td><td>' + (lot.lot_number || '-') + '</td><td>' + lot.available_quantity + '</td></tr>';
-            });
-            lotHtml += '</tbody></table>';
-            document.getElementById('prevCAdvanceLots').innerHTML = lotHtml;
-        });
-    }
 });
 
 window._createFormConfirmed = false;
@@ -1042,7 +887,7 @@ document.querySelectorAll('.view-po-btn').forEach(function(btn) {
                         const isExcess = itemProduced > qty;
                         const barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
                         const barWidth = Math.min(itemPercent, 100);
-                        const excessBadge = isExcess ? '<span class="badge bg-danger">' + '+' + (itemProduced - qty) + '</span>' : '';
+                        const excessBadge = '';
                         const lineTotal = item.quantity * item.unit_price;
                         const conv = item.uom_conversion || null;
                         let casesHtml = '—';
@@ -1391,7 +1236,7 @@ document.getElementById('editPOForm').addEventListener('submit', function(e) {
     document.getElementById('prevEPONumber').textContent = poNumber;
     document.getElementById('prevEPODate').textContent = poDate;
     document.getElementById('prevETerms').textContent = terms;
-    document.getElementById('prevEProdType').textContent = prodType === 'advance' ? 'Advance' : 'Normal';
+    document.getElementById('prevEProdType').textContent = 'Normal';
 
     var itemsHtml = '<table class="table table-sm table-bordered mb-0"><thead><tr><th>Item Code</th><th>Description</th><th>UOM</th><th>Qty</th><th>Status</th></tr></thead><tbody>';
     document.querySelectorAll('#editItemsContainer .item-row').forEach(function(row) {

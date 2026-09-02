@@ -28,7 +28,7 @@
                         <th>UOM</th>
                         <th>Quantity</th>
                         <th>Cases</th>
-                        <th>Produced</th>
+                        <th>Delivery Progress</th>
                         <th>Source</th>
                     </tr>
                 </thead>
@@ -47,23 +47,20 @@
                                 —
                             <?php endif; ?>
                         </td>
-                        <td><?= $item['produced_quantity'] ?? 0 ?></td>
+                        <?php
+                            $ordered = intval($item['quantity'] ?? 0);
+                            $delivered = intval($item['delivered_quantity'] ?? 0);
+                            $status = $delivered <= 0 ? 'Pending' : ($delivered >= $ordered ? 'Fully Delivered' : 'Partial (' . ($ordered - $delivered) . ' left)');
+                            $statusClass = $delivered >= $ordered ? 'bg-success' : ($delivered > 0 ? 'bg-warning text-dark' : 'bg-secondary');
+                        ?>
+                        <td><span class="me-2"><?= $delivered ?>/<?= $ordered ?> pcs</span><span class="badge <?= $statusClass ?>"><?= $status ?></span></td>
                         <td>
-                            <?php
-                            $itemConsumption = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
-                            if (!empty($itemConsumption)):
-                            ?>
-                                <?php foreach ($itemConsumption as $i => $ncr): ?>
-                                    <?= $i > 0 ? ', ' : '' ?><span style="opacity:0.75"><?= htmlspecialchars($ncr['advance_po_number']) ?></span>/<?= htmlspecialchars($ncr['normal_po_number']) ?>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <span class="text-muted">—</span>
-                            <?php endif; ?>
+                            <span class="text-muted">—</span>
                         </td>
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($po_items)): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-3">No items found</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-3">No items found</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

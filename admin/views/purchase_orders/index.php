@@ -12,6 +12,11 @@
             <option value="">All Items</option>
         </select>
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by PO Date" value="<?= htmlspecialchars($filterDate ?? '') ?>">
+        <select class="form-select form-select-sm" style="width:180px" onchange="location.href='?controller=admin&action=purchaseOrders&delivery_status=' + encodeURIComponent(this.value)">
+            <option value="">All POs</option>
+            <option value="open" <?= ($filterDeliveryStatus ?? '') === 'open' ? 'selected' : '' ?>>Open POs</option>
+            <option value="closed" <?= ($filterDeliveryStatus ?? '') === 'closed' ? 'selected' : '' ?>>Closed POs</option>
+        </select>
         <a href="?controller=admin&action=purchaseOrders" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear</a>
     </div>
     <div class="search-box" style="width: 300px;">
@@ -36,9 +41,7 @@
 <th class="sortable" data-sort="po_date">PO Date <i class="bi bi-chevron-expand"></i></th>
 <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
 <th>Item</th>
-<th class="sortable" data-sort="progress">Produced PO QTY <i class="bi bi-chevron-expand"></i></th>
-<th class="sortable" data-sort="delivered">Delivered PO QTY <i class="bi bi-chevron-expand"></i></th>
-<th>Type</th>
+                       <th>Delivery Progress</th>
 <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -47,20 +50,7 @@
                     $items = $po_items_map[$po['po_id']] ?? [];
                 ?>
                 <tr>
-                    <td><strong class="text-primary">
-                    <?php
-                    $allNormalCr = [];
-                    if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
-                        foreach ($items as $item) {
-                            $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
-                            foreach ($ncrRecords as $ncr) {
-                                $allNormalCr[] = $ncr;
-                            }
-                        }
-                    }
-                    if (!empty($allNormalCr)):
-                    ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($po['customer_po_number']) ?>
-                    </strong></td>
+                    <td><strong class="text-primary"><?= htmlspecialchars($po['customer_po_number']) ?></strong></td>
                     <td><?= date('Y-m-d', strtotime($po['customer_po_date'])) ?></td>
                     <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
                     <td>
@@ -75,72 +65,26 @@
                             <small class="text-muted">-</small>
                         <?php endif; ?>
                     </td>
-<td>
-    <?php if (!empty($items)): ?>
-        <?php foreach ($items as $idx => $item):
-            $qty = $item['quantity'] ?? 0;
-            $itemProduced = $item['produced_quantity'] ?? 0;
-            $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
-            $isExcess = $itemProduced > $qty;
-            $isAdvance = ($po['production_type'] ?? 'normal') === 'advance';
-            $poiId = $item['poi_id'];
-            $consumedTotal = 0;
-            $consumedBy = [];
-            $crRecords = ($consumption_records ?? [])[$poiId] ?? [];
-            if (!empty($crRecords)) {
-                foreach ($crRecords as $cr) {
-                    $consumedTotal += $cr['quantity'];
-                    $consumedBy[] = htmlspecialchars($cr['normal_po_number']) . ' (' . $cr['quantity'] . ' pcs)';
-                }
-            }
-            $isFullyConsumed = $isAdvance && $consumedTotal > 0 && $consumedTotal >= $itemProduced;
-        ?>
-            <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-            <?php if ($isFullyConsumed): ?>
-                <div>
-                    <span class="badge bg-info"><i class="bi bi-arrow-left-right me-1"></i>Consumed</span>
-                    <br><small class="text-muted">To: <?= implode(', ', $consumedBy) ?></small>
-                </div>
-            <?php else: ?>
-                <div class="d-flex align-items-center" style="min-height: 20px;">
-                    <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                        <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
-                    </div>
-                    <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
-                    <?php if ($isExcess): ?>
-                        <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
-                    <?php endif; ?>
-                    <?php if ($consumedTotal > 0): ?>
-                        <br><small class="text-info"><i class="bi bi-arrow-left-right"></i> Consumed: <?= implode(', ', $consumedBy) ?></small>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    <?php else: ?>
-        <small class="text-muted">-</small>
-    <?php endif; ?>
-</td>
-<td>
-    <?php if (!empty($items)): ?>
-        <?php foreach ($items as $idx => $item):
-            $itemQty = $item['quantity'] ?? 0;
-            $itemDelivered = $item['delivered_quantity'] ?? 0;
-        ?>
-            <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-            <?php $conv = $item['uom_conversion'] ?? null; ?>
-            <small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? floor($itemDelivered / $conv) . '/' . floor($itemQty / $conv) . ' cs' : '—/—' ?></small>
-        <?php endforeach; ?>
-    <?php else: ?>
-        <small class="text-muted">-</small>
-    <?php endif; ?>
-</td>
-<td>
-    <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
-        <span class="badge bg-info">Advance</span>
-    <?php else: ?>
-        <span class="badge bg-secondary">Normal</span>
-    <?php endif; ?>
-</td>
+                        <td>
+                            <?php if (!empty($items)): ?>
+                                <?php foreach ($items as $idx => $item):
+                                    $itemQty = intval($item['quantity'] ?? 0);
+                                    $itemDelivered = intval($item['delivered_quantity'] ?? 0);
+                                    $itemPercent = $itemQty > 0 ? min(100, round(($itemDelivered / $itemQty) * 100)) : 0;
+                                    $statusLabel = $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $itemQty ? 'Fully Delivered' : 'Partial (' . ($itemQty - $itemDelivered) . ' left)');
+                                    $statusClass = $itemDelivered >= $itemQty ? 'bg-success' : ($itemDelivered > 0 ? 'bg-warning text-dark' : 'bg-secondary');
+                                ?>
+                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="progress flex-grow-1" style="height:10px; min-width:50px;"><div class="progress-bar <?= $itemDelivered >= $itemQty ? 'bg-success' : 'bg-warning' ?>" style="width:<?= $itemPercent ?>%"></div></div>
+                                        <small class="text-nowrap"><?= $itemDelivered ?>/<?= $itemQty ?> pcs</small>
+                                        <span class="badge <?= $statusClass ?> text-nowrap"><?= $statusLabel ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <small class="text-muted">-</small>
+                            <?php endif; ?>
+                        </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
                             <i class="bi bi-eye"></i>
@@ -149,7 +93,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($allPOs)): ?>
-                <tr><td colspan="8" class="text-center text-muted py-4">No purchase orders found</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-4">No purchase orders found</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -323,10 +267,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (items && items.length > 0) {
                         items.forEach(function(item) {
                             var qty = item.quantity || 0;
-                            var itemProduced = item.produced_quantity || 0;
-                            var itemPercent = qty > 0 ? Math.round((itemProduced / qty) * 100) : 0;
-                            var isExcess = itemProduced > qty;
-                            var barClass = isExcess ? 'bg-danger' : (itemPercent >= 100 ? 'bg-success' : 'bg-warning');
+                            var itemDelivered = item.delivered_quantity || 0;
+                            var itemPercent = qty > 0 ? Math.min(100, Math.round((itemDelivered / qty) * 100)) : 0;
+                            var barClass = itemPercent >= 100 ? 'bg-success' : 'bg-warning';
                             var barWidth = Math.min(itemPercent, 100);
                             tbody.innerHTML += '<tr>' +
                                 '<td>' + (item.item_code || '-') + '</td>' +
@@ -338,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         '<div class="progress flex-grow-1 me-2" style="height: 14px; width: 80px;">' +
                                             '<div class="progress-bar ' + barClass + '" style="width: ' + barWidth + '%"></div>' +
                                         '</div>' +
-                                        '<small class="text-muted">' + itemProduced + '/' + qty + ' pcs</small>' +
+                                        '<small class="text-muted">' + itemDelivered + '/' + qty + ' pcs</small>' +
                                     '</div>' +
                                 '</td>' +
                                 '</tr>';

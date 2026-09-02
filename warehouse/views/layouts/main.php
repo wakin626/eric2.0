@@ -96,11 +96,6 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= $currentAction === 'excessProduction' ? 'active' : '' ?>" href="?controller=warehouse&action=excessProduction">
-                            <i class="bi bi-exclamation-triangle me-2"></i>Excess Production
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link <?= in_array($currentAction, ['deliveries', 'createDelivery']) ? 'active' : '' ?>" href="?controller=warehouse&action=deliveries">
                             <i class="bi bi-truck me-2"></i>Deliveries
                         </a>

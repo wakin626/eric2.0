@@ -342,7 +342,7 @@
             $casesPcs = '(' . number_format($item['qty']) . ' pcs)';
         }
     ?>
-    <div class="print-item-lot" style="top: <?= $currentTop ?>in;"><?= htmlspecialchars($item['lot_number'] ?? '') ?></div>
+    <div class="print-item-lot" style="top: <?= $currentTop ?>in;">LOT# <?= htmlspecialchars($item['lot_number'] ?? '') ?></div>
     <div class="print-item-cases-pcs" style="top: <?= $currentTop ?>in;"><?= $casesPcs ?></div>
     <div class="print-item-price" style="top: <?= $currentTop ?>in;"><?= number_format($item['price'], 2) ?></div>
     <div class="print-item-amount" style="top: <?= $currentTop ?>in;"><?= number_format($item['amount'], 2) ?></div>

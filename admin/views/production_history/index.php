@@ -81,9 +81,9 @@
                     <th class="sortable" data-sort="added">Added Lot Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="new">New Lot Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="totalpo">Total PO Qty <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="excess">Excess <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
                     <th>QC Remark</th>
+                    <th>QA Remark</th>
                     <th>Report</th>
                     <th>Action</th>
                 </tr>
@@ -100,15 +100,21 @@
                         <?php endif; ?>
                     </td>
                     <td><strong>
-                    <?php
-                    $hPoiId = $h['poi_id'] ?? null;
-                    $hNormalCr = $hPoiId ? (($normal_consumption_records ?? [])[$hPoiId] ?? []) : [];
-                    if (!empty($hNormalCr) && ($h['production_type'] ?? 'normal') !== 'advance'):
-                    ?><span style="opacity:0.75"><?= htmlspecialchars($hNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($h['customer_po_number'] ?? '-') ?>
+                    <?= htmlspecialchars($h['customer_po_number'] ?? '-') ?>
                     </strong></td>
                     <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
-                    <td><?= htmlspecialchars($h['sts_ref'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
+                    <td>
+                        <?php if (!empty($h['sts_ref'])): ?>
+                            <?= htmlspecialchars($h['sts_ref']) ?>
+                            <?php if (!empty($h['transfer_source_po'])): ?>
+                                <br><small class="text-info" title="Excess transferred from this PO" style="font-style:italic"><i class="bi bi-arrow-left-right me-1"></i>Transferred from <?= htmlspecialchars($h['transfer_source_po']) ?></small>
+                            <?php endif; ?>
+
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if (!empty($h['lot_number'])): ?>
                             <strong><?= htmlspecialchars($h['lot_number']) ?></strong>
@@ -130,17 +136,6 @@
                     </td>
                     <td><strong><?= intval($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) ?></strong></td>
                     <td><?= $h['computed_po_qty'] ?? 0 ?></td>
-                    <td>
-                        <?php
-                        $ordered = $h['ordered_quantity'] ?? 0;
-                        $excess = $ordered > 0 ? ($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) - $ordered : 0;
-                        ?>
-                        <?php if ($excess > 0): ?>
-                            <span class="badge bg-danger">+<?= $excess ?></span>
-                        <?php else: ?>
-                            <span class="text-muted">-</span>
-                        <?php endif; ?>
-                    </td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td>
                         <?php if (!empty($h['qc_remark'])): ?>
@@ -149,6 +144,19 @@
                                 <br><small class="text-muted">
                                     <i class="bi bi-person me-1"></i><?= htmlspecialchars($h['qc_inspector_name'] ?? '') ?>
                                     &middot; <?= date('m/d/Y g:i A', strtotime($h['qc_inspected_at'])) ?>
+                                </small>
+                            </div>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (!empty($h['qa_remark'])): ?>
+                            <div>
+                                <small><?= nl2br(htmlspecialchars($h['qa_remark'])) ?></small>
+                                <br><small class="text-muted">
+                                    <i class="bi bi-person me-1"></i><?= htmlspecialchars($h['qa_inspector_name'] ?? '') ?>
+                                    &middot; <?= date('m/d/Y g:i A', strtotime($h['qa_inspected_at'])) ?>
                                 </small>
                             </div>
                         <?php else: ?>

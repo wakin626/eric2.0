@@ -34,19 +34,6 @@ class AdminController {
         $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
 
-        $allPoiIds = [];
-        foreach ($data['po_items_map'] as $items) {
-            foreach ($items as $item) {
-                $allPoiIds[] = $item['poi_id'];
-            }
-        }
-        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) {
-            $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr;
-        }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
         $data['deliveries'] = $this->warehouseModel->getDeliveries();
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
@@ -434,14 +421,16 @@ public function purchaseOrders() {
     $filterCustomer = $_GET['filter_customer'] ?? '';
     $filterItem = $_GET['filter_item'] ?? '';
     $filterDate = $_GET['filter_date'] ?? '';
+    $filterDeliveryStatus = $_GET['delivery_status'] ?? '';
 
-    $hasFilter = $search || $filterCustomer || $filterItem || $filterDate;
+    $hasFilter = $search || $filterCustomer || $filterItem || $filterDate || $filterDeliveryStatus;
     if ($hasFilter) {
         $filters = [];
         if ($search) $filters['search'] = $search;
         if ($filterCustomer) $filters['customer_name'] = $filterCustomer;
         if ($filterItem) $filters['item_description'] = $filterItem;
         if ($filterDate) $filters['date'] = $filterDate;
+        if ($filterDeliveryStatus) $filters['delivery_status'] = $filterDeliveryStatus;
         $allPOs = $this->warehouseModel->getPurchaseOrdersFiltered($filters);
         $allCustomers = array_values(array_unique(array_filter(array_column($allPOs, 'customer_name'))));
         $pagination = ['items' => $allPOs, 'page' => 1, 'perPage' => count($allPOs), 'total' => count($allPOs), 'totalPages' => 1, 'hasNext' => false, 'hasPrev' => false];
@@ -455,28 +444,6 @@ public function purchaseOrders() {
     $data['allPOs'] = $pagination['items'];
     $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
 
-    // Get advance consumption records for advance PO items on this page
-    $allPoiIds = [];
-    foreach ($data['po_items_map'] as $items) {
-        foreach ($items as $item) {
-            $allPoiIds[] = $item['poi_id'];
-        }
-    }
-    $rawConsumption = $this->warehouseModel->getAdvanceConsumptionByPoiIds($allPoiIds);
-    $consumptionByPoi = [];
-    foreach ($rawConsumption as $cr) {
-        $consumptionByPoi[$cr['advance_poi_id']][] = $cr;
-    }
-    $data['consumption_records'] = $consumptionByPoi;
-
-    // Get advance consumption records for normal PO items (reverse lookup)
-    $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-    $normalConsumptionByPoi = [];
-    foreach ($rawNormalConsumption as $cr) {
-        $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr;
-    }
-    $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
@@ -484,6 +451,7 @@ public function purchaseOrders() {
     $data['filterCustomer'] = $filterCustomer;
     $data['filterItem'] = $filterItem;
     $data['filterDate'] = $filterDate;
+    $data['filterDeliveryStatus'] = $filterDeliveryStatus;
     $data['allCustomers'] = $allCustomers;
     $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
     $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
@@ -784,13 +752,6 @@ public function productionHistory() {
     }
     $data['history'] = $pagination['items'];
 
-    $poiIds = array_column($data['history'], 'poi_id');
-    $poiIds = array_filter($poiIds);
-    $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
-    $normalConsumptionByPoi = [];
-    foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-    $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
     $data['page'] = $pagination['page'];
     $data['totalPages'] = $pagination['totalPages'];
     $data['total'] = $pagination['total'];
@@ -885,44 +846,6 @@ public function deleteProductionHistory() {
     header('Location: ?controller=admin&action=productionHistory');
     exit;
 }
-
-    public function excessProduction() {
-        $filters = [];
-        if (!empty($_GET['customer_id'])) $filters['customer_id'] = $_GET['customer_id'];
-        if (!empty($_GET['status'])) $filters['status'] = $_GET['status'];
-        $this->warehouseModel->syncExcessProduction();
-        $data['excess'] = $this->warehouseModel->getAllExcess($filters);
-        $data['advance'] = $this->warehouseModel->getAllAdvanceProduction($filters);
-        $data['customers'] = $this->warehouseModel->getCustomers();
-        $data['page_title'] = 'Excess Production';
-        $this->render('excess_production/index', $data);
-    }
-
-    public function updateExcessNotes() {
-        header('Content-Type: application/json');
-        try {
-            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-                http_response_code(405);
-                echo json_encode(['error' => 'Method not allowed']);
-                exit;
-            }
-            $excess_id = $_POST['excess_id'] ?? null;
-            $notes = $_POST['notes'] ?? '';
-            if (!$excess_id) {
-                http_response_code(400);
-                echo json_encode(['error' => 'Missing excess_id']);
-                exit;
-            }
-            $this->warehouseModel->updateExcessNotes($excess_id, $notes);
-            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated excess notes for #' . $excess_id, null, ['notes' => $notes], 'excess_production', $excess_id);
-            echo json_encode(['success' => true]);
-        } catch (\Exception $e) {
-            error_log('updateExcessNotes error: ' . $e->getMessage());
-            http_response_code(500);
-            echo json_encode(['error' => 'Failed to update notes']);
-        }
-        exit;
-    }
 
     public function activityLogs() {
         $auditModel = new AuditModel();

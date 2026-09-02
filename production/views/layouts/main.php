@@ -84,13 +84,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= strpos($page_title ?? '', 'Customer PO') !== false ? 'active' : '' ?>" href="?controller=production&action=purchaseOrders">
-                            <i class="bi bi-cart3 me-2"></i>Customer PO
+                        <a class="nav-link <?= strpos($page_title ?? '', 'FG Inventory') !== false ? 'active' : '' ?>" href="?controller=production&action=fgInventory">
+                            <i class="bi bi-box-seam me-2"></i>FG Inventory
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= strpos($page_title ?? '', 'Advance Production') !== false ? 'active' : '' ?>" href="?controller=production&action=advanceProduction">
-                            <i class="bi bi-lightning me-2"></i>Advance Production
+                        <a class="nav-link <?= strpos($page_title ?? '', 'FG Input') !== false ? 'active' : '' ?>" href="?controller=production&action=fgInput">
+                            <i class="bi bi-box-seam me-2"></i>Finished Goods Input
                         </a>
                     </li>
                     <li class="nav-item">

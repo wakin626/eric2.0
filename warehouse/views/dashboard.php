@@ -32,8 +32,7 @@
                         <th>PO Date</th>
                         <th>Customer</th>
                         <th>Item</th>
-<th>Produced PO QTY</th>
-<th>Delivered PO QTY</th>
+<th>Delivery Progress</th>
                         <th>Type</th>
                     </tr>
                 </thead>
@@ -42,20 +41,7 @@
                         $items = $po_items_map[$po['po_id']] ?? [];
                     ?>
                     <tr>
-                        <td><strong>
-                        <?php
-                        $allNormalCr = [];
-                        if (!empty($items) && ($po['production_type'] ?? 'normal') !== 'advance') {
-                            foreach ($items as $item) {
-                                $ncrRecords = ($normal_consumption_records ?? [])[$item['poi_id']] ?? [];
-                                foreach ($ncrRecords as $ncr) {
-                                    $allNormalCr[] = $ncr;
-                                }
-                            }
-                        }
-                        if (!empty($allNormalCr)):
-                        ?><span style="opacity:0.75"><?= htmlspecialchars($allNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= $po['customer_po_number'] ?>
-                        </strong></td>
+                        <td><strong><?= $po['customer_po_number'] ?></strong></td>
                         <td><?= date('Y-m-d', strtotime($po['customer_po_date'])) ?></td>
                         <td><?= htmlspecialchars($po['customer_name'] ?? '-') ?></td>
                         <td>
@@ -73,51 +59,19 @@
                         <td>
                             <?php if (!empty($items)): ?>
                                 <?php foreach ($items as $idx => $item):
-                                    $qty = $item['quantity'] ?? 0;
-                                    $itemProduced = $item['produced_quantity'] ?? 0;
-                                    $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
-                                    $isExcess = $itemProduced > $qty;
-                                ?>
-                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <div class="d-flex align-items-center" style="min-height: 20px;">
-                                        <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                            <div class="progress-bar <?= $isExcess ? 'bg-danger' : ($itemPercent >= 100 ? 'bg-success' : 'bg-warning') ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
-                                        </div>
-                                        <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <small class="text-muted">-</small>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if (!empty($items)): ?>
-                                <?php foreach ($items as $idx => $item):
-                                    $qty = $item['quantity'] ?? 0;
-                                    $itemProduced = $item['produced_quantity'] ?? 0;
-                                    $itemDelivered = $item['delivered_quantity'] ?? 0;
+                                    $qty = intval($item['quantity'] ?? 0);
+                                    $itemDelivered = intval($item['delivered_quantity'] ?? 0);
+                                    $itemPercent = $qty > 0 ? min(100, round(($itemDelivered / $qty) * 100)) : 0;
                                     $remaining = max(0, $qty - $itemDelivered);
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <?php if ($qty > 0 && $itemDelivered >= $qty && $itemProduced >= $qty): ?>
-                                        <span class="badge bg-success">Fully Delivered</span>
-                                    <?php elseif ($itemDelivered > 0): ?>
-                                        <span class="badge bg-warning text-dark">Partial (<?= $remaining ?> left)</span>
-                                    <?php else: ?>
-                                        <span class="badge bg-secondary">Pending</span>
-                                    <?php endif; ?>
+                                    <div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1" style="height:10px"><div class="progress-bar <?= $itemDelivered >= $qty ? 'bg-success' : 'bg-warning' ?>" style="width:<?= $itemPercent ?>%"></div></div><small class="text-nowrap"><?= $itemDelivered ?>/<?= $qty ?> pcs</small><span class="badge <?= $itemDelivered >= $qty ? 'bg-success' : ($itemDelivered > 0 ? 'bg-warning text-dark' : 'bg-secondary') ?> text-nowrap"><?= $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $qty ? 'Fully Delivered' : 'Partial (' . $remaining . ' left)') ?></span></div>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>
                             <?php endif; ?>
                         </td>
-                        <td>
-                            <?php if (($po['production_type'] ?? 'normal') === 'advance'): ?>
-                                <span class="badge bg-info">Advance</span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary">Normal</span>
-                            <?php endif; ?>
-                        </td>
+                        <td><span class="badge bg-secondary">Normal</span></td>
                     </tr>
                     <?php endforeach; ?>
                     <?php if (empty($purchase_orders)): ?>
@@ -188,13 +142,7 @@
                     <td><?= implode('<br>', $itemLines) ?></td>
                     <td><?= implode('<br>', $poQtyLines) ?></td>
                     <td><?= implode('<br>', $deliveredLines) ?></td>
-                    <td>
-                        <?php if (($d['production_type'] ?? 'normal') === 'advance'): ?>
-                            <span class="badge bg-info">Advance</span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary">Normal</span>
-                        <?php endif; ?>
-                    </td>
+                    <td><span class="badge bg-secondary">Normal</span></td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
                 </tr>
                 <?php endforeach; ?>
@@ -239,34 +187,17 @@
                                 <tr>
                                     <th>Item Code</th>
                                     <th>Description</th>
-                                    <th>UOM</th>
-                                    <th>Quantity</th>
-                                    <th>Progress</th>
-                                </tr>
-                            </thead>
-                            <tbody id="viewPOItems">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-<div class="modal fade" id="createPOModal">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-cart3 me-2"></i>Create Purchase Order</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="?controller=warehouse&action=createPO" id="createPOFormDash">
                 <div class="modal-body">
                     <div class="row">
+                                                $itemPercent = $itemQty > 0 ? min(100, round(($itemDelivered / $itemQty) * 100)) : 0;
+                                                $statusLabel = $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $itemQty ? 'Fully Delivered' : 'Partial (' . ($itemQty - $itemDelivered) . ' left)');
+                                                $statusClass = $itemDelivered >= $itemQty ? 'bg-success' : ($itemDelivered > 0 ? 'bg-warning text-dark' : 'bg-secondary');
                         <div class="col-md-4 mb-3">
                             <label class="form-label">PO Number</label>
-                            <input type="text" name="customer_po_number" class="form-control" required>
-                        </div>
+                                                <div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1" style="height:10px"><div class="progress-bar <?= $itemDelivered >= $itemQty ? 'bg-success' : 'bg-warning' ?>" style="width:<?= $itemPercent ?>%"></div></div><small class="text-nowrap"><?= $itemDelivered ?>/<?= $itemQty ?> pcs</small><span class="badge <?= $statusClass ?> text-nowrap"><?= $statusLabel ?></span></div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">PO Date</label>
                             <input type="date" name="customer_po_date" class="form-control" required>
@@ -275,7 +206,6 @@
                             <label class="form-label">Production Process</label>
                             <select name="production_type" class="form-select" required>
                                 <option value="normal">Normal Production</option>
-                                <option value="advance">Advance Production</option>
                             </select>
                         </div>
                     </div>

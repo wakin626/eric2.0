@@ -21,7 +21,7 @@ class ProductionController {
             header('Location: ?controller=auth&action=login');
             exit;
         }
-        if ($action !== 'getPODetails' && ($_SESSION['department'] ?? '') !== 'production') {
+        if ($action !== 'getPODetails' && $action !== 'searchItems' && $action !== 'fgInput' && $action !== 'saveFgInput' && $action !== 'getLotsForInventory' && ($_SESSION['department'] ?? '') !== 'production') {
             header('Location: ?controller=admin');
             exit;
         }
@@ -34,71 +34,44 @@ class ProductionController {
         $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
 
-        $allPoiIds = [];
-        foreach ($data['po_items_map'] as $items) {
-            foreach ($items as $item) { $allPoiIds[] = $item['poi_id']; }
-        }
-        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
-        $advByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $advByPoi[$cr['normal_poi_id']] = intval($cr['quantity']); }
-        foreach ($data['purchase_orders'] as &$po) {
-            $totalAdv = 0;
-            if (!empty($data['po_items_map'][$po['po_id']])) {
-                foreach ($data['po_items_map'][$po['po_id']] as $item) {
-                    $totalAdv += $advByPoi[$item['poi_id']] ?? 0;
-                }
-            }
-            $po['produced_quantity'] = intval($po['produced_quantity']) + $totalAdv;
-        }
-        unset($po);
-
         $this->render('dashboard', $data);
     }
 
-    public function purchaseOrders() {
+    public function fgInventory() {
         $search = $_GET['search'] ?? '';
-        if ($search) {
-            $allPOs = $this->warehouseModel->getPurchaseOrdersFiltered(['search' => $search, 'production_type' => 'normal']);
-        } else {
-            $allPOs = $this->warehouseModel->getNormalProductionPOs();
-        }
-        $pagination = Pagination::paginate($allPOs, 10);
-        $poIds = array_column($pagination['items'], 'po_id');
-        $data['purchase_orders'] = $pagination['items'];
-        $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
+        $allItems = $this->warehouseModel->getFGInventory(['search' => $search]);
+        $pagination = Pagination::paginate($allItems, 20);
 
-        $allPoiIds = [];
-        foreach ($data['po_items_map'] as $items) {
-            foreach ($items as $item) { $allPoiIds[] = $item['poi_id']; }
-        }
-        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
-        $advByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $advByPoi[$cr['normal_poi_id']] = intval($cr['quantity']); }
-        foreach ($data['purchase_orders'] as &$po) {
-            $totalAdv = 0;
-            if (!empty($data['po_items_map'][$po['po_id']])) {
-                foreach ($data['po_items_map'][$po['po_id']] as $item) {
-                    $totalAdv += $advByPoi[$item['poi_id']] ?? 0;
-                }
-            }
-            $po['produced_quantity'] = intval($po['produced_quantity']) + $totalAdv;
-        }
-        unset($po);
-
+        $data['inventory'] = $pagination['items'];
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
         $data['total'] = $pagination['total'];
         $data['search'] = $search;
-        $data['page_title'] = 'Customer PO';
-        $this->render('purchase_orders/index', $data);
+        $data['page_title'] = 'FG Inventory';
+        $this->render('fg_inventory/index', $data);
+    }
+
+    public function getLotsForInventory() {
+        header('Content-Type: application/json');
+        try {
+            $item_id = $_GET['item_id'] ?? null;
+            if (!$item_id) {
+                echo json_encode([]);
+                exit;
+            }
+            $lots = $this->warehouseModel->getLotsByItemForInventory($item_id);
+            echo json_encode($lots);
+        } catch (\Exception $e) {
+            error_log('getLotsForInventory error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to load lots']);
+        }
+        exit;
+    }
+
+    public function purchaseOrders() {
+        header('Location: ?controller=production&action=fgInventory');
+        exit;
     }
 
     public function updateQuantity() {
@@ -165,7 +138,6 @@ class ProductionController {
                                 'received_by_name' => $receivedByName,
                             ];
                             $this->warehouseModel->updateItemProducedQuantity($poi_id, $addedQty, $_SESSION['user_id'], $lot, $itemDesc, $autoStsRef, $extraStsData);
-                            $this->checkAndRecordExcess($poi_id, $po_id, $conn);
                             $this->saveItemConversionIfNeeded($poi_id, intval($pcsPerCases[$i] ?? 0));
                             $poLabel = $poi['customer_po_number'] ?? $poi['po_number'] ?? 'PO item #' . $poi_id;
                             $lotText = $lot ? ' for lot ' . $lot : '';
@@ -222,7 +194,6 @@ class ProductionController {
                                 'received_by_name' => $receivedByName,
                             ];
                             $this->warehouseModel->updateItemProducedQuantity($poi_id, $addedQty, $_SESSION['user_id'], $lot, $itemDesc, $autoStsRef, $extraStsData);
-                            $this->checkAndRecordExcess($poi_id, $po_id, $conn);
                             $this->saveItemConversionIfNeeded($poi_id, intval($pcsPerCases[$i] ?? 0));
                             $poLabel = $poi['customer_po_number'] ?? $poi['po_number'] ?? 'PO item #' . $poi_id;
                             $lotText = $lot ? ' for lot ' . $lot : '';
@@ -295,46 +266,172 @@ class ProductionController {
         exit;
     }
 
-    private function checkAndRecordExcess($poi_id, $po_id, $conn = null) {
-        $ownsConn = false;
-        if (!$conn) {
-            $conn = \App\Core\BaseModel::getConnection();
-            $ownsConn = true;
+    public function fgInput() {
+        $data['page_title'] = 'FG Input';
+        $this->render('production/fg_input', $data);
+    }
+
+    public function searchItems() {
+        header('Content-Type: application/json');
+        try {
+            $query = trim($_GET['q'] ?? '');
+            if (strlen($query) < 1) {
+                echo json_encode([]);
+                exit;
+            }
+            $items = $this->warehouseModel->searchItems($query);
+            echo json_encode($items);
+        } catch (\Exception $e) {
+            error_log('searchItems error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to search items']);
         }
+        exit;
+    }
 
-        $stmt = $conn->prepare("SELECT quantity, produced_quantity, item_id
-            FROM purchase_order_items WHERE poi_id = :poi_id FOR UPDATE");
-        $stmt->execute(['poi_id' => $poi_id]);
-        $poi = $stmt->fetch();
-        if (!$poi) return;
+    public function saveFgInput() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?controller=production&action=fgInput');
+            exit;
+        }
+        $maxRetries = 3;
+        for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
+            $conn = \App\Core\BaseModel::getConnection();
+            $conn->beginTransaction();
+            try {
+                $item_ids = $_POST['item_id'] ?? [];
+                if (!is_array($item_ids)) $item_ids = [$item_ids];
 
-        $ordered = intval($poi['quantity']);
-        $produced = intval($poi['produced_quantity']);
+                $lotNumbers = $_POST['lot_number'] ?? [];
+                $quantities = $_POST['added_quantity'] ?? [];
+                $pcsPerCases = $_POST['pcs_per_case'] ?? [];
+                $shifts = $_POST['shift'] ?? [];
+                $rejectStatuses = $_POST['reject_status'] ?? [];
+                $stsRemarks = $_POST['sts_remarks'] ?? [];
+                $preparedByName = trim($_POST['prepared_by_name'] ?? '') ?: null;
+                $checkedByName = trim($_POST['checked_by_name'] ?? '') ?: null;
+                $receivedByName = trim($_POST['received_by_name'] ?? '') ?: null;
 
-        if ($produced > $ordered) {
-            $excess = $produced - $ordered;
-            $po = $this->warehouseModel->getPurchaseOrderById($po_id);
-            if ($po) {
-                $itemStmt = $conn->prepare("SELECT item_code FROM items WHERE item_id = :item_id");
-                $itemStmt->execute(['item_id' => $poi['item_id']]);
-                $item = $itemStmt->fetch();
-                $itemCode = $item['item_code'] ?? 'Item #' . $poi['item_id'];
+                if (!is_array($lotNumbers)) $lotNumbers = [$lotNumbers];
+                if (!is_array($quantities)) $quantities = [$quantities];
+                if (!is_array($pcsPerCases)) $pcsPerCases = [$pcsPerCases];
+                if (!is_array($shifts)) $shifts = [$shifts];
+                if (!is_array($rejectStatuses)) $rejectStatuses = [$rejectStatuses];
+                if (!is_array($stsRemarks)) $stsRemarks = [$stsRemarks];
 
-                $this->warehouseModel->insertExcessProduction([
-                    'customer_id' => $po['customer_id'],
-                    'item_id' => $poi['item_id'],
-                    'source_po_id' => $po_id,
-                    'source_poi_id' => $poi_id,
-                    'excess_quantity' => $excess,
-                    'notes' => 'Excess from PO ' . ($po['customer_po_number'] ?? $po_id)
-                ]);
+                $itemCache = [];
+                $savedCount = 0;
+                $savedItemDescriptions = [];
 
-                \App\Helpers\NotificationHelper::excessDetected(
-                    $po['customer_po_number'] ?? 'PO #' . $po_id,
-                    $itemCode,
-                    $excess,
-                    $_SESSION['full_name'] ?? null
-                );
+                $stmtLast = $conn->prepare("SELECT sts_ref FROM production_history WHERE sts_ref LIKE 'STS-%' ORDER BY history_id DESC LIMIT 1 FOR UPDATE");
+                $stmtLast->execute();
+                $lastSts = $stmtLast->fetchColumn();
+                if ($lastSts && preg_match('/STS-(\d+)/', $lastSts, $m)) {
+                    $nextNum = intval($m[1]) + 1;
+                } else {
+                    $nextNum = 1;
+                }
+
+                foreach ($lotNumbers as $i => $lotNumber) {
+                    $lotNumber = trim($lotNumber ?? '');
+                    $qty = intval($quantities[$i] ?? 0);
+                    $item_id = $item_ids[$i] ?? null;
+                    if ($lotNumber === '' || $qty <= 0 || !$item_id) continue;
+
+                    if (!isset($itemCache[$item_id])) {
+                        $itemStmt = $conn->prepare("SELECT item_id, item_code, item_description FROM items WHERE item_id = :item_id AND `remove` = 0");
+                        $itemStmt->execute(['item_id' => $item_id]);
+                        $itemCache[$item_id] = $itemStmt->fetch();
+                    }
+                    $item = $itemCache[$item_id];
+                    if (!$item) continue;
+
+                    $savedItemDescriptions[] = $item['item_description'];
+
+                    $autoStsRef = 'STS-' . str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+                    $nextNum++;
+
+                    $existingLot = $this->warehouseModel->getLotByItemAndLotNumber($item_id, $lotNumber);
+                    $previousLotQty = $existingLot ? intval($existingLot['quantity_produced']) : 0;
+
+                    try {
+                        $lotId = $this->warehouseModel->upsertItemLot([
+                            'item_id' => $item_id,
+                            'lot_number' => $lotNumber,
+                            'quantity_produced' => $qty,
+                            'pcs_per_case' => intval($pcsPerCases[$i] ?? 0) ?: null,
+                            'created_by' => $_SESSION['user_id']
+                        ]);
+                    } catch (\Exception $e) {
+                        error_log('FG Input upsertItemLot error: ' . $e->getMessage());
+                        throw $e;
+                    }
+
+                    $newLotQty = $previousLotQty + $qty;
+
+                    $histPcs = intval($pcsPerCases[$i] ?? 0) ?: null;
+                    $histShift = trim($shifts[$i] ?? '') ?: null;
+                    $histReject = trim($rejectStatuses[$i] ?? '') ?: null;
+                    $histRemarks = trim($stsRemarks[$i] ?? '') ?: null;
+
+                    try {
+                        $conn->prepare("INSERT INTO production_history (po_id, poi_id, item_id, lot_number, item_description, sts_ref, shift, reject_status, sts_remarks, pcs_per_case, prepared_by_name, checked_by_name, received_by_name, user_id, previous_quantity, added_quantity, new_quantity, date_created)
+                            VALUES (NULL, NULL, :item_id, :lot_number, :item_description, :sts_ref, :shift, :reject_status, :sts_remarks, :pcs_per_case, :prepared_by_name, :checked_by_name, :received_by_name, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())")
+                            ->execute([
+                                'item_id' => $item_id,
+                                'lot_number' => $lotNumber,
+                                'item_description' => $item['item_description'],
+                                'sts_ref' => $autoStsRef,
+                                'shift' => $histShift,
+                                'reject_status' => $histReject,
+                                'sts_remarks' => $histRemarks,
+                                'pcs_per_case' => $histPcs,
+                                'prepared_by_name' => $preparedByName,
+                                'checked_by_name' => $checkedByName,
+                                'received_by_name' => $receivedByName,
+                                'user_id' => $_SESSION['user_id'],
+                                'previous_quantity' => $previousLotQty,
+                                'added_quantity' => $qty,
+                                'new_quantity' => $newLotQty,
+                            ]);
+                    } catch (\Exception $e) {
+                        error_log('FG Input production_history INSERT error: ' . $e->getMessage() . ' | Query params: lot_number=' . $lotNumber . ', item_desc=' . ($item['item_description'] ?? 'null') . ', sts_ref=' . $autoStsRef . ', user_id=' . $_SESSION['user_id'] . ', added_qty=' . $qty);
+                        throw $e;
+                    }
+
+                    $this->saveItemConversionIfNeeded(null, intval($pcsPerCases[$i] ?? 0), $item_id);
+                    $savedCount++;
+                }
+
+                if ($savedCount === 0) {
+                    $conn->rollBack();
+                    $_SESSION['error'] = 'No valid lot entries to save.';
+                    header('Location: ?controller=production&action=fgInput');
+                    exit;
+                }
+
+                $uniqueDescriptions = array_unique($savedItemDescriptions);
+                $descList = implode(', ', $uniqueDescriptions);
+                NotificationHelper::create('production', 'FG Input', $savedCount . ' lot(s) of FG produced for ' . $descList, 'warehouse', '?controller=warehouse&action=deliveries', $_SESSION['user_id']);
+                NotificationHelper::qcInspectionNeeded('New FG production: ' . $descList, '', $_SESSION['user_id']);
+
+                $conn->commit();
+                $_SESSION['success'] = $savedCount . ' lot(s) of FG recorded successfully for ' . $descList . '.';
+                header('Location: ?controller=production&action=fgInput');
+                exit;
+            } catch (\PDOException $e) {
+                $conn->rollBack();
+                if ($e->errorInfo[1] == 23000 && $attempt < $maxRetries - 1) {
+                    continue;
+                }
+                $_SESSION['error'] = 'Failed to save FG: ' . $e->getMessage();
+                header('Location: ?controller=production&action=fgInput');
+                exit;
+            } catch (\Exception $e) {
+                $conn->rollBack();
+                $_SESSION['error'] = 'Failed to save FG: ' . $e->getMessage();
+                header('Location: ?controller=production&action=fgInput');
+                exit;
             }
         }
     }
@@ -367,13 +464,6 @@ class ProductionController {
             $pagination = Pagination::paginate($allHistory, 10);
         }
         $data['history'] = $pagination['items'];
-
-        $poiIds = array_column($data['history'], 'poi_id');
-        $poiIds = array_filter($poiIds);
-        $rawNormalConsumption = !empty($poiIds) ? $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds(array_values($poiIds)) : [];
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
 
         $data['page'] = $pagination['page'];
         $data['totalPages'] = $pagination['totalPages'];
@@ -428,48 +518,6 @@ class ProductionController {
             header('Location: ?controller=production&action=history');
             exit;
         }
-    }
-
-    public function advanceProduction() {
-        $search = $_GET['search'] ?? '';
-        if ($search) {
-            $allPOs = $this->warehouseModel->getPurchaseOrdersFiltered(['search' => $search, 'production_type' => 'advance']);
-        } else {
-            $allPOs = $this->warehouseModel->getAdvanceProductionPOs();
-        }
-        $pagination = Pagination::paginate($allPOs, 10);
-        $poIds = array_column($pagination['items'], 'po_id');
-        $data['purchase_orders'] = $pagination['items'];
-        $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
-
-        // Get all advance PO item IDs to fetch consumption records
-        $allPoiIds = [];
-        foreach ($data['po_items_map'] as $items) {
-            foreach ($items as $item) {
-                $allPoiIds[] = $item['poi_id'];
-            }
-        }
-        $rawConsumption = $this->warehouseModel->getAdvanceConsumptionByPoiIds($allPoiIds);
-
-        // Group by advance_poi_id for easy lookup in view
-        $consumptionByPoi = [];
-        foreach ($rawConsumption as $cr) {
-            $consumptionByPoi[$cr['advance_poi_id']][] = $cr;
-        }
-        $data['consumption_records'] = $consumptionByPoi;
-
-        $rawNormalConsumption = $this->warehouseModel->getAdvanceConsumptionByNormalPoiIds($allPoiIds);
-        $normalConsumptionByPoi = [];
-        foreach ($rawNormalConsumption as $cr) { $normalConsumptionByPoi[$cr['normal_poi_id']][] = $cr; }
-        $data['normal_consumption_records'] = $normalConsumptionByPoi;
-
-        $data['excess_records'] = $this->warehouseModel->getAllExcessForProduction();
-        $data['page'] = $pagination['page'];
-        $data['totalPages'] = $pagination['totalPages'];
-        $data['total'] = $pagination['total'];
-        $data['search'] = $search;
-        $data['page_title'] = 'Advance Production';
-        $this->render('advance_production/index', $data);
     }
 
     public function getPODetails() {
@@ -620,11 +668,16 @@ class ProductionController {
         include __DIR__ . "/../views/layouts/main.php";
     }
 
-    private function saveItemConversionIfNeeded($poi_id, $pcs_per_case) {
+    private function saveItemConversionIfNeeded($poi_id, $pcs_per_case, $item_id = null) {
         if ($pcs_per_case <= 0) return;
         $conn = \App\Core\BaseModel::getConnection();
-        $stmt = $conn->prepare("SELECT poi.item_id, i.uom_conversion FROM purchase_order_items poi JOIN items i ON poi.item_id = i.item_id WHERE poi.poi_id = :poi_id AND i.`remove` = 0");
-        $stmt->execute(['poi_id' => $poi_id]);
+        if ($item_id) {
+            $stmt = $conn->prepare("SELECT item_id, uom_conversion FROM items WHERE item_id = :item_id AND `remove` = 0");
+            $stmt->execute(['item_id' => $item_id]);
+        } else {
+            $stmt = $conn->prepare("SELECT poi.item_id, i.uom_conversion FROM purchase_order_items poi JOIN items i ON poi.item_id = i.item_id WHERE poi.poi_id = :poi_id AND i.`remove` = 0");
+            $stmt->execute(['poi_id' => $poi_id]);
+        }
         $row = $stmt->fetch();
         if (!$row) return;
         if (empty($row['uom_conversion']) || $row['uom_conversion'] == 0) {

@@ -57,7 +57,6 @@
                     <th class="sortable" data-sort="shift">Shift <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="status">Status <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="totalpo">Total PO Qty <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="excess">Excess <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
                     <th>Report</th>
                 </tr>
@@ -74,11 +73,7 @@
                         <?php endif; ?>
                     </td>
                     <td><strong>
-                    <?php
-                    $hPoiId = $h['poi_id'] ?? null;
-                    $hNormalCr = $hPoiId ? (($normal_consumption_records ?? [])[$hPoiId] ?? []) : [];
-                    if (!empty($hNormalCr) && ($h['production_type'] ?? 'normal') !== 'advance'):
-                    ?><span style="opacity:0.75"><?= htmlspecialchars($hNormalCr[0]['advance_po_number']) ?></span>/<?php endif; ?><?= htmlspecialchars($h['customer_po_number'] ?? '-') ?>
+                    <?= htmlspecialchars($h['customer_po_number'] ?? '-') ?>
                     </strong></td>
                     <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
@@ -86,6 +81,10 @@
                         <?php if (!empty($h['sts_ref'])): ?>
                             <strong><?= htmlspecialchars($h['sts_ref']) ?></strong>
                             <a href="?controller=production&action=printSTS&sts_ref=<?= urlencode($h['sts_ref']) ?>" target="_blank" class="btn btn-sm btn-outline-primary ms-1" title="Print STS"><i class="bi bi-printer"></i></a>
+                            <?php if (!empty($h['transfer_source_po'])): ?>
+                                <br><small class="text-info" title="Excess transferred from this PO" style="font-style:italic"><i class="bi bi-arrow-left-right me-1"></i>Transferred from <?= htmlspecialchars($h['transfer_source_po']) ?></small>
+                            <?php endif; ?>
+
                             <?php if (!empty($h['sts_remarks'])): ?>
                                 <br><small class="text-muted" title="Remarks" style="font-style:italic"><?= htmlspecialchars($h['sts_remarks']) ?></small>
                             <?php endif; ?>
@@ -137,17 +136,6 @@
                         <?php endif; ?>
                     </td>
                     <td><?= $h['computed_po_qty'] ?? 0 ?></td>
-                    <td>
-                        <?php
-                        $ordered = $h['ordered_quantity'] ?? 0;
-                        $excess = $ordered > 0 ? ($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) - $ordered : 0;
-                        ?>
-                        <?php if ($excess > 0): ?>
-                            <span class="badge bg-danger">+<?= $excess ?></span>
-                        <?php else: ?>
-                            <span class="text-muted">-</span>
-                        <?php endif; ?>
-                    </td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td>
                         <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
@@ -161,7 +149,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="15" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="14" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
