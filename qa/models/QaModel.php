@@ -12,13 +12,16 @@ class QaModel extends BaseModel {
                     ph.qc_inspector_name,
                     ph.qa_remark, ph.qa_inspected_by, ph.qa_inspected_at,
                     ph.qa_inspector_name,
-                    poi.quantity as ordered_quantity
+                    poi.quantity as ordered_quantity,
+                    COALESCE(i.item_code, ifa.item_code) as item_code
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
                 LEFT JOIN users u ON ph.user_id = u.user_id
                 LEFT JOIN users eu ON ph.edited_by = eu.user_id
                 LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
+                LEFT JOIN items i ON ph.item_id = i.item_id
+                LEFT JOIN items ifa ON ph.item_description = ifa.item_description AND ph.item_id IS NULL
                 WHERE 1=1";
         $params = [];
 

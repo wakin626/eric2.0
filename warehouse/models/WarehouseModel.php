@@ -576,7 +576,8 @@ class WarehouseModel extends BaseModel {
                     ph.qc_remark, ph.qc_inspected_by, ph.qc_inspected_at,
                     ph.qc_inspector_name,
                     ph.qa_remark, ph.qa_inspected_by, ph.qa_inspected_at,
-                    ph.qa_inspector_name
+                    ph.qa_inspector_name,
+                    COALESCE(i.item_code, ifa.item_code) as item_code
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
@@ -584,6 +585,8 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN users eu ON ph.edited_by = eu.user_id
                 LEFT JOIN production_reports pr ON ph.history_id = pr.history_id AND pr.status = 'pending'
                 LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
+                LEFT JOIN items i ON ph.item_id = i.item_id
+                LEFT JOIN items ifa ON ph.item_description = ifa.item_description AND ph.item_id IS NULL
                 ORDER BY ph.date_created ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
@@ -793,7 +796,8 @@ class WarehouseModel extends BaseModel {
                     ph.qc_remark, ph.qc_inspected_by, ph.qc_inspected_at,
                     ph.qc_inspector_name,
                     ph.qa_remark, ph.qa_inspected_by, ph.qa_inspected_at,
-                    ph.qa_inspector_name
+                    ph.qa_inspector_name,
+                    COALESCE(i.item_code, ifa.item_code) as item_code
                 FROM production_history ph 
                 LEFT JOIN purchase_orders po ON ph.po_id = po.po_id 
                 LEFT JOIN customers c ON po.customer_id = c.customer_id 
@@ -801,6 +805,8 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN users eu ON ph.edited_by = eu.user_id
                 LEFT JOIN production_reports pr ON ph.history_id = pr.history_id AND pr.status = 'pending'
                 LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
+                LEFT JOIN items i ON ph.item_id = i.item_id
+                LEFT JOIN items ifa ON ph.item_description = ifa.item_description AND ph.item_id IS NULL
                 WHERE 1=1";
         $params = [];
 
@@ -1033,14 +1039,24 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getLotsByPOItem($poi_id) {
+        $conn = self::getConnection();
+
+        $poiStmt = $conn->prepare("SELECT item_id FROM purchase_order_items WHERE poi_id = :poi_id LIMIT 1");
+        $poiStmt->execute(['poi_id' => $poi_id]);
+        $item_id = $poiStmt->fetchColumn();
+
         $sql = "SELECT MIN(lot_id) as lot_id, poi_id, lot_number, SUM(quantity_produced) as quantity_produced,
                        MIN(lot_date) as lot_date, MIN(created_by) as created_by, MIN(date_created) as date_created
                 FROM production_lots 
-                WHERE poi_id = :poi_id AND `is_removed` = 0 
+                WHERE (poi_id = :poi_id" . ($item_id ? " OR (item_id = :item_id AND poi_id IS NULL)" : "") . ")
+                AND `is_removed` = 0 
                 GROUP BY poi_id, lot_number
                 ORDER BY lot_number ASC, date_created ASC";
-        $stmt = self::getConnection()->prepare($sql);
-        $stmt->execute(['poi_id' => $poi_id]);
+        $params = ['poi_id' => $poi_id];
+        if ($item_id) $params['item_id'] = $item_id;
+
+        $stmt = $conn->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -2115,7 +2131,8 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getLotsByItem($itemId) {
-        $sql = "SELECT 
+        // Fetch PO-linked lots for this item
+        $poLotsSql = "SELECT 
                     pl.lot_number,
                     pl.po_id,
                     MIN(pl.poi_id) as poi_id,
@@ -2135,12 +2152,39 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN customers c ON po.customer_id = c.customer_id
                 LEFT JOIN users u ON pl.created_by = u.user_id
                 WHERE pl.is_removed = 0
-                  AND poi.item_id = :item_id
-                GROUP BY pl.lot_number, pl.po_id, po.customer_po_number, c.customer_name, i.uom_conversion, i.item_description, i.item_code
-                ORDER BY MIN(pl.lot_date) DESC, pl.lot_number DESC";
-        $stmt = self::getConnection()->prepare($sql);
+                  AND pl.poi_id IS NOT NULL
+                  AND pl.item_id = :item_id
+                GROUP BY pl.lot_number, pl.po_id, po.customer_po_number, c.customer_name, i.uom_conversion, i.item_description, i.item_code";
+        $stmt = self::getConnection()->prepare($poLotsSql);
         $stmt->execute(['item_id' => $itemId]);
-        $lots = $stmt->fetchAll();
+        $poLots = $stmt->fetchAll();
+
+        // Fetch independent lots (poi_id IS NULL) for this item
+        $indLotsSql = "SELECT 
+                    pl.lot_number,
+                    pl.po_id,
+                    MIN(pl.poi_id) as poi_id,
+                    MIN(pl.lot_date) as lot_date,
+                    MIN(pl.created_by) as created_by,
+                    SUM(pl.quantity_produced) as quantity_produced,
+                    NULL as customer_po_number,
+                    NULL as customer_name,
+                    MIN(u.full_name) as created_by_name,
+                    i.uom_conversion,
+                    i.item_description,
+                    i.item_code
+                FROM production_lots pl
+                LEFT JOIN items i ON pl.item_id = i.item_id
+                LEFT JOIN users u ON pl.created_by = u.user_id
+                WHERE pl.is_removed = 0
+                  AND pl.poi_id IS NULL
+                  AND pl.item_id = :item_id
+                GROUP BY pl.lot_number, i.uom_conversion, i.item_description, i.item_code";
+        $stmt2 = self::getConnection()->prepare($indLotsSql);
+        $stmt2->execute(['item_id' => $itemId]);
+        $indLots = $stmt2->fetchAll();
+
+        $lots = array_merge($poLots, $indLots);
 
         $allDelivered = $this->getLotDeliveries();
         $allLotIds = $this->getLotIdsByItem($itemId);
@@ -2156,15 +2200,15 @@ class WarehouseModel extends BaseModel {
 
         $deliveredByKey = [];
         foreach ($allLotIds as $lid) {
-            $key = $lid['lot_number'] . '_' . $lid['po_id'];
+            $key = $lid['lot_number'] . '_' . $lid['po_id'] . '_' . $lid['item_id'];
             $deliveredByKey[$key] = ($deliveredByKey[$key] ?? 0) + ($allDelivered[$lid['lot_id']] ?? 0);
         }
         foreach ($lots as &$lot) {
-            $key = $lot['lot_number'] . '_' . $lot['po_id'];
+            $key = $lot['lot_number'] . '_' . $lot['po_id'] . '_' . $itemId;
             $lot['quantity_delivered'] = $deliveredByKey[$key] ?? 0;
             $lotBackloaded = 0;
             foreach ($allLotIds as $lid) {
-                if ($lid['lot_number'] === $lot['lot_number'] && $lid['po_id'] === $lot['po_id']) {
+                if ($lid['lot_number'] === $lot['lot_number'] && $lid['po_id'] == $lot['po_id'] && $lid['item_id'] == $itemId) {
                     $lotBackloaded += $allBackloaded[$lid['lot_id']] ?? 0;
                 }
             }
@@ -2174,7 +2218,8 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getAllLotsStockOnHand() {
-        $sql = "SELECT 
+        // Fetch PO-linked lots (with poi_id set)
+        $poLotsSql = "SELECT 
                     pl.lot_number,
                     pl.po_id,
                     poi.item_id,
@@ -2195,12 +2240,40 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN purchase_orders po ON pl.po_id = po.po_id
                 LEFT JOIN customers c ON po.customer_id = c.customer_id
                 LEFT JOIN users u ON pl.created_by = u.user_id
-                WHERE pl.is_removed = 0
+                WHERE pl.is_removed = 0 AND pl.poi_id IS NOT NULL
                 GROUP BY pl.lot_number, pl.po_id, poi.item_id, po.customer_po_number, c.customer_name, i.uom_conversion, i.item_code, i.item_description
-                ORDER BY i.item_description ASC, MIN(pl.lot_date) DESC, pl.lot_number DESC";
-        $stmt = self::getConnection()->prepare($sql);
+                ORDER BY MIN(pl.lot_id) DESC, i.item_description ASC";
+        $stmt = self::getConnection()->prepare($poLotsSql);
         $stmt->execute();
-        $lots = $stmt->fetchAll();
+        $poLots = $stmt->fetchAll();
+
+        // Fetch independent lots (poi_id IS NULL, but item_id is set)
+        $independentLotsSql = "SELECT 
+                    pl.lot_number,
+                    pl.po_id,
+                    pl.item_id as item_id,
+                    MIN(pl.lot_id) as lot_id,
+                    MIN(pl.poi_id) as poi_id,
+                    MIN(pl.lot_date) as lot_date,
+                    MIN(pl.created_by) as created_by,
+                    SUM(pl.quantity_produced) as quantity_produced,
+                    NULL as customer_po_number,
+                    NULL as customer_name,
+                    MIN(u.full_name) as created_by_name,
+                    i.uom_conversion,
+                    i.item_code,
+                    i.item_description
+                FROM production_lots pl
+                LEFT JOIN items i ON pl.item_id = i.item_id
+                LEFT JOIN users u ON pl.created_by = u.user_id
+                WHERE pl.is_removed = 0 AND pl.poi_id IS NULL
+                GROUP BY pl.lot_number, pl.item_id, i.uom_conversion, i.item_code, i.item_description
+                ORDER BY MIN(pl.lot_id) DESC, i.item_description ASC";
+        $stmt2 = self::getConnection()->prepare($independentLotsSql);
+        $stmt2->execute();
+        $independentLots = $stmt2->fetchAll();
+
+        $allLots = array_merge($poLots, $independentLots);
 
         $allDelivered = $this->getLotDeliveries();
 
@@ -2214,9 +2287,8 @@ class WarehouseModel extends BaseModel {
         }
 
         $lotIdMap = self::getConnection()->prepare(
-            "SELECT pl.lot_id, pl.lot_number, pl.po_id, poi.item_id
+            "SELECT pl.lot_id, pl.lot_number, pl.po_id, pl.item_id
                 FROM production_lots pl
-                LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
                 WHERE pl.is_removed = 0"
         );
         $lotIdMap->execute();
@@ -2228,7 +2300,7 @@ class WarehouseModel extends BaseModel {
             $deliveredByKey[$key] = ($deliveredByKey[$key] ?? 0) + ($allDelivered[intval($lid['lot_id'])] ?? 0);
         }
 
-        foreach ($lots as &$lot) {
+        foreach ($allLots as &$lot) {
             $key = $lot['lot_number'] . '_' . $lot['po_id'] . '_' . $lot['item_id'];
             $lot['quantity_delivered'] = $deliveredByKey[$key] ?? 0;
             $lotBackloaded = 0;
@@ -2239,14 +2311,13 @@ class WarehouseModel extends BaseModel {
             }
             $lot['quantity_backloaded'] = $lotBackloaded;
         }
-        return $lots;
+        return $allLots;
     }
 
     private function getLotIdsByItem($itemId) {
-        $sql = "SELECT pl.lot_id, pl.lot_number, pl.po_id
+        $sql = "SELECT pl.lot_id, pl.lot_number, pl.po_id, pl.item_id
                 FROM production_lots pl
-                LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
-                WHERE pl.is_removed = 0 AND poi.item_id = :item_id";
+                WHERE pl.is_removed = 0 AND pl.item_id = :item_id";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['item_id' => $itemId]);
         return $stmt->fetchAll();
@@ -2849,11 +2920,15 @@ class WarehouseModel extends BaseModel {
     }
 
 public function searchItems($query) {
-        $sql = "SELECT MIN(item_id) as item_id, item_code, item_description, MIN(item_uom) as item_uom, MIN(uom_conversion) as uom_conversion 
-                FROM items WHERE `remove` = 0 AND status = 1 
-                AND (item_code LIKE :q1 OR item_description LIKE :q2)
-                GROUP BY item_code, item_description
-                ORDER BY item_code ASC LIMIT 20";
+        $sql = "SELECT i.item_id, i.item_code, i.item_description, i.item_uom, i.uom_conversion
+                FROM items i
+                WHERE i.`remove` = 0 AND i.status = 1
+                AND (i.item_code LIKE :q1 OR i.item_description LIKE :q2)
+                AND i.item_id = (
+                    SELECT MAX(i2.item_id) FROM items i2
+                    WHERE i2.item_code = i.item_code AND i2.`remove` = 0 AND i2.status = 1
+                )
+                ORDER BY i.item_code ASC LIMIT 20";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['q1' => "%{$query}%", 'q2' => "%{$query}%"]);
         return $stmt->fetchAll();

@@ -4,12 +4,12 @@
     <div class="d-flex gap-2 flex-wrap align-items-center">
         <?php if (($reportsCount ?? 0) > 0): ?>
             <?php if ($filterReports ?? false): ?>
-                <a href="?controller=admin&action=productionHistory<?= ($filterCustomer ?? '') ? '&filter_customer=' . urlencode($filterCustomer) : '' ?><?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterLot ?? '') ? '&filter_lot=' . urlencode($filterLot) : '' ?><?= ($filterPo ?? '') ? '&filter_po=' . urlencode($filterPo) : '' ?><?= ($filterDateFrom ?? '') ? '&filter_date_from=' . urlencode($filterDateFrom) : '' ?><?= ($filterDateTo ?? '') ? '&filter_date_to=' . urlencode($filterDateTo) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
+                <a href="?controller=admin&action=productionHistory<?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterLot ?? '') ? '&filter_lot=' . urlencode($filterLot) : '' ?><?= ($filterDateFrom ?? '') ? '&filter_date_from=' . urlencode($filterDateFrom) : '' ?><?= ($filterDateTo ?? '') ? '&filter_date_to=' . urlencode($filterDateTo) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
                    class="btn btn-sm btn-warning fw-bold">
                     <i class="bi bi-flag-fill me-1"></i>Show All
                 </a>
             <?php else: ?>
-                <a href="?controller=admin&action=productionHistory&filter_reports=1<?= ($filterCustomer ?? '') ? '&filter_customer=' . urlencode($filterCustomer) : '' ?><?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterLot ?? '') ? '&filter_lot=' . urlencode($filterLot) : '' ?><?= ($filterPo ?? '') ? '&filter_po=' . urlencode($filterPo) : '' ?><?= ($filterDateFrom ?? '') ? '&filter_date_from=' . urlencode($filterDateFrom) : '' ?><?= ($filterDateTo ?? '') ? '&filter_date_to=' . urlencode($filterDateTo) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
+                <a href="?controller=admin&action=productionHistory&filter_reports=1<?= ($filterItem ?? '') ? '&filter_item=' . urlencode($filterItem) : '' ?><?= ($filterLot ?? '') ? '&filter_lot=' . urlencode($filterLot) : '' ?><?= ($filterDateFrom ?? '') ? '&filter_date_from=' . urlencode($filterDateFrom) : '' ?><?= ($filterDateTo ?? '') ? '&filter_date_to=' . urlencode($filterDateTo) : '' ?><?= ($search ?? '') ? '&search=' . urlencode($search) : '' ?>"
                    class="btn btn-sm btn-outline-danger">
                     <i class="bi bi-flag-fill me-1"></i>Reports <span class="badge bg-danger ms-1"><?= $reportsCount ?></span>
                 </a>
@@ -18,12 +18,6 @@
         <form method="GET" id="historyFilterForm" class="d-flex gap-2 flex-wrap">
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="productionHistory">
-            <select name="filter_customer" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
-                <option value="">All Customers</option>
-                <?php foreach (($allCustomers ?? []) as $c): ?>
-                    <option value="<?= htmlspecialchars($c) ?>" <?= ($filterCustomer ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
-                <?php endforeach; ?>
-            </select>
             <select name="filter_item" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
                 <option value="">All Items</option>
                 <?php foreach (($allItems ?? []) as $i): ?>
@@ -36,12 +30,6 @@
                     <option value="<?= htmlspecialchars($l) ?>" <?= ($filterLot ?? '') === $l ? 'selected' : '' ?>><?= htmlspecialchars($l) ?></option>
                 <?php endforeach; ?>
             </select>
-            <select name="filter_po" class="form-select form-select-sm filter-select" style="width:170px" onchange="this.form.submit()">
-                <option value="">All PO Numbers</option>
-                <?php foreach (($allPos ?? []) as $p): ?>
-                    <option value="<?= htmlspecialchars($p) ?>" <?= ($filterPo ?? '') === $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
-                <?php endforeach; ?>
-            </select>
             <input type="date" name="filter_date_from" class="form-control form-control-sm" style="width:150px" value="<?= htmlspecialchars($filterDateFrom ?? '') ?>" placeholder="From" onchange="this.form.submit()">
             <input type="date" name="filter_date_to" class="form-control form-control-sm" style="width:150px" value="<?= htmlspecialchars($filterDateTo ?? '') ?>" placeholder="To" onchange="this.form.submit()">
         </form>
@@ -51,10 +39,8 @@
         <form method="GET" class="d-flex align-items-center">
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="productionHistory">
-            <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
             <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
             <input type="hidden" name="filter_lot" value="<?= htmlspecialchars($filterLot ?? '') ?>">
-            <input type="hidden" name="filter_po" value="<?= htmlspecialchars($filterPo ?? '') ?>">
             <input type="hidden" name="filter_date_from" value="<?= htmlspecialchars($filterDateFrom ?? '') ?>">
             <input type="hidden" name="filter_date_to" value="<?= htmlspecialchars($filterDateTo ?? '') ?>">
             <?php if ($filterReports ?? false): ?>
@@ -72,8 +58,7 @@
             <thead>
                 <tr>
                     <th class="sortable" data-sort="date">Date <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="po">PO Number <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="item_code">Item Code <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="sts_ref">STS Ref <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="lot">Lot No. <i class="bi bi-chevron-expand"></i></th>
@@ -99,10 +84,7 @@
                             </small>
                         <?php endif; ?>
                     </td>
-                    <td><strong>
-                    <?= htmlspecialchars($h['customer_po_number'] ?? '-') ?>
-                    </strong></td>
-                    <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
+                    <td><strong><?= htmlspecialchars($h['item_code'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
                     <td>
                         <?php if (!empty($h['sts_ref'])): ?>
@@ -274,7 +256,7 @@
 <?php
 $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages);
 $pageParams = 'controller=admin&action=productionHistory';
-foreach (['search', 'filter_customer', 'filter_item', 'filter_lot', 'filter_po', 'filter_date_from', 'filter_date_to', 'filter_reports'] as $p) {
+foreach (['search', 'filter_item', 'filter_lot', 'filter_date_from', 'filter_date_to', 'filter_reports'] as $p) {
     $val = $GLOBALS['_GET'][$p] ?? $$p ?? '';
     if ($val !== '') $pageParams .= '&' . $p . '=' . urlencode($val);
 }

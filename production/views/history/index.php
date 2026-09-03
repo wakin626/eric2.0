@@ -6,12 +6,6 @@
             <input type="hidden" name="controller" value="production">
             <input type="hidden" name="action" value="history">
             <input type="hidden" name="search" value="<?= htmlspecialchars($search ?? '') ?>">
-            <select name="filter_customer" class="form-select form-select-sm filter-select" style="width:180px" onchange="this.form.submit()">
-                <option value="">All Customers</option>
-                <?php foreach (($allCustomers ?? []) as $c): ?>
-                    <option value="<?= htmlspecialchars($c) ?>" <?= ($filterCustomer ?? '') === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
-                <?php endforeach; ?>
-            </select>
             <select name="filter_item" class="form-select form-select-sm filter-select" style="width:180px" onchange="this.form.submit()">
                 <option value="">All Items</option>
                 <?php foreach (($allItems ?? []) as $i): ?>
@@ -31,7 +25,6 @@
         <form method="GET" class="d-flex align-items-center">
             <input type="hidden" name="controller" value="production">
             <input type="hidden" name="action" value="history">
-            <input type="hidden" name="filter_customer" value="<?= htmlspecialchars($filterCustomer ?? '') ?>">
             <input type="hidden" name="filter_item" value="<?= htmlspecialchars($filterItem ?? '') ?>">
             <input type="hidden" name="filter_lot" value="<?= htmlspecialchars($filterLot ?? '') ?>">
             <i class="bi bi-search"></i>
@@ -46,8 +39,7 @@
             <thead>
                 <tr>
                     <th class="sortable" data-sort="date">Date <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="po">PO Number <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
+                    <th class="sortable" data-sort="item_code">Item Code <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="item">Item <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="sts_ref">STS Ref <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="lot">Lot No. <i class="bi bi-chevron-expand"></i></th>
@@ -72,10 +64,7 @@
                             </small>
                         <?php endif; ?>
                     </td>
-                    <td><strong>
-                    <?= htmlspecialchars($h['customer_po_number'] ?? '-') ?>
-                    </strong></td>
-                    <td><?= htmlspecialchars($h['customer_name'] ?? '-') ?></td>
+                    <td><strong><?= htmlspecialchars($h['item_code'] ?? '-') ?></strong></td>
                     <td><?= htmlspecialchars($h['item_description'] ?? '-') ?></td>
                     <td>
                         <?php if (!empty($h['sts_ref'])): ?>

@@ -8,13 +8,13 @@
         <div class="col-md-4">
             <div class="card stat-card p-3 h-100">
                 <h6 class="text-muted">In Progress</h6>
-                <h3><?= count(array_filter($purchase_orders ?? [], function($po) { return ($po['produced_quantity'] ?? 0) < ($po['total_quantity'] ?? 0); })) ?></h3>
+                <h3><?= count(array_filter($purchase_orders ?? [], function($po) { return ($po['delivered_quantity'] ?? 0) < ($po['total_quantity'] ?? 0); })) ?></h3>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card stat-card p-3 h-100">
                 <h6 class="text-muted">Completed</h6>
-                <h3><?= count(array_filter($purchase_orders ?? [], function($po) { return ($po['produced_quantity'] ?? 0) >= ($po['total_quantity'] ?? 0); })) ?></h3>
+                <h3><?= count(array_filter($purchase_orders ?? [], function($po) { return ($po['delivered_quantity'] ?? 0) >= ($po['total_quantity'] ?? 0); })) ?></h3>
             </div>
         </div>
     </div>
@@ -32,8 +32,7 @@
                         <th>PO Date</th>
                         <th>Customer</th>
                         <th>Item</th>
-<th>Produced PO QTY</th>
-<th>Delivered PO QTY</th>
+                        <th>Delivery Progress</th>
 
                     </tr>
                 </thead>
@@ -60,32 +59,13 @@
                         <td>
                             <?php if (!empty($items)): ?>
                                 <?php foreach ($items as $idx => $item):
-                                    $qty = $item['quantity'] ?? 0;
-                                    $itemProduced = $item['produced_quantity'] ?? 0;
-                                    $itemPercent = $qty > 0 ? round(($itemProduced / $qty) * 100) : 0;
-                                ?>
-                                    <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                    <div class="d-flex align-items-center flex-wrap gap-1" style="min-height: 20px;">
-                                        <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
-                                            <div class="progress-bar <?= $itemPercent >= 100 ? 'bg-success' : 'bg-warning' ?>" style="width: <?= min($itemPercent, 100) ?>%"></div>
-                                        </div>
-                                         <small class="text-muted text-nowrap"><?= $itemProduced ?>/<?= $qty ?> pcs</small>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <small class="text-muted">-</small>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if (!empty($items)): ?>
-                                <?php foreach ($items as $idx => $item):
-                                    $itemQty = $item['quantity'] ?? 0;
-                                    $itemDelivered = $item['delivered_quantity'] ?? 0;
+                                    $itemQty = intval($item['quantity'] ?? 0);
+                                    $itemDelivered = intval($item['delivered_quantity'] ?? 0);
+                                    $itemPercent = $itemQty > 0 ? min(100, round(($itemDelivered / $itemQty) * 100)) : 0;
                                     $itemRemaining = max(0, $itemQty - $itemDelivered);
                                 ?>
                                     <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-<?php $conv = $item['uom_conversion'] ?? null; ?>
-<small class="text-muted"><?= $itemDelivered ?>/<?= $itemQty ?> pcs, <?= $conv ? floor($itemDelivered / $conv) . '/' . floor($itemQty / $conv) . ' cs' : '—/—' ?></small>
+                                    <div class="d-flex align-items-center gap-2"><div class="progress flex-grow-1" style="height:10px"><div class="progress-bar <?= $itemDelivered >= $itemQty ? 'bg-success' : 'bg-warning' ?>" style="width:<?= $itemPercent ?>%"></div></div><small class="text-nowrap"><?= $itemDelivered ?>/<?= $itemQty ?> pcs</small><span class="badge <?= $itemDelivered >= $itemQty ? 'bg-success' : ($itemDelivered > 0 ? 'bg-warning text-dark' : 'bg-secondary') ?> text-nowrap"><?= $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $itemQty ? 'Fully Delivered' : 'Partial (' . $itemRemaining . ' left)') ?></span></div>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <small class="text-muted">-</small>

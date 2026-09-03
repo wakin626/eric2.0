@@ -407,8 +407,7 @@ $pageLotData = array_slice($lotData, $lotOffset, $lotPageSize);
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Customer</th>
-                            <th>PO Number</th>
+                            <th>Item</th>
                             <th>Lot Number</th>
                             <th class="text-end">Stock on Hand</th>
                             <th class="text-end">Delivered</th>
@@ -421,9 +420,8 @@ $pageLotData = array_slice($lotData, $lotOffset, $lotPageSize);
                             $conv = intval($lot['uom_conversion'] ?? 0);
                         ?>
                             <tr>
-                                <td><?= htmlspecialchars($lot['customer_name']) ?></td>
-                                <td><?= htmlspecialchars($lot['customer_po_number']) ?></td>
-                                <td><strong><?= htmlspecialchars($lot['lot_number']) ?></strong> <small class="text-muted"><?= htmlspecialchars($lot['item_description'] ?? $lot['item_code'] ?? '') ?></small></td>
+                                <td><strong><?= htmlspecialchars($lot['item_description'] ?? $lot['item_code'] ?? '') ?></strong></td>
+                                <td><strong><?= htmlspecialchars($lot['lot_number']) ?></strong></td>
                                 <td class="text-end"><?php if ($conv > 0): ?><?= number_format(intval($stockOnHandPcs / $conv)) ?> cs<?php else: ?><?= number_format($stockOnHandPcs) ?> pcs<?php endif; ?></td>
                                 <td class="text-end"><?php if ($conv > 0): ?><?= number_format(intval($lot['quantity_delivered'] / $conv)) ?> cs<?php else: ?><?= number_format($lot['quantity_delivered']) ?> pcs<?php endif; ?></td>
                                 <td><?= $lot['lot_date'] ? date('M Y', strtotime($lot['lot_date'] . ' +3 years')) : '-' ?></td>

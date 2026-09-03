@@ -96,9 +96,6 @@
                                 </div>
                                 <small class="text-muted text-nowrap"><?= $itemDelivered ?>/<?= $qty ?> pcs</small>
                                 <span class="badge <?= $statusClass ?> text-nowrap"><?= $statusLabel ?></span>
-                                <?php if ($isExcess): ?>
-                                    <span class="badge bg-danger">+<?= $itemProduced - $qty ?></span>
-                                <?php endif; ?>
                             </div>
                         </td>
                         <?php if ($idx === 0): ?>
