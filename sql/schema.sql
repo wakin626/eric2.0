@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS deliveries (
     plate_number VARCHAR(50) NULL,
     vehicle_type VARCHAR(50) NULL,
     logistic_provider VARCHAR(100) NULL,
+    is_over_shipment TINYINT(1) DEFAULT 0,
     old_dr_number VARCHAR(50) NULL,
     old_quantity TEXT NULL,
     lot_items LONGTEXT NULL COMMENT 'JSON object of lot details: {lot_id: {poi_id, lot_number, item_code, item_description, qty}}',

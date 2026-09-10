@@ -90,7 +90,6 @@
                                 <th>DR #</th>
                                 <th>Customer</th>
                                 <th>PO Number</th>
-                                <th>Item</th>
                                 <th>Cases</th>
                                 <th>Total Qty</th>
                                 <th>Delivered By</th>
@@ -621,7 +620,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '<td>' + (d.dr_number || '-') + '</td>';
                 html += '<td>' + (d.customer_name || '-') + '</td>';
                 html += '<td>' + (d.customer_po_number || '-') + '</td>';
-                html += '<td>' + (d.item_description || '-') + '</td>';
                 html += '<td>' + d.cases_delivered + '</td>';
                 html += '<td>' + d.delivery_quantity.toLocaleString() + ' ' + (d.item_uom || '') + '</td>';
                 html += '<td>' + (d.delivered_by_name || '-') + '</td>';

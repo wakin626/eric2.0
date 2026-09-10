@@ -47,7 +47,7 @@
                         <th>Type</th>
                         <th class="sortable" data-sort="created_by">Created By <i class="bi bi-chevron-expand"></i></th>
                         <th class="sortable" data-sort="date">Date Created <i class="bi bi-chevron-expand"></i></th>
-                        <th class="text-center">Actions</th>
+                        <th class="text-center action-col">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="poTableBody">
@@ -68,7 +68,7 @@
                         </td>
                         <td><?= htmlspecialchars($po['requested_by_name'] ?? '-') ?></td>
                         <td><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
-                        <td class="text-center">
+                        <td class="text-center action-col">
                             <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-eye"></i></button>
                             <button type="button" class="btn btn-sm btn-success edit-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-pencil"></i></button>
                         </td>
@@ -104,7 +104,7 @@
                         </td>
                         <td rowspan="<?= $itemCount ?>"><?= htmlspecialchars($po['requested_by_name'] ?? '-') ?></td>
                         <td rowspan="<?= $itemCount ?>"><?= date('Y-m-d', strtotime($po['date_created'])) ?></td>
-                        <td rowspan="<?= $itemCount ?>" class="text-center">
+                        <td rowspan="<?= $itemCount ?>" class="text-center action-col">
                             <button type="button" class="btn btn-sm btn-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-eye"></i></button>
                             <button type="button" class="btn btn-sm btn-success edit-po-btn" data-po-id="<?= $po['po_id'] ?>"><i class="bi bi-pencil"></i></button>
                         </td>

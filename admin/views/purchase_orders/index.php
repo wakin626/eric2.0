@@ -42,7 +42,7 @@
 <th class="sortable" data-sort="customer">Customer <i class="bi bi-chevron-expand"></i></th>
 <th>Item</th>
                        <th>Delivery Progress</th>
-<th class="text-center">Actions</th>
+<th class="text-center action-col">Actions</th>
                 </tr>
             </thead>
             <tbody id="poTableBody">
@@ -85,7 +85,7 @@
                                 <small class="text-muted">-</small>
                             <?php endif; ?>
                         </td>
-                    <td class="text-center">
+                    <td class="text-center action-col">
                         <button type="button" class="btn btn-sm btn-outline-primary view-po-btn" data-po-id="<?= $po['po_id'] ?>">
                             <i class="bi bi-eye"></i>
                         </button>

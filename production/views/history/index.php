@@ -50,7 +50,7 @@
                     <th class="sortable" data-sort="status">Status <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="totalpo">Total PO Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
-                    <th>Report</th>
+                    <th class="action-col">Report</th>
                 </tr>
             </thead>
             <tbody id="historyTableBody">
@@ -126,8 +126,27 @@
                     </td>
                     <td><?= $h['computed_po_qty'] ?? 0 ?></td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
-                    <td>
-                        <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
+                    <td class="action-col">
+                        <?php
+                        $canUndo = !empty($h['undo_available']) && (int)($h['user_id'] ?? 0) === (int)($_SESSION['user_id'] ?? 0);
+                        ?>
+                        <?php if ($canUndo): ?>
+                            <div id="undoAction<?= (int)$h['history_id'] ?>">
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="undoProductionEntry(<?= (int)$h['history_id'] ?>, this)" title="Undo this production entry">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                    <span class="undo-countdown" data-deadline="<?= (int)($h['undo_deadline'] ?? 0) ?>"></span>
+                                </button>
+                            </div>
+                            <div id="reportAction<?= (int)$h['history_id'] ?>" class="d-none">
+                                <?php if (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
+                                    <span class="badge bg-warning text-dark" title="<?= htmlspecialchars($h['report_reason'] ?? '') ?>">Reported</span>
+                                <?php elseif (!empty($h['lot_number'])): ?>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="openReportModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>', <?= $h['added_quantity'] ?>)">
+                                        <i class="bi bi-flag"></i>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        <?php elseif (!empty($h['report_id']) && $h['report_status'] === 'pending'): ?>
                             <span class="badge bg-warning text-dark" title="<?= htmlspecialchars($h['report_reason'] ?? '') ?>">Reported</span>
                         <?php elseif (!empty($h['lot_number'])): ?>
                             <button class="btn btn-sm btn-outline-danger" onclick="openReportModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>', <?= $h['added_quantity'] ?>)">
@@ -213,6 +232,54 @@ function openReportModal(historyId, lotNumber, addedQty) {
     updateReportTitle();
     new bootstrap.Modal(document.getElementById('reportModal')).show();
 }
+
+function undoProductionEntry(historyId, button) {
+    if (!confirm('Undo this entry? The quantity will be deducted from the production lot.')) return;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    fetch('?controller=production&action=undoLastFgEntry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history_ids: [historyId] })
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var row = button.closest('tr');
+            if (row) row.remove();
+            return;
+        }
+        alert(data.error || 'Unable to undo this entry.');
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i><span class="undo-countdown"></span>';
+    })
+    .catch(function() {
+        alert('Network error. Please try again.');
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i><span class="undo-countdown"></span>';
+    });
+}
+
+document.querySelectorAll('.undo-countdown').forEach(function(countdown) {
+    var action = countdown.closest('[id^="undoAction"]');
+    var report = action ? document.getElementById(action.id.replace('undoAction', 'reportAction')) : null;
+    var deadline = parseInt(countdown.dataset.deadline || '0', 10);
+    var update = function() {
+        var remaining = deadline - Math.floor(Date.now() / 1000);
+        if (remaining <= 0) {
+            if (action) action.classList.add('d-none');
+            if (report) report.classList.remove('d-none');
+            return false;
+        }
+        countdown.textContent = ' ' + Math.floor(remaining / 60) + ':' + String(remaining % 60).padStart(2, '0');
+        return true;
+    };
+    if (update()) {
+        var timer = setInterval(function() {
+            if (!update()) clearInterval(timer);
+        }, 1000);
+    }
+});
 
 function updateReportTitle() {
     const type = document.getElementById('reportType').value;

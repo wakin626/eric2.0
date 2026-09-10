@@ -300,6 +300,10 @@ CREATE TABLE `deliveries` (
   `delivery_quantity` int(11) DEFAULT 0,
   `old_quantity` text DEFAULT NULL,
   `dr_number` varchar(50) DEFAULT NULL COMMENT 'Delivery Receipt number',
+  `plate_number` varchar(50) DEFAULT NULL,
+  `vehicle_type` varchar(50) DEFAULT NULL,
+  `logistic_provider` varchar(100) DEFAULT NULL,
+  `is_over_shipment` tinyint(1) DEFAULT 0,
   `old_dr_number` varchar(50) DEFAULT NULL,
   `lot_items` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'JSON array of lot details [{lot_id, poi_id, qty}]' CHECK (json_valid(`lot_items`)),
   `remove` tinyint(1) NOT NULL DEFAULT 0
@@ -1160,7 +1164,8 @@ CREATE TABLE `production_history` (
   `date_created` datetime DEFAULT current_timestamp(),
   `date_edited` datetime DEFAULT NULL,
   `old_lot_number` varchar(100) DEFAULT NULL,
-  `old_added_quantity` int(11) DEFAULT NULL
+  `old_added_quantity` int(11) DEFAULT NULL,
+  `is_removed` tinyint(1) DEFAULT 0 COMMENT '0=active, 1=undone'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

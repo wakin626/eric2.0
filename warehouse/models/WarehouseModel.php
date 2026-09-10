@@ -28,7 +28,7 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getItemsByCustomer($customer_id) {
-        $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 AND (customer_id = :customer_id OR customer_id IS NULL) ORDER BY item_code ASC";
+        $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 AND customer_id = :customer_id ORDER BY item_code ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['customer_id' => $customer_id]);
         return $stmt->fetchAll();
@@ -212,8 +212,8 @@ class WarehouseModel extends BaseModel {
             $perPoi = [];
         }
 
-        $sql = "INSERT INTO deliveries (po_id, poi_id, lot_id, delivered_by, delivery_date, delivery_quantity, dr_number, plate_number, vehicle_type, logistic_provider, lot_items, remarks) 
-                VALUES (:po_id, :poi_id, :lot_id, :delivered_by, :delivery_date, :delivery_quantity, :dr_number, :plate_number, :vehicle_type, :logistic_provider, :lot_items, :remarks)";
+        $sql = "INSERT INTO deliveries (po_id, poi_id, lot_id, delivered_by, delivery_date, delivery_quantity, dr_number, plate_number, vehicle_type, logistic_provider, lot_items, remarks, is_over_shipment) 
+                VALUES (:po_id, :poi_id, :lot_id, :delivered_by, :delivery_date, :delivery_quantity, :dr_number, :plate_number, :vehicle_type, :logistic_provider, :lot_items, :remarks, :is_over_shipment)";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'po_id' => $data['po_id'],
@@ -227,7 +227,8 @@ class WarehouseModel extends BaseModel {
             'vehicle_type' => $data['vehicle_type'] ?? null,
             'logistic_provider' => $data['logistic_provider'] ?? null,
             'lot_items' => $data['lot_items'] ?? null,
-            'remarks' => $data['remarks'] ?? ''
+            'remarks' => $data['remarks'] ?? '',
+            'is_over_shipment' => $data['is_over_shipment'] ?? 0
         ]);
         $deliveryId = $conn->lastInsertId();
 
@@ -569,6 +570,8 @@ class WarehouseModel extends BaseModel {
 
     public function getProductionHistory() {
         $sql = "SELECT ph.*, po.customer_po_number, po.production_type, c.customer_name, u.full_name,
+                UNIX_TIMESTAMP(ph.date_created) + 300 as undo_deadline,
+                (ph.date_created >= NOW() - INTERVAL 5 MINUTE) as undo_available,
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
                     pr.report_type as report_type, pr.new_lot_number as resolved_lot,
@@ -587,6 +590,7 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
                 LEFT JOIN items i ON ph.item_id = i.item_id
                 LEFT JOIN items ifa ON ph.item_description = ifa.item_description AND ph.item_id IS NULL
+                WHERE ph.is_removed = 0
                 ORDER BY ph.date_created ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
@@ -641,7 +645,12 @@ class WarehouseModel extends BaseModel {
         }
         unset($row);
 
-        krsort($rows);
+        usort($rows, function ($first, $second) {
+            $dateComparison = strcmp($second['date_created'] ?? '', $first['date_created'] ?? '');
+            return $dateComparison !== 0
+                ? $dateComparison
+                : ((int)($second['history_id'] ?? 0) <=> (int)($first['history_id'] ?? 0));
+        });
         return array_values($rows);
     }
 
@@ -789,6 +798,8 @@ class WarehouseModel extends BaseModel {
 
     public function getProductionHistoryFiltered($filters = []) {
         $sql = "SELECT ph.*, po.customer_po_number, po.production_type, c.customer_name, u.full_name,
+                UNIX_TIMESTAMP(ph.date_created) + 300 as undo_deadline,
+                (ph.date_created >= NOW() - INTERVAL 5 MINUTE) as undo_available,
                     eu.full_name as edited_by_name, ph.date_edited,
                     pr.report_id, pr.status as report_status, pr.reason as report_reason,
                     pr.report_type as report_type, pr.new_lot_number as resolved_lot,
@@ -807,7 +818,7 @@ class WarehouseModel extends BaseModel {
                 LEFT JOIN purchase_order_items poi ON ph.poi_id = poi.poi_id
                 LEFT JOIN items i ON ph.item_id = i.item_id
                 LEFT JOIN items ifa ON ph.item_description = ifa.item_description AND ph.item_id IS NULL
-                WHERE 1=1";
+                WHERE ph.is_removed = 0";
         $params = [];
 
         if (!empty($filters['search'])) {
@@ -915,7 +926,12 @@ class WarehouseModel extends BaseModel {
         }
         unset($row);
 
-        krsort($rows);
+        usort($rows, function ($first, $second) {
+            $dateComparison = strcmp($second['date_created'] ?? '', $first['date_created'] ?? '');
+            return $dateComparison !== 0
+                ? $dateComparison
+                : ((int)($second['history_id'] ?? 0) <=> (int)($first['history_id'] ?? 0));
+        });
         return array_values($rows);
     }
 
@@ -1119,7 +1135,10 @@ class WarehouseModel extends BaseModel {
             }
         }
         $result = array_values($merged);
-        usort($result, function($a, $b) { return strcmp($a['lot_number'], $b['lot_number']); });
+        usort($result, function($a, $b) {
+            $dateCmp = strtotime($a['date_created']) - strtotime($b['date_created']);
+            return $dateCmp !== 0 ? $dateCmp : strcmp($a['lot_number'], $b['lot_number']);
+        });
         return $result;
     }
 
@@ -1179,7 +1198,10 @@ class WarehouseModel extends BaseModel {
             }
         }
         $result = array_values($merged);
-        usort($result, function($a, $b) { return strcmp($a['lot_number'], $b['lot_number']); });
+        usort($result, function($a, $b) {
+            $dateCmp = strtotime($a['date_created']) - strtotime($b['date_created']);
+            return $dateCmp !== 0 ? $dateCmp : strcmp($a['lot_number'], $b['lot_number']);
+        });
         return $result;
     }
 
@@ -2121,7 +2143,7 @@ class WarehouseModel extends BaseModel {
         $sql = "SELECT DISTINCT i.item_id, i.item_code, i.item_description
                 FROM production_lots pl
                 LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
-                LEFT JOIN items i ON poi.item_id = i.item_id
+            LEFT JOIN items i ON COALESCE(poi.item_id, pl.item_id) = i.item_id
                 WHERE pl.is_removed = 0
                   AND i.item_id IS NOT NULL
                 ORDER BY i.item_description ASC";
@@ -2617,6 +2639,69 @@ class WarehouseModel extends BaseModel {
         return $stmt->fetch() ?: null;
     }
 
+    public function undoProductionHistory($historyIds, $userId = null) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $ids = array_map('intval', $historyIds);
+            if (empty($ids)) {
+                $conn->rollBack();
+                return false;
+            }
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+                $userCondition = $userId !== null ? ' AND user_id = ?' : '';
+                $queryParams = $ids;
+                if ($userId !== null) {
+                $queryParams[] = $userId;
+                }
+                $stmt = $conn->prepare("SELECT history_id, item_id, lot_number, added_quantity, date_created
+                    FROM production_history
+                    WHERE history_id IN ($placeholders) AND is_removed = 0
+                    AND date_created >= NOW() - INTERVAL 5 MINUTE$userCondition");
+                $stmt->execute($queryParams);
+            $rows = $stmt->fetchAll();
+            if (empty($rows)) {
+                $conn->rollBack();
+                return false;
+            }
+
+            $validIds = array_column($rows, 'history_id');
+            $validPlaceholders = implode(',', array_fill(0, count($validIds), '?'));
+            $conn->prepare("UPDATE production_history SET is_removed = 1 WHERE history_id IN ($validPlaceholders)")
+                ->execute($validIds);
+
+            $lotDeductions = [];
+            foreach ($rows as $row) {
+                $key = $row['item_id'] . '_' . $row['lot_number'];
+                if (!isset($lotDeductions[$key])) {
+                    $lotDeductions[$key] = [
+                        'item_id' => $row['item_id'],
+                        'lot_number' => $row['lot_number'],
+                        'total_deducted' => 0,
+                    ];
+                }
+                $lotDeductions[$key]['total_deducted'] += intval($row['added_quantity']);
+            }
+
+            foreach ($lotDeductions as $deduction) {
+                $conn->prepare("UPDATE production_lots SET quantity_produced = GREATEST(0, quantity_produced - :deducted)
+                        WHERE item_id = :item_id AND lot_number = :lot_number AND is_removed = 0")
+                    ->execute([
+                        'deducted' => $deduction['total_deducted'],
+                        'item_id' => $deduction['item_id'],
+                        'lot_number' => $deduction['lot_number'],
+                    ]);
+            }
+
+            $conn->commit();
+            return true;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
     public function upsertItemLot($data) {
         $conn = self::getConnection();
         $item_id = $data['item_id'];
@@ -2675,7 +2760,7 @@ class WarehouseModel extends BaseModel {
                 COALESCE(i2.item_description, i.item_description) as item_description,
                 COALESCE(i2.item_uom, i.item_uom) as item_uom,
                 COALESCE(i2.uom_conversion, i.uom_conversion) as uom_conversion,
-                l.lot_id, l.lot_number, l.quantity_produced, l.pcs_per_case, l.lot_date, l.po_id,
+                l.lot_id, l.lot_number, l.quantity_produced, l.pcs_per_case, l.lot_date, l.po_id, l.date_created,
                 po.po_number, po.customer_po_number,
                 CASE WHEN $selectedPoMatch THEN 1 ELSE 0 END AS in_selected_po
                 FROM production_lots l
@@ -2748,6 +2833,7 @@ class WarehouseModel extends BaseModel {
                     'po_number' => $lot['customer_po_number'] ?: $lot['po_number'] ?? null,
                     'pcs_per_case' => $lot['pcs_per_case'],
                     'lot_date' => $lot['lot_date'],
+                    'date_created' => $lot['date_created'],
                     'uom_conversion' => $lot['uom_conversion'] ?? null,
                     'in_selected_po' => (int)($lot['in_selected_po'] ?? 1),
                     'sub_lots' => [['lot_id' => $lid, 'available' => $available]],
@@ -2764,8 +2850,37 @@ class WarehouseModel extends BaseModel {
         $result = array_values($grouped);
         foreach ($result as &$item) {
             $item['lots'] = array_values($item['lots']);
+            usort($item['lots'], function($a, $b) {
+                return strtotime($a['date_created']) - strtotime($b['date_created']);
+            });
         }
         unset($item);
+
+        if ($selectedPoId !== null) {
+            $poiStmt = $conn->prepare("SELECT poi.item_id, poi.quantity, poi.delivered_quantity, i.uom_conversion
+                    FROM purchase_order_items poi
+                    JOIN items i ON poi.item_id = i.item_id
+                    WHERE poi.po_id = ?");
+            $poiStmt->execute([$selectedPoId]);
+            $poiFulfillment = [];
+            while ($row = $poiStmt->fetch()) {
+                $poiFulfillment[intval($row['item_id'])] = [
+                    'quantity' => intval($row['quantity']),
+                    'delivered_quantity' => intval($row['delivered_quantity']),
+                    'uom_conversion' => $row['uom_conversion'] ? intval($row['uom_conversion']) : null,
+                ];
+            }
+            foreach ($result as &$item) {
+                $iid = intval($item['item_id']);
+                if (isset($poiFulfillment[$iid])) {
+                    $item['po_quantity'] = $poiFulfillment[$iid]['quantity'];
+                    $item['po_delivered'] = $poiFulfillment[$iid]['delivered_quantity'];
+                    $item['po_uom_conversion'] = $poiFulfillment[$iid]['uom_conversion'];
+                }
+            }
+            unset($item);
+        }
+
         usort($result, function($a, $b) { return strcmp($a['item_code'], $b['item_code']); });
         return $result;
     }
@@ -2924,11 +3039,26 @@ public function searchItems($query) {
                 FROM items i
                 WHERE i.`remove` = 0 AND i.status = 1
                 AND (i.item_code LIKE :q1 OR i.item_description LIKE :q2)
-                AND i.item_id = (
-                    SELECT MAX(i2.item_id) FROM items i2
-                    WHERE i2.item_code = i.item_code AND i2.`remove` = 0 AND i2.status = 1
-                )
-                ORDER BY i.item_code ASC LIMIT 20";
+                                AND i.item_id = (
+                                        SELECT i2.item_id
+                                        FROM items i2
+                                        WHERE i2.item_code = i.item_code
+                                            AND i2.`remove` = 0
+                                            AND i2.status = 1
+                                        ORDER BY (
+                                                SELECT COUNT(*)
+                                                FROM production_lots pl2
+                                                WHERE pl2.item_id = i2.item_id AND pl2.is_removed = 0
+                                        ) DESC, i2.item_id ASC
+                                        LIMIT 1
+                                )
+                ORDER BY i.item_code ASC,
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM production_lots pl
+                        WHERE pl.item_id = i.item_id AND pl.is_removed = 0
+                    ) THEN 0 ELSE 1 END,
+                    i.item_id ASC
+                LIMIT 20";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['q1' => "%{$query}%", 'q2' => "%{$query}%"]);
         return $stmt->fetchAll();

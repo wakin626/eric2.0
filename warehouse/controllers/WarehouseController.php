@@ -770,6 +770,7 @@ class WarehouseController {
             $lotIdsRaw = $_POST['lot_ids'] ?? '';
             $delivery_date = $_POST['delivery_date'] ?? date('Y-m-d');
             $remarks = $_POST['remarks'] ?? '';
+            $isOverShipment = intval($_POST['is_over_shipment'] ?? 0) ? 1 : 0;
             if (empty($dr_number) || empty($lotIdsRaw) || empty($plate_number) || empty($vehicle_type) || empty($logistic_provider)) {
                 $_SESSION['error'] = 'Missing required fields for delivery.';
                 header('Location: ?controller=warehouse&action=deliveries');
@@ -889,6 +890,31 @@ class WarehouseController {
                     $totalQty += $deliveryQty;
                 }
             }
+
+            if ($po_id) {
+                $perPoiDelivery = [];
+                foreach ($lotItems as $li) {
+                    $poiId = $li['poi_id'] ?? null;
+                    if (!$poiId) continue;
+                    $perPoiDelivery[$poiId] = ($perPoiDelivery[$poiId] ?? 0) + intval($li['qty']);
+                }
+                $conn = \App\Core\BaseModel::getConnection();
+                foreach ($perPoiDelivery as $poiId => $requestedQty) {
+                    $poiStmt = $conn->prepare("SELECT poi.quantity, poi.delivered_quantity
+                            FROM purchase_order_items poi WHERE poi.poi_id = ?");
+                    $poiStmt->execute([$poiId]);
+                    $poiData = $poiStmt->fetch();
+                    if ($poiData) {
+                        $remaining = intval($poiData['quantity']) - intval($poiData['delivered_quantity']);
+                        if ($requestedQty > $remaining) {
+                            $_SESSION['error'] = "Delivery blocked: Requested quantity ({$requestedQty}) exceeds open PO balance ({$remaining}) for PO item #{$poiId}.";
+                            header('Location: ?controller=warehouse&action=deliveries');
+                            exit;
+                        }
+                    }
+                }
+            }
+
             if (empty($lotItems)) {
                 $_SESSION['error'] = 'No valid lots selected for delivery.';
                 header('Location: ?controller=warehouse&action=deliveries');
@@ -918,7 +944,8 @@ class WarehouseController {
                 'vehicle_type' => $vehicle_type,
                 'logistic_provider' => $logistic_provider,
                 'lot_items' => json_encode($lotItems),
-                'remarks' => $remarks
+                'remarks' => $remarks,
+                'is_over_shipment' => $isOverShipment
             ]);
 
             $uniquePoiIds = array_unique(array_filter($assignedPoiIds));
@@ -1284,6 +1311,29 @@ class WarehouseController {
                 $groupedLotItems[$key]['qty'] += intval($li['qty'] ?? 0);
             }
             $lotItems = array_values($groupedLotItems);
+
+            $conn = \App\Core\BaseModel::getConnection();
+            $perPoiDelivery = [];
+            foreach ($lotItems as $li) {
+                $poiId = $li['poi_id'] ?? null;
+                if (!$poiId) continue;
+                $perPoiDelivery[$poiId] = ($perPoiDelivery[$poiId] ?? 0) + intval($li['qty']);
+            }
+            foreach ($perPoiDelivery as $poiId => $requestedQty) {
+                $poiStmt = $conn->prepare("SELECT poi.quantity, poi.delivered_quantity
+                        FROM purchase_order_items poi WHERE poi.poi_id = ?");
+                $poiStmt->execute([$poiId]);
+                $poiData = $poiStmt->fetch();
+                if ($poiData) {
+                    $remaining = intval($poiData['quantity']) - intval($poiData['delivered_quantity']);
+                    if ($requestedQty > $remaining) {
+                        http_response_code(400);
+                        echo json_encode(['error' => "Delivery blocked: Requested quantity ({$requestedQty}) exceeds open PO balance ({$remaining}) for PO item #{$poiId}."]);
+                        exit;
+                    }
+                }
+            }
+
             $this->warehouseModel->createDelivery([
                 'po_id' => $po_id,
                 'poi_id' => $firstPoiId,
@@ -1536,10 +1586,17 @@ class WarehouseController {
         $poHeaderRow = $xlsx->addRow(['Customer', 'PO Number', 'Item Code', 'Item', 'PO Qty', 'Produced', 'Delivered', 'Balance', 'Status'], 2);
         $xlsx->setAutoFilter('A', $poHeaderRow, 'I', $poHeaderRow);
         foreach ($filteredItems as $item) {
+            $conv = intval($item['uom_conversion'] ?? 0);
             $ordered = intval($item['po_qty']);
             $produced = intval($item['produced_quantity']);
             $delivered = intval($item['delivered_quantity']);
             $balance = $ordered - $delivered;
+            if ($conv > 0) {
+                $ordered = floor($ordered / $conv);
+                $produced = floor($produced / $conv);
+                $delivered = floor($delivered / $conv);
+                $balance = floor($balance / $conv);
+            }
             if ($delivered >= $ordered) {
                 $status = 'Completed';
             } elseif ($produced > 0) {

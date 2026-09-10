@@ -161,6 +161,7 @@
     <script src="public/js/app.js"></script>
     <script>var URL_ROOT = '<?= URL_ROOT ?>';</script>
     <script src="public/js/notifications.js"></script>
+    <script src="public/js/network-status.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');

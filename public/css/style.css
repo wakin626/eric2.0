@@ -263,7 +263,7 @@ h6 {
   border: none;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  overflow: visible;
 }
 .data-card .card-header {
   background: var(--bg-card);
@@ -314,6 +314,35 @@ h6 {
 .table tbody tr:hover td:first-child {
   border-left: 3px solid var(--accent);
   padding-left: calc(1rem - 3px);
+}
+
+/* --- Sticky Table Headers & Fixed Action Columns --- */
+.data-card .table-responsive {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.data-card .table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f8fafc;
+}
+.table .action-col {
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  background: inherit;
+}
+.table thead .action-col {
+  z-index: 15;
+  background: #f8fafc;
+}
+.table tbody tr:nth-child(even) > .action-col {
+  background: #f1f5f9 !important;
+}
+.table tbody tr:nth-child(odd) > .action-col {
+  background: #ffffff !important;
 }
 
 /* --- Buttons --- */

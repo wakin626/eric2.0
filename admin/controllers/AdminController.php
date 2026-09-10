@@ -1091,10 +1091,17 @@ public function deleteProductionHistory() {
         $poHeaderRow = $xlsx->addRow(['Customer', 'PO Number', 'Item Code', 'Item', 'PO Qty', 'Produced', 'Delivered', 'Balance', 'Status'], 2);
         $xlsx->setAutoFilter('A', $poHeaderRow, 'I', $poHeaderRow);
         foreach ($filteredItems as $item) {
+            $conv = intval($item['uom_conversion'] ?? 0);
             $ordered = intval($item['po_qty']);
             $produced = intval($item['produced_quantity']);
             $delivered = intval($item['delivered_quantity']);
             $balance = $ordered - $delivered;
+            if ($conv > 0) {
+                $ordered = floor($ordered / $conv);
+                $produced = floor($produced / $conv);
+                $delivered = floor($delivered / $conv);
+                $balance = floor($balance / $conv);
+            }
             if ($delivered >= $ordered) {
                 $status = 'Completed';
             } elseif ($produced > 0) {

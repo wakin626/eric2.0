@@ -322,6 +322,7 @@ class ProductionController {
                 $itemCache = [];
                 $savedCount = 0;
                 $savedItemDescriptions = [];
+                $savedHistoryIds = [];
 
                 $stmtLast = $conn->prepare("SELECT sts_ref FROM production_history WHERE sts_ref LIKE 'STS-%' ORDER BY history_id DESC LIMIT 1 FOR UPDATE");
                 $stmtLast->execute();
@@ -336,10 +337,26 @@ class ProductionController {
                     $lotNumber = trim($lotNumber ?? '');
                     $qty = intval($quantities[$i] ?? 0);
                     $item_id = $item_ids[$i] ?? null;
-                    if ($lotNumber === '' || $qty <= 0 || !$item_id) continue;
+                    $shift = trim($shifts[$i] ?? '');
+
+                    // Skip completely empty rows
+                    if ($lotNumber === '' && $qty <= 0 && empty($item_id) && $shift === '') {
+                        continue;
+                    }
+
+                    // Reject partially filled rows
+                    $rowErrors = [];
+                    if (empty($item_id)) $rowErrors[] = 'Item';
+                    if ($lotNumber === '') $rowErrors[] = 'Lot Number';
+                    if ($qty <= 0) $rowErrors[] = 'Quantity';
+                    if ($shift === '') $rowErrors[] = 'Shift';
+
+                    if (!empty($rowErrors)) {
+                        throw new \RuntimeException('Row ' . ($i + 1) . ': Missing required fields (' . implode(', ', $rowErrors) . ')');
+                    }
 
                     if (!isset($itemCache[$item_id])) {
-                        $itemStmt = $conn->prepare("SELECT item_id, item_code, item_description FROM items WHERE item_id = :item_id AND `remove` = 0");
+                        $itemStmt = $conn->prepare("SELECT item_id, item_code, item_description, uom_conversion FROM items WHERE item_id = :item_id AND `remove` = 0");
                         $itemStmt->execute(['item_id' => $item_id]);
                         $itemCache[$item_id] = $itemStmt->fetch();
                     }
@@ -354,12 +371,17 @@ class ProductionController {
                     $existingLot = $this->warehouseModel->getLotByItemAndLotNumber($item_id, $lotNumber);
                     $previousLotQty = $existingLot ? intval($existingLot['quantity_produced']) : 0;
 
+                    $pcsVal = intval($pcsPerCases[$i] ?? 0);
+                    if ($pcsVal <= 0) {
+                        $pcsVal = intval($item['uom_conversion'] ?? 0);
+                    }
+
                     try {
                         $lotId = $this->warehouseModel->upsertItemLot([
                             'item_id' => $item_id,
                             'lot_number' => $lotNumber,
                             'quantity_produced' => $qty,
-                            'pcs_per_case' => intval($pcsPerCases[$i] ?? 0) ?: null,
+                            'pcs_per_case' => $pcsVal > 0 ? $pcsVal : null,
                             'created_by' => $_SESSION['user_id']
                         ]);
                     } catch (\Exception $e) {
@@ -369,15 +391,15 @@ class ProductionController {
 
                     $newLotQty = $previousLotQty + $qty;
 
-                    $histPcs = intval($pcsPerCases[$i] ?? 0) ?: null;
+                    $histPcs = $pcsVal > 0 ? $pcsVal : null;
                     $histShift = trim($shifts[$i] ?? '') ?: null;
                     $histReject = trim($rejectStatuses[$i] ?? '') ?: null;
                     $histRemarks = trim($stsRemarks[$i] ?? '') ?: null;
 
                     try {
-                        $conn->prepare("INSERT INTO production_history (po_id, poi_id, item_id, lot_number, item_description, sts_ref, shift, reject_status, sts_remarks, pcs_per_case, prepared_by_name, checked_by_name, received_by_name, user_id, previous_quantity, added_quantity, new_quantity, date_created)
-                            VALUES (NULL, NULL, :item_id, :lot_number, :item_description, :sts_ref, :shift, :reject_status, :sts_remarks, :pcs_per_case, :prepared_by_name, :checked_by_name, :received_by_name, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())")
-                            ->execute([
+                        $histStmt = $conn->prepare("INSERT INTO production_history (po_id, poi_id, item_id, lot_number, item_description, sts_ref, shift, reject_status, sts_remarks, pcs_per_case, prepared_by_name, checked_by_name, received_by_name, user_id, previous_quantity, added_quantity, new_quantity, date_created)
+                            VALUES (NULL, NULL, :item_id, :lot_number, :item_description, :sts_ref, :shift, :reject_status, :sts_remarks, :pcs_per_case, :prepared_by_name, :checked_by_name, :received_by_name, :user_id, :previous_quantity, :added_quantity, :new_quantity, NOW())");
+                        $histStmt->execute([
                                 'item_id' => $item_id,
                                 'lot_number' => $lotNumber,
                                 'item_description' => $item['item_description'],
@@ -394,12 +416,13 @@ class ProductionController {
                                 'added_quantity' => $qty,
                                 'new_quantity' => $newLotQty,
                             ]);
+                        $savedHistoryIds[] = intval($conn->lastInsertId());
                     } catch (\Exception $e) {
                         error_log('FG Input production_history INSERT error: ' . $e->getMessage() . ' | Query params: lot_number=' . $lotNumber . ', item_desc=' . ($item['item_description'] ?? 'null') . ', sts_ref=' . $autoStsRef . ', user_id=' . $_SESSION['user_id'] . ', added_qty=' . $qty);
                         throw $e;
                     }
 
-                    $this->saveItemConversionIfNeeded(null, intval($pcsPerCases[$i] ?? 0), $item_id);
+                    $this->saveItemConversionIfNeeded(null, intval($pcsPerCases[$i] ?? 0), $item_id, true);
                     $savedCount++;
                 }
 
@@ -434,6 +457,41 @@ class ProductionController {
                 exit;
             }
         }
+    }
+
+    public function undoLastFgEntry() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed']);
+            exit;
+        }
+        if (empty($_SESSION['user_id'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Unauthorized']);
+            exit;
+        }
+        $input = json_decode(file_get_contents('php://input'), true);
+        $historyIds = $input['history_ids'] ?? [];
+        if (empty($historyIds) || !is_array($historyIds)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No history IDs provided']);
+            exit;
+        }
+        try {
+            $result = $this->warehouseModel->undoProductionHistory($historyIds, $_SESSION['user_id']);
+            if ($result) {
+                echo json_encode(['success' => true, 'message' => 'Entry reversed successfully.']);
+            } else {
+                http_response_code(400);
+                echo json_encode(['error' => 'Reversal window expired or entries not found.']);
+            }
+        } catch (\Exception $e) {
+            error_log('undoLastFgEntry error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to reverse entry. Please try again.']);
+        }
+        exit;
     }
 
     public function history() {
@@ -668,7 +726,7 @@ class ProductionController {
         include __DIR__ . "/../views/layouts/main.php";
     }
 
-    private function saveItemConversionIfNeeded($poi_id, $pcs_per_case, $item_id = null) {
+    private function saveItemConversionIfNeeded($poi_id, $pcs_per_case, $item_id = null, $always_update = false) {
         if ($pcs_per_case <= 0) return;
         $conn = \App\Core\BaseModel::getConnection();
         if ($item_id) {
@@ -680,7 +738,7 @@ class ProductionController {
         }
         $row = $stmt->fetch();
         if (!$row) return;
-        if (empty($row['uom_conversion']) || $row['uom_conversion'] == 0) {
+        if ($always_update || empty($row['uom_conversion']) || $row['uom_conversion'] == 0) {
             $update = $conn->prepare("UPDATE items SET uom_conversion = :conv WHERE item_id = :id AND `remove` = 0");
             $update->execute(['conv' => $pcs_per_case, 'id' => $row['item_id']]);
         }

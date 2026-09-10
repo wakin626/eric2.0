@@ -26,7 +26,7 @@
                     <th class="sortable text-end" data-sort="available">Available Stock <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable text-end" data-sort="lots">Total Lots <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable text-end" data-sort="cases">Total Cases <i class="bi bi-chevron-expand"></i></th>
-                    <th class="text-center">Actions</th>
+                    <th class="text-center action-col">Actions</th>
                 </tr>
             </thead>
             <tbody id="fgTableBody">
@@ -52,7 +52,7 @@
                     </td>
                     <td class="text-end"><?= $totalLots ?></td>
                     <td class="text-end"><?= $cases !== null ? number_format($cases) . ' cs' : '—' ?></td>
-                    <td class="text-center">
+                    <td class="text-center action-col">
                         <button type="button" class="btn btn-sm btn-outline-primary view-lots-btn" data-item-id="<?= $item['item_id'] ?>" data-item-name="<?= htmlspecialchars($item['item_code'] . ' - ' . $item['item_description']) ?>" title="View Lots">
                             <i class="bi bi-eye"></i>
                         </button>

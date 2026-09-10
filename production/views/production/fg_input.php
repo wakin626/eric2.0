@@ -49,6 +49,7 @@
                         <div class="col-md-2">
                             <label class="form-label">Add Quantity <span class="text-danger">*</span></label>
                             <input type="number" name="added_quantity[]" class="form-control" min="1" required>
+                            <div class="lot-live-preview text-muted small" style="position:absolute; bottom:-1.4em; left:0; right:0; min-height:1.2em;"></div>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">PCS to CASE</label>
@@ -120,6 +121,8 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var saving = false;
+
     function initItemSearch(entry) {
         var searchInput = entry.querySelector('.item-search-input');
         var dropdown = entry.querySelector('.item-dropdown');
@@ -161,6 +164,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 selectedItemName.textContent = item.item_code + ' - ' + item.item_description;
                                 selectedItemInfo.classList.remove('d-none');
                                 dropdown.classList.add('d-none');
+                                entry.setAttribute('data-uom-conversion', item.uom_conversion || '');
+                                var pcsInput = entry.querySelector('input[name="pcs_per_case[]"]');
+                                if (pcsInput && !pcsInput.value && item.uom_conversion) {
+                                    pcsInput.value = item.uom_conversion;
+                                }
                             });
                             div.addEventListener('mouseenter', function() { this.style.background = '#f0f4ff'; });
                             div.addEventListener('mouseleave', function() { this.style.background = ''; });
@@ -193,6 +201,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function initLotEntry(entry) {
         initItemSearch(entry);
         updateRemoveButtons();
+
+        var qtyInput = entry.querySelector('input[name="added_quantity[]"]');
+        var previewDiv = entry.querySelector('.lot-live-preview');
+        if (qtyInput && previewDiv) {
+            qtyInput.addEventListener('input', function() {
+                var qty = parseInt(this.value) || 0;
+                if (qty <= 0) {
+                    previewDiv.textContent = '';
+                    return;
+                }
+                previewDiv.innerHTML = '<i class="bi bi-calculator me-1"></i>Adding <strong>' + qty.toLocaleString() + '</strong> pcs';
+            });
+        }
     }
 
     var firstEntry = document.querySelector('#lotContainer .lot-entry');
@@ -239,37 +260,56 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
 
         var entries = document.querySelectorAll('#lotContainer .lot-entry');
-        var hasValidLot = false;
-        var missingItem = false;
+        var firstError = null;
+
+        // Clear previous errors
         entries.forEach(function(entry) {
-            var itemId = entry.querySelector('.selected-item-id').value;
+            entry.querySelectorAll('.is-invalid').forEach(function(el) {
+                el.classList.remove('is-invalid');
+            });
+            entry.style.borderColor = '';
+        });
+
+        // Validate every lot entry
+        entries.forEach(function(entry, idx) {
+            var itemId = entry.querySelector('.selected-item-id').value.trim();
             var lotNum = entry.querySelector('input[name="lot_number[]"]').value.trim();
             var qty = parseInt(entry.querySelector('input[name="added_quantity[]"]').value) || 0;
-            if (lotNum && qty > 0) {
-                hasValidLot = true;
-                if (!itemId) missingItem = true;
+            var shift = entry.querySelector('select[name="shift[]"]').value;
+
+            // Skip completely empty rows
+            var hasAny = itemId || lotNum || qty > 0 || shift;
+            if (!hasAny) return;
+
+            var missing = [];
+            if (!itemId) {
+                missing.push('Item');
+                var searchInput = entry.querySelector('.item-search-input');
+                if (searchInput) searchInput.classList.add('is-invalid');
+            }
+            if (!lotNum) {
+                missing.push('Lot Number');
+                entry.querySelector('input[name="lot_number[]"]').classList.add('is-invalid');
+            }
+            if (qty <= 0) {
+                missing.push('Quantity');
+                entry.querySelector('input[name="added_quantity[]"]').classList.add('is-invalid');
+            }
+            if (!shift) {
+                missing.push('Shift');
+                entry.querySelector('select[name="shift[]"]').classList.add('is-invalid');
+            }
+
+            if (missing.length > 0) {
+                entry.style.borderColor = 'red';
+                if (!firstError) firstError = entry;
+                var lotLabel = lotNum || ('Lot entry #' + (idx + 1));
+                alert('Please complete all required fields (' + missing.join(', ') + ') for ' + lotLabel + '.');
             }
         });
 
-        if (!hasValidLot) {
-            alert('Please enter at least one valid lot with a lot number and quantity.');
-            return;
-        }
-        if (missingItem) {
-            alert('Please select an item for all filled lot entries.');
-            return;
-        }
-
-        var shiftOk = true;
-        entries.forEach(function(entry) {
-            var lotNum = entry.querySelector('input[name="lot_number[]"]').value.trim();
-            var qty = parseInt(entry.querySelector('input[name="added_quantity[]"]').value) || 0;
-            if (lotNum && qty > 0 && !entry.querySelector('select[name="shift[]"]').value) {
-                shiftOk = false;
-            }
-        });
-        if (!shiftOk) {
-            alert('Please select a shift for all filled lot entries.');
+        if (firstError) {
+            firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
 
@@ -278,10 +318,18 @@ document.addEventListener('DOMContentLoaded', function() {
             var lotNum = entry.querySelector('input[name="lot_number[]"]').value.trim();
             var qty = entry.querySelector('input[name="added_quantity[]"]').value;
             var conv = entry.querySelector('input[name="pcs_per_case[]"]').value;
+            var defaultConv = entry.getAttribute('data-uom-conversion') || '';
             var shift = entry.querySelector('select[name="shift[]"]').value;
             var itemName = entry.querySelector('.selected-item-name') ? entry.querySelector('.selected-item-name').textContent : '';
             if (lotNum && parseInt(qty) > 0) {
-                lotsHtml += '<tr><td>' + itemName + '</td><td>' + lotNum + '</td><td>' + qty + '</td><td>' + (conv || '-') + '</td><td>' + shift + '</td></tr>';
+                var displayConv = conv || defaultConv || '-';
+                var warnBadge = '';
+                if (!conv && !defaultConv) {
+                    warnBadge = ' <span class="badge bg-warning text-dark" title="This item has no case conversion set. The PCS/Case value will be null."><i class="bi bi-exclamation-triangle"></i> No CS conv</span>';
+                } else if (!conv && defaultConv) {
+                    displayConv = defaultConv + ' <small class="text-muted">(default)</small>';
+                }
+                lotsHtml += '<tr><td>' + itemName + '</td><td>' + lotNum + '</td><td>' + qty + '</td><td>' + displayConv + warnBadge + '</td><td>' + shift + '</td></tr>';
             }
         });
         lotsHtml += '</tbody></table>';
@@ -292,7 +340,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('confirmSaveBtn').addEventListener('click', function() {
+        if (saving) return;
+        saving = true;
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
         document.getElementById('fgInputForm').submit();
+    });
+
+    document.getElementById('previewModal').addEventListener('show.bs.modal', function() {
+        var btn = document.getElementById('confirmSaveBtn');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Confirm & Save';
+        saving = false;
     });
 });
 </script>

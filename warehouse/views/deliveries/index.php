@@ -54,7 +54,7 @@
                     <th>Delivery Date</th>
                     <th>Remarks</th>
                     <th>Report / Edit</th>
-                    <th>Actions</th>
+                    <th class="action-col">Actions</th>
                 </tr>
             </thead>
             <tbody id="deliveryTableBody">
@@ -172,7 +172,7 @@
                             <span class="text-muted">-</span>
                         <?php endif; ?>
                     </td>
-                    <td>
+                    <td class="action-col">
                         <?php $disAttr = $isActive ? '' : 'disabled'; ?>
                         <?php $disClass = $isActive ? '' : 'disabled'; ?>
                         <?php if ($hasLotItems): ?>
@@ -303,9 +303,9 @@
                                 <input type="text" name="dr_number" id="modalDrNumber" class="form-control" placeholder="Enter DR number" required>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Purchase Order</label>
-                                <select name="po_id" id="poSelect" class="form-select">
-                                    <option value="">Select PO (optional)</option>
+                                <label class="form-label">Purchase Order *</label>
+                                <select name="po_id" id="poSelect" class="form-select" required>
+                                    <option value="">Select PO</option>
                                 </select>
                             </div>
                             <div class="mb-3">
@@ -685,14 +685,11 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
     var container = document.getElementById('availableItemsContainer');
     var poSelect = document.getElementById('poSelect');
     var saveBtn = document.querySelector('#createDeliveryModal form button[type="submit"]');
-    var loadedItemMap = {};
-    var allItemsData = [];
-
     function loadAllPOs() {
         fetch('?controller=warehouse&action=getActivePOsForAssignment')
             .then(function(r) { return r.json(); })
             .then(function(pos) {
-                poSelect.innerHTML = '<option value="">Select PO (optional)</option>';
+                poSelect.innerHTML = '<option value="">Select PO</option>';
                 if (!pos || pos.length === 0) return;
                 pos.forEach(function(po) {
                     var opt = document.createElement('option');
@@ -760,11 +757,39 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
             itemDiv.className = 'mb-3 border rounded p-2';
             var header = document.createElement('div');
             header.className = 'fw-bold text-primary mb-1';
+            var progressBarHtml = '';
+            if (item.po_quantity !== undefined && item.po_quantity > 0) {
+                var poQty = item.po_quantity;
+                var poDelivered = item.po_delivered || 0;
+                var pct = Math.min(100, (poDelivered / poQty) * 100);
+                var isComplete = poDelivered >= poQty;
+                var barClass = isComplete ? 'bg-success' : (pct > 0 ? 'bg-warning' : 'bg-danger');
+                var badgeClass = isComplete ? 'bg-success' : (pct > 0 ? 'bg-warning text-dark' : 'bg-secondary');
+                var conv = item.po_uom_conversion || 0;
+                var qtyLabel, statusText;
+                if (conv > 0) {
+                    var deliveredCases = Math.floor(poDelivered / conv);
+                    var orderedCases = Math.floor(poQty / conv);
+                    var remainingCases = orderedCases - deliveredCases;
+                    qtyLabel = deliveredCases + ' / ' + orderedCases + ' CS';
+                    statusText = isComplete ? 'Complete' : (pct > 0 ? 'Partial (' + remainingCases + ' CS left)' : 'Pending');
+                } else {
+                    qtyLabel = poDelivered.toLocaleString() + ' / ' + poQty.toLocaleString() + ' pcs';
+                    statusText = isComplete ? 'Complete' : (pct > 0 ? 'Partial (' + (poQty - poDelivered).toLocaleString() + ' left)' : 'Pending');
+                }
+                progressBarHtml = '<div class="d-flex align-items-center gap-2 mb-1 ms-3">' +
+                    '<div class="progress flex-grow-1" style="height:8px;max-width:200px;">' +
+                        '<div class="progress-bar ' + barClass + '" style="width:' + pct + '%"></div>' +
+                    '</div>' +
+                    '<small class="text-muted text-nowrap">' + qtyLabel + '</small>' +
+                    '<span class="badge ' + badgeClass + ' text-nowrap" style="font-size:0.65rem;">' + statusText + '</span>' +
+                '</div>';
+            }
             header.innerHTML = '<i class="bi bi-box-seam me-1"></i>' + (item.item_code || '') + ' - ' + (item.item_description || '') +
-                ' <small class="text-muted">(' + (item.item_uom || 'PCS') + ')</small>';
+                ' <small class="text-muted">(' + (item.item_uom || 'PCS') + ')</small>' + progressBarHtml;
             itemDiv.appendChild(header);
 
-            visibleLots.forEach(function(lot) {
+            visibleLots.forEach(function(lot, lotIdx) {
                 var lotId = lot.lot_id;
                 var subLots = lot.sub_lots || [{lot_id: lotId, available: lot.available_quantity || 0}];
                 loadedItemMap[lotId] = { item_id: item.item_id, item_code: item.item_code, item_description: item.item_description };
@@ -776,15 +801,46 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
                 var availRem = conv > 0 ? avail % conv : 0;
                 var availLabel = conv > 0 ? availCS + ' CS' + (availRem > 0 ? ' / ' + availRem + ' pcs' : '') : avail + ' ' + uom;
 
+                var isFifoRecommended = lotIdx === 0 && visibleLots.length > 1;
+                var fifoBadge = isFifoRecommended
+                    ? ' <span class="badge bg-success ms-1" style="font-size:0.65rem;"><i class="bi bi-arrow-down-circle me-1"></i>FIFO Recommended</span>'
+                    : '';
+
+                var lotDateStr = '';
+                if (lot.date_created) {
+                    var d = new Date(lot.date_created);
+                    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                    var formattedDate = months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+                    var now = new Date();
+                    var diffMs = now - d;
+                    var ageDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                    lotDateStr = ' <small class="text-muted ms-1" title="' + lot.date_created + '"><i class="bi bi-calendar3 me-1"></i>' + formattedDate + ' <span class="text-secondary">(' + ageDays + ' days)</span></small>';
+                }
+
+                var fifoWarnHtml = '';
+                if (!isFifoRecommended && visibleLots.length > 1) {
+                    var oldestLot = visibleLots[0];
+                    var oldestDateStr = '';
+                    if (oldestLot.date_created) {
+                        var od = new Date(oldestLot.date_created);
+                        var oMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        oldestDateStr = oMonths[od.getMonth()] + ' ' + od.getDate() + ', ' + od.getFullYear();
+                    }
+                    fifoWarnHtml = '<div class="fifo-warn mt-1 ms-4" style="display:none;" id="fifoWarn_' + lotId + '">' +
+                        '<small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Older lot <strong>' + (oldestLot.lot_number || '-') + '</strong>' + (oldestDateStr ? ' (' + oldestDateStr + ')' : '') + ' still has stock. Are you sure?</small>' +
+                        '</div>';
+                }
+
                 var row = document.createElement('div');
                 row.className = 'border rounded p-2 mb-1 bg-light';
                 row.setAttribute('data-lot-row', lotId);
                 row.innerHTML =
                     '<div class="form-check">' +
-                        '<input class="form-check-input" type="checkbox" id="availChk_' + lotId + '" data-lot-id="' + lotId + '" data-type="avail" data-sub-lots=\'' + JSON.stringify(subLots).replace(/'/g, "&#39;") + '\'>' +
+                        '<input class="form-check-input" type="checkbox" id="availChk_' + lotId + '" data-lot-id="' + lotId + '" data-lot-number="' + lotNum + '" data-type="avail" data-sub-lots=\'' + JSON.stringify(subLots).replace(/'/g, "&#39;") + '\' data-lot-index="' + lotIdx + '">' +
                         '<label class="form-check-label fw-bold" for="availChk_' + lotId + '">' +
-                            '<i class="bi bi-tag me-1"></i>' + lotNum +
+                            '<i class="bi bi-tag me-1"></i>' + lotNum + fifoBadge +
                             ' <span class="ms-1 text-muted">Avail: ' + availLabel + '</span>' +
+                            lotDateStr +
                         '</label>' +
                     '</div>' +
                     '<div class="row g-2 mt-1 ms-4" style="display:none;" id="availFields_' + lotId + '">' +
@@ -797,7 +853,8 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
                             '<input type="number" class="form-control form-control-sm" id="lotQtyAvail_' + lotId + '" min="1" max="' + avail + '" data-max="' + avail + '" data-conv="' + conv + '" placeholder="Qty">' +
                         '</div>' +
                         '<div class="col-md-4" id="lotWarn_' + lotId + '"></div>' +
-                    '</div>';
+                    '</div>' +
+                    fifoWarnHtml;
 
                 itemDiv.appendChild(row);
 
@@ -810,12 +867,22 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
                     fieldsDiv.style.display = this.checked ? '' : 'none';
                     if (!this.checked) { caseEl.value = ''; qtyEl.value = ''; }
                     else { caseEl.focus(); }
+
+                    var fifoWarn = document.getElementById('fifoWarn_' + lotId);
+                    if (fifoWarn) {
+                        if (this.checked && lotIdx > 0) {
+                            fifoWarn.style.display = '';
+                        } else {
+                            fifoWarn.style.display = 'none';
+                        }
+                    }
                 });
 
                 if (conv > 0) {
                     caseEl.addEventListener('input', function() {
                         var cs = parseInt(this.value) || 0;
                         qtyEl.value = cs * conv;
+                        validateLotOverShipment(qtyEl, avail, conv, lotId, item);
                     });
                     qtyEl.addEventListener('input', function() {
                         var qty = parseInt(this.value) || 0;
@@ -831,12 +898,64 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
                                 w.textContent = '';
                             }
                         }
+                        validateLotOverShipment(qtyEl, avail, conv, lotId, item);
+                    });
+                } else {
+                    qtyEl.addEventListener('input', function() {
+                        var qty = parseInt(this.value) || 0;
+                        var w = document.getElementById('lotWarn_' + lotId);
+                        if (w) {
+                            if (qty > avail) {
+                                w.innerHTML = '<small class="text-danger"><i class="bi bi-exclamation-circle"></i> Exceeds available ' + avail + ' pcs.</small>';
+                            } else {
+                                w.textContent = '';
+                            }
+                        }
+                        validateLotOverShipment(qtyEl, avail, 0, lotId, item);
                     });
                 }
             });
 
             container.appendChild(itemDiv);
         });
+    }
+
+    function validateLotOverShipment(qtyEl, avail, conv, lotId, item) {
+        var qty = parseInt(qtyEl.value) || 0;
+        var w = document.getElementById('lotWarn_' + lotId);
+        if (!w || !item || item.po_quantity === undefined || item.po_quantity <= 0) return;
+
+        var poConv = item.po_uom_conversion || conv || 0;
+        var poRemaining = item.po_quantity - (item.po_delivered || 0);
+        if (poRemaining < 0) poRemaining = 0;
+
+        var existingHtml = w.innerHTML;
+        var overShipWarn = '';
+        if (qty > 0 && qty > poRemaining) {
+            if (poConv > 0) {
+                overShipWarn = '<small class="text-danger fw-bold"><i class="bi bi-exclamation-circle"></i> Cannot exceed remaining balance of ' + Math.floor(poRemaining / poConv) + ' CS (' + poRemaining + ' pcs) for this PO item.</small>';
+            } else {
+                overShipWarn = '<small class="text-danger fw-bold"><i class="bi bi-exclamation-circle"></i> Cannot exceed remaining balance of ' + poRemaining + ' pcs for this PO item.</small>';
+            }
+            qtyEl.classList.add('is-invalid');
+        } else {
+            qtyEl.classList.remove('is-invalid');
+        }
+
+        if (overShipWarn) {
+            w.innerHTML = existingHtml ? existingHtml + '<br>' + overShipWarn : overShipWarn;
+        } else {
+            w.innerHTML = existingHtml.replace(/<br><small class="text-danger fw-bold">.*?<\/small>$/, '').replace(/<small class="text-danger fw-bold">.*?<\/small>$/, '');
+        }
+
+        updateSubmitButton();
+    }
+
+    function updateSubmitButton() {
+        var saveBtn = document.querySelector('#createDeliveryModal form button[type="submit"]');
+        if (!saveBtn) return;
+        var anyOver = document.querySelectorAll('#availableItemsContainer .is-invalid').length > 0;
+        saveBtn.disabled = anyOver;
     }
 
     poSelect.addEventListener('change', function() {
@@ -848,6 +967,52 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
         loadAvailableItems(poSelect.value || null);
     });
 })();
+
+var allItemsData = [];
+var loadedItemMap = {};
+
+function checkOverShipment(lotData, items) {
+    var lotToItem = {};
+    items.forEach(function(item) {
+        (item.lots || []).forEach(function(lot) {
+            lotToItem[lot.lot_id] = item;
+        });
+    });
+
+    var perItemDelivery = {};
+    for (var lotId in lotData) {
+        var d = lotData[lotId];
+        var item = lotToItem[lotId];
+        if (!item || item.po_quantity === undefined) continue;
+        var iid = item.item_id;
+        if (!perItemDelivery[iid]) {
+            perItemDelivery[iid] = { item: item, totalQty: 0 };
+        }
+        perItemDelivery[iid].totalQty += d.qty;
+    }
+
+    var overItems = [];
+    for (var iid in perItemDelivery) {
+        var entry = perItemDelivery[iid];
+        var poQty = entry.item.po_quantity || 0;
+        var poDelivered = entry.item.po_delivered || 0;
+        var remaining = poQty - poDelivered;
+        if (remaining < 0) remaining = 0;
+        if (entry.totalQty > remaining && remaining >= 0 && poQty > 0) {
+            overItems.push({
+                item_code: entry.item.item_code,
+                item_description: entry.item.item_description,
+                po_quantity: poQty,
+                po_delivered: poDelivered,
+                po_uom_conversion: entry.item.po_uom_conversion || 0,
+                remaining: remaining,
+                attempted: entry.totalQty,
+                excess: entry.totalQty - remaining
+            });
+        }
+    }
+    return overItems;
+}
 
 document.getElementById('createDeliveryModal').addEventListener('hidden.bs.modal', function() {
     var form = this.querySelector('form');
@@ -864,6 +1029,11 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
     e.preventDefault();
 
     var poSelect = document.getElementById('poSelect');
+
+    if (!poSelect.value) {
+        alert('Please select a Purchase Order before creating a delivery.');
+        return;
+    }
 
     var lotData = {};
     var hasError = false;
@@ -921,6 +1091,21 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
 
     document.getElementById('selectedLotIds').value = lotPairs.join(',');
 
+    var overItems = checkOverShipment(lotData, allItemsData);
+    if (overItems.length > 0) {
+        var msg = 'Delivery blocked. The following items exceed remaining PO balance:\n\n';
+        overItems.forEach(function(item) {
+            var conv = item.po_uom_conversion || 0;
+            if (conv > 0) {
+                msg += item.item_code + ': ' + item.attempted.toLocaleString() + ' pcs (' + Math.floor(item.attempted / conv) + ' CS) requested, ' + item.remaining.toLocaleString() + ' pcs (' + Math.floor(item.remaining / conv) + ' CS) remaining\n';
+            } else {
+                msg += item.item_code + ': ' + item.attempted.toLocaleString() + ' pcs requested, ' + item.remaining.toLocaleString() + ' pcs remaining\n';
+            }
+        });
+        alert(msg);
+        return;
+    }
+
     var drNumber = document.getElementById('modalDrNumber').value.trim();
     if (drNumber) {
         fetch('?controller=warehouse&action=checkDRNumber&dr_number=' + encodeURIComponent(drNumber))
@@ -963,20 +1148,19 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
         for (var lotId in lotData) {
             var d = lotData[lotId];
             var lotLabel = 'Lot #' + lotId;
-            var lblEl = document.getElementById('availChk_' + lotId);
-            if (lblEl) {
-                var parentDiv = lblEl.closest('.bg-light');
-                if (parentDiv) {
-                    var lbl = parentDiv.querySelector('label');
-                    if (lbl) lotLabel = lbl.textContent.trim();
-                }
-            }
+            var chkEl = document.getElementById('availChk_' + lotId);
+            if (chkEl && chkEl.dataset.lotNumber) lotLabel = chkEl.dataset.lotNumber;
+            var itemName = 'Independent FG';
+            if (loadedItemMap[lotId]) itemName = loadedItemMap[lotId].item_code || loadedItemMap[lotId].item_description || 'Independent FG';
             totalQty += d.qty;
-            lotsHtml += '<tr><td>Independent FG</td><td>' + lotLabel + '</td><td>' + d.qty + '</td></tr>';
+            lotsHtml += '<tr><td>' + itemName + '</td><td>' + lotLabel + '</td><td>' + d.qty + '</td></tr>';
         }
         lotsHtml += '</tbody></table>';
         document.getElementById('previewLots').innerHTML = lotsHtml;
-        document.getElementById('previewItem').textContent = 'Independent FG';
+        var firstLotId = Object.keys(lotData)[0];
+        var firstItemName = 'Independent FG';
+        if (firstLotId && loadedItemMap[firstLotId]) firstItemName = loadedItemMap[firstLotId].item_code || loadedItemMap[firstLotId].item_description || 'Independent FG';
+        document.getElementById('previewItem').textContent = firstItemName;
         document.getElementById('previewQty').textContent = totalQty;
 
         var previewModal = new bootstrap.Modal(document.getElementById('deliveryPreviewModal'));
@@ -1516,7 +1700,7 @@ document.getElementById('submitBackloadBtn').addEventListener('click', function(
 
     var previewModal = new bootstrap.Modal(document.getElementById('backloadPreviewModal'));
     previewModal.show();
-});
+    });
 
 document.getElementById('confirmBackloadBtn').addEventListener('click', function() {
     bootstrap.Modal.getInstance(document.getElementById('backloadPreviewModal')).hide();
