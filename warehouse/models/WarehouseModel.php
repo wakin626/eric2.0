@@ -28,7 +28,7 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getItemsByCustomer($customer_id) {
-        $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 AND customer_id = :customer_id ORDER BY item_code ASC";
+        $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 AND item_type = 'FG' AND customer_id = :customer_id ORDER BY item_code ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['customer_id' => $customer_id]);
         return $stmt->fetchAll();
@@ -597,31 +597,24 @@ class WarehouseModel extends BaseModel {
         $rows = $stmt->fetchAll();
 
         $transferredLots = self::getConnection()->query("
-            SELECT pl.po_id as target_po_id, pl.poi_id, pl.lot_number, i.item_description, SUM(pl.quantity_produced) as transfer_qty, po.customer_po_number as source_po_number
+            SELECT pl.item_id, pl.po_id as target_po_id, pl.poi_id, pl.lot_number, i.item_description, SUM(pl.quantity_produced) as transfer_qty, po.customer_po_number as source_po_number
             FROM production_lots pl
             LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
             LEFT JOIN items i ON poi.item_id = i.item_id
             LEFT JOIN purchase_orders po ON pl.transferred_from_po_id = po.po_id
             WHERE pl.transferred_from_po_id IS NOT NULL AND pl.is_removed = 0
-            GROUP BY pl.po_id, pl.poi_id, pl.lot_number, i.item_description, po.customer_po_number
+            GROUP BY pl.item_id, pl.po_id, pl.poi_id, pl.lot_number, i.item_description, po.customer_po_number
         ")->fetchAll(\PDO::FETCH_ASSOC);
         $transferredMap = [];
-        $poiTransferredTotals = [];
         foreach ($transferredLots as $tl) {
-            $key = $tl['target_po_id'] . '|' . $tl['lot_number'] . '|' . ($tl['item_description'] ?? '');
+            $key = ($tl['item_id'] ?? 0) . '|' . $tl['lot_number'];
             $transferredMap[$key] = ['qty' => (int)$tl['transfer_qty'], 'source' => $tl['source_po_number'] ?? ''];
-            $poiKey = $tl['target_po_id'] . '|' . $tl['poi_id'];
-            $poiTransferredTotals[$poiKey] = ($poiTransferredTotals[$poiKey] ?? 0) + (int)$tl['transfer_qty'];
         }
 
         $lotItemTotals = [];
-        $poiTotals = [];
         foreach ($rows as &$row) {
             $lot = $row['lot_number'] ?? '';
-            $item = $row['item_description'] ?? '';
-            $poId = $row['po_id'];
-            $lotItemKey = $poId . '|' . $lot . '|' . $item;
-            $pid = $row['poi_id'];
+            $lotItemKey = ($row['item_id'] ?? 0) . '|' . $lot;
 
             if (!isset($lotItemTotals[$lotItemKey])) {
                 if (isset($transferredMap[$lotItemKey]) && !empty($transferredMap[$lotItemKey]['qty'])) {
@@ -635,13 +628,6 @@ class WarehouseModel extends BaseModel {
             $row['computed_prev_lot_qty'] = $lotItemTotals[$lotItemKey];
             $lotItemTotals[$lotItemKey] += $row['added_quantity'];
             $row['computed_new_lot_qty'] = $lotItemTotals[$lotItemKey];
-
-            if (!isset($poiTotals[$pid])) {
-                $poiKey = $poId . '|' . $pid;
-                $poiTotals[$pid] = $poiTransferredTotals[$poiKey] ?? 0;
-            }
-            $poiTotals[$pid] += $row['added_quantity'];
-            $row['computed_po_qty'] = $poiTotals[$pid];
         }
         unset($row);
 
@@ -871,7 +857,7 @@ class WarehouseModel extends BaseModel {
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
-        $transferredSql = "SELECT pl.po_id as target_po_id, pl.poi_id, pl.lot_number, i.item_description, SUM(pl.quantity_produced) as transfer_qty, po.customer_po_number as source_po_number
+        $transferredSql = "SELECT pl.item_id, pl.po_id as target_po_id, pl.poi_id, pl.lot_number, i.item_description, SUM(pl.quantity_produced) as transfer_qty, po.customer_po_number as source_po_number
             FROM production_lots pl
             LEFT JOIN purchase_order_items poi ON pl.poi_id = poi.poi_id
             LEFT JOIN items i ON poi.item_id = i.item_id
@@ -882,27 +868,20 @@ class WarehouseModel extends BaseModel {
             $transferredSql .= " AND pl.lot_number = :filter_lot";
             $transferredParams['filter_lot'] = $filters['lot_number'];
         }
-        $transferredSql .= " GROUP BY pl.po_id, pl.poi_id, pl.lot_number, i.item_description, po.customer_po_number";
+        $transferredSql .= " GROUP BY pl.item_id, pl.po_id, pl.poi_id, pl.lot_number, i.item_description, po.customer_po_number";
         $transferredStmt = self::getConnection()->prepare($transferredSql);
         $transferredStmt->execute($transferredParams);
         $transferredLots = $transferredStmt->fetchAll(\PDO::FETCH_ASSOC);
         $transferredMap = [];
-        $poiTransferredTotals = [];
         foreach ($transferredLots as $tl) {
-            $key = $tl['target_po_id'] . '|' . $tl['lot_number'] . '|' . ($tl['item_description'] ?? '');
+            $key = ($tl['item_id'] ?? 0) . '|' . $tl['lot_number'];
             $transferredMap[$key] = ['qty' => (int)$tl['transfer_qty'], 'source' => $tl['source_po_number'] ?? ''];
-            $poiKey = $tl['target_po_id'] . '|' . $tl['poi_id'];
-            $poiTransferredTotals[$poiKey] = ($poiTransferredTotals[$poiKey] ?? 0) + (int)$tl['transfer_qty'];
         }
 
         $lotItemTotals = [];
-        $poiTotals = [];
         foreach ($rows as &$row) {
             $lot = $row['lot_number'] ?? '';
-            $item = $row['item_description'] ?? '';
-            $poId = $row['po_id'];
-            $lotItemKey = $poId . '|' . $lot . '|' . $item;
-            $pid = $row['poi_id'];
+            $lotItemKey = ($row['item_id'] ?? 0) . '|' . $lot;
 
             if (!isset($lotItemTotals[$lotItemKey])) {
                 if (isset($transferredMap[$lotItemKey]) && !empty($transferredMap[$lotItemKey]['qty'])) {
@@ -916,13 +895,6 @@ class WarehouseModel extends BaseModel {
             $row['computed_prev_lot_qty'] = $lotItemTotals[$lotItemKey];
             $lotItemTotals[$lotItemKey] += $row['added_quantity'];
             $row['computed_new_lot_qty'] = $lotItemTotals[$lotItemKey];
-
-            if (!isset($poiTotals[$pid])) {
-                $poiKey = $poId . '|' . $pid;
-                $poiTotals[$pid] = $poiTransferredTotals[$poiKey] ?? 0;
-            }
-            $poiTotals[$pid] += $row['added_quantity'];
-            $row['computed_po_qty'] = $poiTotals[$pid];
         }
         unset($row);
 
@@ -1054,26 +1026,49 @@ class WarehouseModel extends BaseModel {
         }
     }
 
-    public function getLotsByPOItem($poi_id) {
+    public function getLotsByPOItem($poi_id, $po_id = null) {
         $conn = self::getConnection();
 
-        $poiStmt = $conn->prepare("SELECT item_id FROM purchase_order_items WHERE poi_id = :poi_id LIMIT 1");
-        $poiStmt->execute(['poi_id' => $poi_id]);
-        $item_id = $poiStmt->fetchColumn();
+        // When po_id is provided, derive lots from deliveries' lot_items JSON
+        // This matches how delivered_quantity is computed in purchase_order_items
+        if (!is_null($po_id)) {
+            $stmt = $conn->prepare("SELECT lot_items FROM deliveries 
+                WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0");
+            $stmt->execute(['po_id' => $po_id]);
 
-        $sql = "SELECT MIN(lot_id) as lot_id, poi_id, lot_number, SUM(quantity_produced) as quantity_produced,
-                       MIN(lot_date) as lot_date, MIN(created_by) as created_by, MIN(date_created) as date_created
-                FROM production_lots 
-                WHERE (poi_id = :poi_id" . ($item_id ? " OR (item_id = :item_id AND poi_id IS NULL)" : "") . ")
-                AND `is_removed` = 0 
-                GROUP BY poi_id, lot_number
+            $lotMap = [];
+            while ($r = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                $items = json_decode($r['lot_items'], true);
+                if (!is_array($items)) continue;
+                foreach ($items as $li) {
+                    $lPoi = (int)($li['poi_id'] ?? 0);
+                    $qty = (int)($li['qty'] ?? 0);
+                    $lotNum = $li['lot_number'] ?? '';
+                    if ($lPoi == $poi_id && $qty > 0 && $lotNum !== '') {
+                        if (!isset($lotMap[$lotNum])) {
+                            $lotMap[$lotNum] = ['lot_number' => $lotNum, 'quantity_delivered' => 0];
+                        }
+                        $lotMap[$lotNum]['quantity_delivered'] += $qty;
+                    }
+                }
+            }
+
+            ksort($lotMap);
+            return array_values($lotMap);
+        }
+
+        // Fallback: return production lots (used by FG inventory / reports)
+        $sql = "SELECT pl.lot_id, pl.poi_id, pl.lot_number, pl.quantity_produced,
+                       MIN(pl.lot_date) as lot_date, MIN(pl.created_by) as created_by, MIN(pl.date_created) as date_created
+                FROM production_lots pl
+                WHERE pl.poi_id = :poi_id
+                AND pl.is_removed = 0 
+                GROUP BY pl.lot_id, pl.lot_number, pl.quantity_produced
                 ORDER BY lot_number ASC, date_created ASC";
-        $params = ['poi_id' => $poi_id];
-        if ($item_id) $params['item_id'] = $item_id;
 
         $stmt = $conn->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll();
+        $stmt->execute(['poi_id' => $poi_id]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
     public function getAvailableLotsForPO($po_id) {
@@ -2750,7 +2745,7 @@ class WarehouseModel extends BaseModel {
 
         $selectedPoMatch = $selectedPoId === null
             ? '1'
-            : '(l.po_id = ? OR poi.po_id = ? OR EXISTS (
+            : '(EXISTS (
                     SELECT 1 FROM purchase_order_items selected_poi
                     WHERE selected_poi.po_id = ?
                     AND selected_poi.item_id = COALESCE(i2.item_id, i.item_id)
@@ -2772,7 +2767,7 @@ class WarehouseModel extends BaseModel {
                 AND (i.`remove` = 0 OR i2.`remove` = 0)
                 AND COALESCE(i2.item_id, i.item_id) IS NOT NULL";
 
-        $params = $selectedPoId === null ? [] : [$selectedPoId, $selectedPoId, $selectedPoId];
+        $params = $selectedPoId === null ? [] : [$selectedPoId];
 
         $stmt = $conn->prepare($sql);
         $stmt->execute($params);
@@ -3062,5 +3057,91 @@ public function searchItems($query) {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['q1' => "%{$query}%", 'q2' => "%{$query}%"]);
         return $stmt->fetchAll();
+    }
+
+    // ─── MRP Methods ──────────────────────────────────────────────────────────
+
+    public function getCustomersWithOpenPOs() {
+        $sql = "SELECT DISTINCT c.customer_id, c.customer_code, c.customer_name
+                FROM customers c
+                JOIN purchase_orders po ON c.customer_id = po.customer_id
+                WHERE c.`remove` = 0 AND c.status = 1
+                  AND po.delivered_quantity < po.total_quantity
+                  AND po.`remove` = 0
+                ORDER BY c.customer_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getOpenPOsByCustomer($customer_id) {
+        $sql = "SELECT po.*, c.customer_name
+                FROM purchase_orders po
+                JOIN customers c ON po.customer_id = c.customer_id
+                WHERE po.customer_id = :customer_id
+                  AND po.delivered_quantity < po.total_quantity
+                  AND po.`remove` = 0
+                ORDER BY po.customer_po_date DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customer_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getPOItemsWithBOM($po_id) {
+        $sql = "SELECT poi.poi_id, poi.quantity, poi.item_uom, poi.item_id,
+                       i.item_code, i.item_description,
+                       b.id AS bom_id, b.bom_code, b.batch_qty, b.batch_uom
+                FROM purchase_order_items poi
+                JOIN items i ON poi.item_id = i.item_id AND i.`remove` = 0
+                LEFT JOIN fg_boms b ON b.fg_item_id = poi.item_id
+                WHERE poi.po_id = :po_id
+                ORDER BY i.item_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_id' => $po_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getBOMComponentsWithStock($bom_ids) {
+        if (empty($bom_ids)) return [];
+        $placeholders = implode(',', array_fill(0, count($bom_ids), '?'));
+        $sql = "SELECT bi.bom_id, bi.item_id AS component_item_id, bi.dosage_rate, bi.wastage_allowance_pct,
+                       i.item_code, i.item_description, i.item_uom,
+                       COALESCE(v.total_soh, 0) AS soh
+                FROM fg_bom_items bi
+                JOIN items i ON bi.item_id = i.item_id AND i.`remove` = 0
+                LEFT JOIN view_inventory_status v ON v.item_id = bi.item_id
+                WHERE bi.bom_id IN ({$placeholders})
+                ORDER BY bi.bom_id, bi.id ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($bom_ids);
+        return $stmt->fetchAll();
+    }
+
+    public function getPendingAllocationsAcrossPOs($exclude_poi_ids, $ingredient_item_ids) {
+        if (empty($ingredient_item_ids)) return [];
+        $placeholders = implode(',', array_fill(0, count($ingredient_item_ids), '?'));
+        $sql = "SELECT bi.item_id AS component_item_id,
+                       SUM((poi.quantity / b.batch_qty) * bi.dosage_rate * (1 + bi.wastage_allowance_pct / 100)) AS total_pending
+                FROM purchase_order_items poi
+                JOIN fg_boms b ON b.fg_item_id = poi.item_id
+                JOIN fg_bom_items bi ON bi.bom_id = b.id
+                JOIN purchase_orders po ON poi.po_id = po.po_id
+                WHERE po.delivered_quantity < po.total_quantity
+                  AND po.`remove` = 0
+                  AND bi.item_id IN ({$placeholders})";
+        $params = $ingredient_item_ids;
+        if (!empty($exclude_poi_ids)) {
+            $exPlaceholders = implode(',', array_fill(0, count($exclude_poi_ids), '?'));
+            $sql .= " AND poi.poi_id NOT IN ({$exPlaceholders})";
+            $params = array_merge($params, $exclude_poi_ids);
+        }
+        $sql .= " GROUP BY bi.item_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        $result = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $result[$row['component_item_id']] = $row['total_pending'];
+        }
+        return $result;
     }
 }

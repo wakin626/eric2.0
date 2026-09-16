@@ -101,6 +101,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link <?= ($currentAction ?? '') === 'mrp' ? 'active' : '' ?>" href="?controller=warehouse&action=mrp">
+                            <i class="bi bi-calculator me-2"></i>MRP Sheet
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link <?= ($currentAction ?? '') === 'activityLogs' ? 'active' : '' ?>" href="?controller=warehouse&action=activityLogs">
                             <i class="bi bi-clock-history me-2"></i>Activity Logs
                         </a>

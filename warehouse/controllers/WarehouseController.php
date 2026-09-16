@@ -16,7 +16,12 @@ class WarehouseController {
             exit;
         }
         $action = $_GET['action'] ?? '';
-        if ($action !== 'getPODetails' && $action !== 'getItemsByCustomer' && $action !== 'backloadDelivery' && $action !== 'getDeliveryLotsForBackload' && $action !== 'getLotsByPOItem' && $action !== 'getPOItemsForAssignment' && $action !== 'getActivePOsForAssignment' && $action !== 'getLotsForTransfer' && $action !== 'viewBackloads' && $action !== 'getPOsContainingItem' && $action !== 'getAvailableItemsForDelivery' && ($_SESSION['department'] ?? '') !== 'warehouse') {
+        $dept = $_SESSION['department'] ?? '';
+        $mrpAllowed = in_array($action, ['mrp', 'mrpPDF']) && in_array($dept, ['warehouse', 'rnd', 'admin']);
+        $apiActions = ['getPODetails', 'getItemsByCustomer', 'backloadDelivery', 'getDeliveryLotsForBackload',
+            'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
+            'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery'];
+        if (!$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
         }
@@ -538,7 +543,12 @@ class WarehouseController {
             echo json_encode([]);
             exit;
         }
-        $lots = $this->warehouseModel->getLotsByPOItem($poiId);
+        $conn = \App\Core\BaseModel::getConnection();
+        $stmt = $conn->prepare("SELECT po_id FROM purchase_order_items WHERE poi_id = ?");
+        $stmt->execute([$poiId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $poId = $row ? $row['po_id'] : null;
+        $lots = $this->warehouseModel->getLotsByPOItem($poiId, $poId);
         echo json_encode($lots);
         exit;
     }
@@ -1670,6 +1680,242 @@ class WarehouseController {
         header('Content-Type: application/json');
         $pos = $this->warehouseModel->getAllActivePOs();
         echo json_encode($pos);
+        exit;
+    }
+
+    // ─── MRP Sheet ────────────────────────────────────────────────────────────
+
+    public function mrp() {
+        $customers = $this->warehouseModel->getCustomersWithOpenPOs();
+        $openPOs = [];
+        $poHeader = null;
+        $poItems = [];
+        $mrpSections = [];
+        $consolidated = [];
+        $customerId = $_GET['customer_id'] ?? null;
+        $poId = $_GET['po_id'] ?? null;
+
+        if ($customerId) {
+            $openPOs = $this->warehouseModel->getOpenPOsByCustomer($customerId);
+        }
+
+        if ($poId) {
+            $poHeader = $this->warehouseModel->getPurchaseOrderById($poId);
+            $allPoItems = $this->warehouseModel->getPOItemsWithBOM($poId);
+
+            $bomIds = [];
+            $poiIds = [];
+            foreach ($allPoItems as $poi) {
+                if (!empty($poi['bom_id'])) {
+                    $bomIds[] = $poi['bom_id'];
+                }
+                $poiIds[] = $poi['poi_id'];
+            }
+
+            $allComponents = $this->warehouseModel->getBOMComponentsWithStock($bomIds);
+            $componentsByBom = [];
+            $allIngredientIds = [];
+            foreach ($allComponents as $comp) {
+                $componentsByBom[$comp['bom_id']][] = $comp;
+                $allIngredientIds[$comp['component_item_id']] = true;
+            }
+
+            $pendingAllocations = $this->warehouseModel->getPendingAllocationsAcrossPOs(
+                $poiIds,
+                array_keys($allIngredientIds)
+            );
+
+            foreach ($allPoItems as $poi) {
+                if (empty($poi['bom_id'])) continue;
+                $batchQty = floatval($poi['batch_qty'] ?: 1);
+                $batchesNeeded = floatval($poi['quantity']) / $batchQty;
+                $components = $componentsByBom[$poi['bom_id']] ?? [];
+                $rows = [];
+                foreach ($components as $comp) {
+                    $dosage = floatval($comp['dosage_rate']);
+                    $wastage = floatval($comp['wastage_allowance_pct']);
+                    $totalReqt = $batchesNeeded * $dosage * (1 + $wastage / 100);
+                    $soh = floatval($comp['soh']);
+                    $allocated = floatval($pendingAllocations[$comp['component_item_id']] ?? 0);
+                    $excess = $soh - $totalReqt;
+
+                    if ($totalReqt == 0) {
+                        $remarks = 'NO NEED';
+                    } elseif ($soh == 0) {
+                        $remarks = 'NO stock for next order mfg';
+                    } elseif ($excess < 0) {
+                        $remarks = 'LACKING';
+                    } elseif ($excess < ($comp['soh'] * 0.1)) {
+                        $remarks = 'LOW STOCK';
+                    } else {
+                        $remarks = 'OK';
+                    }
+
+                    $rows[] = [
+                        'item_code' => $comp['item_code'],
+                        'item_description' => $comp['item_description'],
+                        'item_uom' => $comp['item_uom'],
+                        'total_reqt' => $totalReqt,
+                        'soh' => $soh,
+                        'allocated' => 0,
+                        'pending' => $allocated,
+                        'excess' => $excess,
+                        'remarks' => $remarks,
+                    ];
+                }
+                $mrpSections[] = [
+                    'fg_code' => $poi['item_code'],
+                    'fg_name' => $poi['item_description'],
+                    'target_qty' => $poi['quantity'],
+                    'item_uom' => $poi['item_uom'],
+                    'batch_qty' => $batchQty,
+                    'batch_uom' => $poi['batch_uom'],
+                    'batches_needed' => $batchesNeeded,
+                    'components' => $rows,
+                ];
+            }
+
+            $consolidatedMap = [];
+            foreach ($mrpSections as $section) {
+                foreach ($section['components'] as $row) {
+                    $key = $row['item_code'];
+                    if (!isset($consolidatedMap[$key])) {
+                        $consolidatedMap[$key] = $row;
+                    } else {
+                        $consolidatedMap[$key]['total_reqt'] += $row['total_reqt'];
+                        $consolidatedMap[$key]['soh'] = $row['soh'];
+                        $consolidatedMap[$key]['allocated'] += $row['allocated'];
+                        $consolidatedMap[$key]['pending'] += $row['pending'];
+                        $consolidatedMap[$key]['excess'] = $consolidatedMap[$key]['soh'] - $consolidatedMap[$key]['total_reqt'];
+                        if ($consolidatedMap[$key]['excess'] < 0) {
+                            $consolidatedMap[$key]['remarks'] = 'LACKING';
+                        }
+                    }
+                }
+            }
+            $consolidated = array_values($consolidatedMap);
+        }
+
+        $this->render('mrp/preview', [
+            'customers' => $customers,
+            'openPOs' => $openPOs,
+            'poHeader' => $poHeader,
+            'mrpSections' => $mrpSections,
+            'consolidated' => $consolidated,
+            'selectedCustomer' => $customerId,
+            'selectedPO' => $poId,
+        ]);
+    }
+
+    public function mrpPDF() {
+        $customerId = $_GET['customer_id'] ?? null;
+        $poId = $_GET['po_id'] ?? null;
+        if (!$poId) {
+            header('Location: ?controller=warehouse&action=mrp');
+            exit;
+        }
+
+        $poHeader = $this->warehouseModel->getPurchaseOrderById($poId);
+        $allPoItems = $this->warehouseModel->getPOItemsWithBOM($poId);
+
+        $bomIds = [];
+        $poiIds = [];
+        foreach ($allPoItems as $poi) {
+            if (!empty($poi['bom_id'])) $bomIds[] = $poi['bom_id'];
+            $poiIds[] = $poi['poi_id'];
+        }
+
+        $allComponents = $this->warehouseModel->getBOMComponentsWithStock($bomIds);
+        $componentsByBom = [];
+        $allIngredientIds = [];
+        foreach ($allComponents as $comp) {
+            $componentsByBom[$comp['bom_id']][] = $comp;
+            $allIngredientIds[$comp['component_item_id']] = true;
+        }
+
+        $pendingAllocations = $this->warehouseModel->getPendingAllocationsAcrossPOs(
+            $poiIds,
+            array_keys($allIngredientIds)
+        );
+
+        $mrpSections = [];
+        foreach ($allPoItems as $poi) {
+            if (empty($poi['bom_id'])) continue;
+            $batchQty = floatval($poi['batch_qty'] ?: 1);
+            $batchesNeeded = floatval($poi['quantity']) / $batchQty;
+            $components = $componentsByBom[$poi['bom_id']] ?? [];
+            $rows = [];
+            foreach ($components as $comp) {
+                $dosage = floatval($comp['dosage_rate']);
+                $wastage = floatval($comp['wastage_allowance_pct']);
+                $totalReqt = $batchesNeeded * $dosage * (1 + $wastage / 100);
+                $soh = floatval($comp['soh']);
+                $pending = floatval($pendingAllocations[$comp['component_item_id']] ?? 0);
+                $excess = $soh - $totalReqt;
+
+                if ($totalReqt == 0) $remarks = 'NO NEED';
+                elseif ($soh == 0) $remarks = 'NO stock for next order mfg';
+                elseif ($excess < 0) $remarks = 'LACKING';
+                else $remarks = 'OK';
+
+                $rows[] = [
+                    'item_code' => $comp['item_code'],
+                    'item_description' => $comp['item_description'],
+                    'item_uom' => $comp['item_uom'],
+                    'total_reqt' => $totalReqt,
+                    'soh' => $soh,
+                    'allocated' => 0,
+                    'pending' => $pending,
+                    'excess' => $excess,
+                    'remarks' => $remarks,
+                ];
+            }
+            $mrpSections[] = [
+                'fg_code' => $poi['item_code'],
+                'fg_name' => $poi['item_description'],
+                'target_qty' => $poi['quantity'],
+                'item_uom' => $poi['item_uom'],
+                'batch_qty' => $batchQty,
+                'batch_uom' => $poi['batch_uom'],
+                'batches_needed' => $batchesNeeded,
+                'components' => $rows,
+            ];
+        }
+
+        $consolidatedMap = [];
+        foreach ($mrpSections as $section) {
+            foreach ($section['components'] as $row) {
+                $key = $row['item_code'];
+                if (!isset($consolidatedMap[$key])) {
+                    $consolidatedMap[$key] = $row;
+                } else {
+                    $consolidatedMap[$key]['total_reqt'] += $row['total_reqt'];
+                    $consolidatedMap[$key]['pending'] += $row['pending'];
+                    $consolidatedMap[$key]['excess'] = $consolidatedMap[$key]['soh'] - $consolidatedMap[$key]['total_reqt'];
+                }
+            }
+        }
+        $consolidated = array_values($consolidatedMap);
+
+        $data = [
+            'po' => $poHeader,
+            'mrpSections' => $mrpSections,
+            'consolidated' => $consolidated,
+            'userName' => $_SESSION['full_name'] ?? '',
+            'userDept' => $_SESSION['department'] ?? '',
+        ];
+
+        ob_start();
+        include __DIR__ . "/../views/mrp/pdf_template.php";
+        $html = ob_get_clean();
+
+        require_once __DIR__ . '/../../public/vendor/dompdf/autoload.inc.php';
+        $dompdf = new \Dompdf\Dompdf();
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+        $poNumber = $poHeader['customer_po_number'] ?? 'PO';
+        $dompdf->stream("MRP_{$poNumber}.pdf", ['Attachment' => false]);
         exit;
     }
 
