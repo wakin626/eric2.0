@@ -30,11 +30,38 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
     <h4 class="mb-0"><i class="bi bi-calculator me-2"></i>MRP Sheet - Customer PO Requirements</h4>
-    <?php if (!empty($poHeader)): ?>
-    <a href="?controller=warehouse&action=mrpPDF&customer_id=<?= $selectedCustomer ?>&po_id=<?= $selectedPO ?>" class="btn btn-danger">
-        <i class="bi bi-file-earmark-pdf me-1"></i>Print MRP Sheet (PDF)
-    </a>
-    <?php endif; ?>
+    <div class="d-flex gap-2">
+        <?php if (!empty($poHeader)): ?>
+        <?php if (!empty($hasExistingSnapshot)): ?>
+            <span class="btn btn-success disabled">
+                <i class="bi bi-check-circle me-1"></i>Snapshot Saved
+            </span>
+        <?php else: ?>
+        <form method="POST" action="?controller=warehouse&action=saveMrpSnapshot" class="d-inline" id="saveMrpForm">
+            <input type="hidden" name="po_id" value="<?= $selectedPO ?>">
+            <input type="hidden" name="customer_id" value="<?= $selectedCustomer ?>">
+            <button type="submit" class="btn btn-success" id="saveMrpBtn" onclick="return confirm('Save current MRP as snapshot?')">
+                <i class="bi bi-save me-1"></i>Save Snapshot
+            </button>
+        </form>
+        <script>
+        document.getElementById('saveMrpForm')?.addEventListener('submit', function() {
+            var btn = document.getElementById('saveMrpBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+        });
+        </script>
+        <?php endif; ?>
+        <?php endif; ?>
+        <a href="?controller=warehouse&action=mrpHistory<?= !empty($selectedPO) ? '&po_id=' . $selectedPO : '' ?>" class="btn btn-outline-secondary">
+            <i class="bi bi-clock-history me-1"></i>History
+        </a>
+        <?php if (!empty($poHeader)): ?>
+        <a href="?controller=warehouse&action=mrpPDF&customer_id=<?= $selectedCustomer ?>&po_id=<?= $selectedPO ?>" class="btn btn-danger">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Print PDF
+        </a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -175,6 +202,7 @@
                         <th class="num">SOH</th>
                         <th class="num">Allocated</th>
                         <th class="num">Pending PO/RR</th>
+                        <th class="num">Supplier</th>
                         <th class="num">EXCESS / (LACKING)</th>
                         <th>Date</th>
                         <th>Remarks</th>
@@ -190,6 +218,7 @@
                         <td class="num"><?= number_format($row['soh'], 2) ?></td>
                         <td class="num"><?= number_format($row['allocated'], 2) ?></td>
                         <td class="num"><?= number_format($row['pending'], 2) ?></td>
+                        <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? '<span class="text-success">' . number_format($row['supplier_pending'], 2) . '</span>' : '0.00' ?></td>
                         <td class="num <?= $row['excess'] < 0 ? 'mrp-negative' : 'mrp-positive' ?>">
                             <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
                         </td>
@@ -220,6 +249,7 @@
                     <th class="num">SOH</th>
                     <th class="num">Allocated</th>
                     <th class="num">Pending PO/RR</th>
+                    <th class="num">Supplier</th>
                     <th class="num">EXCESS / (LACKING)</th>
                     <th>Remarks</th>
                 </tr>
@@ -234,6 +264,7 @@
                     <td class="num"><?= number_format($row['soh'], 2) ?></td>
                     <td class="num"><?= number_format($row['allocated'], 2) ?></td>
                     <td class="num"><?= number_format($row['pending'], 2) ?></td>
+                    <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? '<span class="text-success">' . number_format($row['supplier_pending'], 2) . '</span>' : '0.00' ?></td>
                     <td class="num <?= $row['excess'] < 0 ? 'mrp-negative' : 'mrp-positive' ?>">
                         <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
                     </td>

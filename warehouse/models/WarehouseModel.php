@@ -28,7 +28,10 @@ class WarehouseModel extends BaseModel {
     }
 
     public function getItemsByCustomer($customer_id) {
-        $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 AND item_type = 'FG' AND customer_id = :customer_id ORDER BY item_code ASC";
+        $sql = "SELECT item_id, item_code, item_description, customer_id, item_uom, uom_conversion
+                FROM customer_finished_goods
+                WHERE `remove` = 0 AND status = 1 AND customer_id = :customer_id
+                ORDER BY item_code ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['customer_id' => $customer_id]);
         return $stmt->fetchAll();
@@ -49,16 +52,17 @@ class WarehouseModel extends BaseModel {
         return self::getConnection()->lastInsertId();
     }
 
-    public function createPurchaseOrderItem($po_id, $item_id, $quantity, $unit_price, $uom = 'PCS') {
-        $sql = "INSERT INTO purchase_order_items (po_id, item_id, quantity, unit_price, item_uom) 
-                VALUES (:po_id, :item_id, :quantity, :unit_price, :item_uom)";
+    public function createPurchaseOrderItem($po_id, $item_id, $quantity, $unit_price, $uom = 'PCS', $item_code = null) {
+        $sql = "INSERT INTO purchase_order_items (po_id, item_id, quantity, unit_price, item_uom, item_code) 
+                VALUES (:po_id, :item_id, :quantity, :unit_price, :item_uom, :item_code)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'po_id' => $po_id,
             'item_id' => $item_id,
             'quantity' => $quantity,
             'unit_price' => $unit_price,
-            'item_uom' => $uom
+            'item_uom' => $uom,
+            'item_code' => $item_code
         ]);
         
         $poi_id = self::getConnection()->lastInsertId();
@@ -81,7 +85,7 @@ class WarehouseModel extends BaseModel {
         return $stmt->execute(['po_id' => $po_id, 'po_id2' => $po_id]);
     }
 
-    public function updatePurchaseOrderItem($poi_id, $quantity, $item_id = null, $unit_price = null, $item_uom = null) {
+    public function updatePurchaseOrderItem($poi_id, $quantity, $item_id = null, $unit_price = null, $item_uom = null, $item_code = null) {
         $fields = ['quantity' => $quantity, 'poi_id' => $poi_id];
         $set = "quantity = :quantity";
         if ($item_id !== null) {
@@ -95,6 +99,10 @@ class WarehouseModel extends BaseModel {
         if ($item_uom !== null) {
             $set .= ", item_uom = :item_uom";
             $fields['item_uom'] = $item_uom;
+        }
+        if ($item_code !== null) {
+            $set .= ", item_code = :item_code";
+            $fields['item_code'] = $item_code;
         }
         $sql = "UPDATE purchase_order_items SET $set WHERE poi_id = :poi_id";
         $stmt = self::getConnection()->prepare($sql);
@@ -3030,32 +3038,23 @@ class WarehouseModel extends BaseModel {
     }
 
 public function searchItems($query) {
-        $sql = "SELECT i.item_id, i.item_code, i.item_description, i.item_uom, i.uom_conversion
+        $sql = "(SELECT i.item_id, i.item_code, i.item_description, i.item_uom, i.uom_conversion
                 FROM items i
                 WHERE i.`remove` = 0 AND i.status = 1
                 AND (i.item_code LIKE :q1 OR i.item_description LIKE :q2)
-                                AND i.item_id = (
-                                        SELECT i2.item_id
-                                        FROM items i2
-                                        WHERE i2.item_code = i.item_code
-                                            AND i2.`remove` = 0
-                                            AND i2.status = 1
-                                        ORDER BY (
-                                                SELECT COUNT(*)
-                                                FROM production_lots pl2
-                                                WHERE pl2.item_id = i2.item_id AND pl2.is_removed = 0
-                                        ) DESC, i2.item_id ASC
-                                        LIMIT 1
-                                )
-                ORDER BY i.item_code ASC,
-                    CASE WHEN EXISTS (
-                        SELECT 1 FROM production_lots pl
-                        WHERE pl.item_id = i.item_id AND pl.is_removed = 0
-                    ) THEN 0 ELSE 1 END,
-                    i.item_id ASC
+                ORDER BY i.item_code ASC
+                LIMIT 20)
+                UNION
+                (SELECT item_id, item_code, item_description, item_uom, uom_conversion
+                FROM customer_finished_goods
+                WHERE `remove` = 0 AND status = 1
+                AND (item_code LIKE :q3 OR item_description LIKE :q4)
+                ORDER BY item_code ASC
+                LIMIT 20)
+                ORDER BY item_code ASC
                 LIMIT 20";
         $stmt = self::getConnection()->prepare($sql);
-        $stmt->execute(['q1' => "%{$query}%", 'q2' => "%{$query}%"]);
+        $stmt->execute(['q1' => "%{$query}%", 'q2' => "%{$query}%", 'q3' => "%{$query}%", 'q4' => "%{$query}%"]);
         return $stmt->fetchAll();
     }
 
@@ -3143,5 +3142,475 @@ public function searchItems($query) {
             $result[$row['component_item_id']] = $row['total_pending'];
         }
         return $result;
+    }
+
+    // ─── BOM Lookup ──────────────────────────────────────────────────────────
+
+    public function hasBOM($item_id) {
+        $sql = "SELECT id, bom_code, batch_qty, batch_uom
+                FROM fg_boms
+                WHERE fg_item_id = :item_id
+                LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['item_id' => $item_id]);
+        return $stmt->fetch() ?: false;
+    }
+
+    // ─── Procurement PO ─────────────────────────────────────────────────────
+
+    public function getSupplierOrdersFiltered($filters = []) {
+        $where = ["so.`remove` = 0"];
+        $params = [];
+
+        if (!empty($filters['status'])) {
+            $where[] = "so.status = :status";
+            $params['status'] = $filters['status'];
+        }
+        if (!empty($filters['supplier_name'])) {
+            $where[] = "so.supplier_name LIKE :supplier_name";
+            $params['supplier_name'] = '%' . $filters['supplier_name'] . '%';
+        }
+        if (!empty($filters['search'])) {
+            $where[] = "(so.supplier_name LIKE :search OR i.item_code LIKE :search OR i.item_description LIKE :search)";
+            $params['search'] = '%' . $filters['search'] . '%';
+        }
+
+        $whereSql = implode(' AND ', $where);
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom,
+                       u.full_name AS created_by_name,
+                       po.customer_po_number
+                FROM supplier_orders so
+                JOIN items i ON so.item_id = i.item_id
+                JOIN users u ON so.created_by = u.user_id
+                LEFT JOIN purchase_orders po ON so.po_id = po.po_id
+                WHERE {$whereSql}
+                ORDER BY so.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function getSupplierOrderById($id) {
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom
+                FROM supplier_orders so
+                JOIN items i ON so.item_id = i.item_id
+                WHERE so.supplier_order_id = :id AND so.`remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['id' => $id]);
+        return $stmt->fetch() ?: false;
+    }
+
+    public function createSupplierOrder($data) {
+        $status = $data['status'] ?? 'pending';
+        $poId = $data['po_id'] ?? null;
+        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, unit_cost, order_date, expected_date, remarks, created_by, status, po_id)
+                VALUES (:supplier_name, :item_id, :quantity, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id)";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute([
+            'supplier_name' => $data['supplier_name'],
+            'item_id' => $data['item_id'],
+            'quantity' => $data['quantity'],
+            'unit_cost' => $data['unit_cost'],
+            'order_date' => $data['order_date'],
+            'expected_date' => $data['expected_date'],
+            'remarks' => $data['remarks'],
+            'created_by' => $data['created_by'],
+            'status' => $status,
+            'po_id' => $poId
+        ]);
+        return self::getConnection()->lastInsertId();
+    }
+
+    public function receiveSupplierOrder($id, $receivedQty) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $stmt = $conn->prepare("UPDATE supplier_orders SET status = 'completed', received_qty = :qty, received_date = CURDATE() WHERE supplier_order_id = :id");
+            $stmt->execute(['qty' => $receivedQty, 'id' => $id]);
+
+            $order = $this->getSupplierOrderById($id);
+            if ($order) {
+                $conn->prepare("INSERT INTO inventory_balances (item_id, site_code, qty_on_hand) VALUES (:item_id, 'MAIN', :qty) ON DUPLICATE KEY UPDATE qty_on_hand = qty_on_hand + :qty2")
+                    ->execute(['item_id' => $order['item_id'], 'qty' => $receivedQty, 'qty2' => $receivedQty]);
+            }
+
+            $conn->commit();
+            return true;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    public function cancelSupplierOrder($id) {
+        $sql = "UPDATE supplier_orders SET status = 'cancelled' WHERE supplier_order_id = :id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['id' => $id]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public function deleteSupplierOrder($id) {
+        $sql = "UPDATE supplier_orders SET `remove` = 1 WHERE supplier_order_id = :id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['id' => $id]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public function getPendingSupplierOrdersForItems($item_ids, $exclude_po_id = null) {
+        if (empty($item_ids)) return [];
+        $namedParams = [];
+        $itemPlaceholders = [];
+        foreach ($item_ids as $idx => $id) {
+            $key = ':item_' . $idx;
+            $itemPlaceholders[] = $key;
+            $namedParams[$key] = $id;
+        }
+        $itemList = implode(',', $itemPlaceholders);
+        $sql = "SELECT item_id, SUM(quantity - received_qty) AS pending_supplier_qty
+                FROM supplier_orders
+                WHERE status = 'pending' AND `remove` = 0
+                  AND item_id IN ({$itemList})";
+        if ($exclude_po_id !== null) {
+            $sql .= " AND (po_id IS NULL OR po_id != :exclude_po_id)";
+            $namedParams[':exclude_po_id'] = $exclude_po_id;
+        }
+        $sql .= " GROUP BY item_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($namedParams);
+        $result = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $result[$row['item_id']] = $row['pending_supplier_qty'];
+        }
+        return $result;
+    }
+
+    public function getExistingRequestedOrders($item_ids) {
+        if (empty($item_ids)) return [];
+        $placeholders = implode(',', array_fill(0, count($item_ids), '?'));
+        $sql = "SELECT item_id, supplier_order_id
+                FROM supplier_orders
+                WHERE status = 'requested' AND `remove` = 0
+                  AND item_id IN ({$placeholders})
+                GROUP BY item_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($item_ids);
+        $result = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $result[$row['item_id']] = $row['supplier_order_id'];
+        }
+        return $result;
+    }
+
+    public function processSupplierOrder($id, $data) {
+        $sql = "UPDATE supplier_orders
+                SET supplier_name = :supplier_name,
+                    quantity = :quantity,
+                    unit_cost = :unit_cost,
+                    order_date = :order_date,
+                    expected_date = :expected_date,
+                    remarks = :remarks,
+                    po_id = :po_id,
+                    status = 'pending'
+                WHERE supplier_order_id = :id AND status = 'requested'";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute([
+            'supplier_name' => $data['supplier_name'],
+            'quantity' => $data['quantity'],
+            'unit_cost' => $data['unit_cost'],
+            'order_date' => $data['order_date'],
+            'expected_date' => $data['expected_date'],
+            'remarks' => $data['remarks'],
+            'po_id' => $data['po_id'] ?? null,
+            'id' => $id
+        ]);
+        return $stmt->rowCount() > 0;
+    }
+
+    public function batchProcessSupplierOrders($ids, $data) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+            $checkSql = "SELECT supplier_order_id, status FROM supplier_orders
+                         WHERE supplier_order_id IN ({$placeholders}) AND `remove` = 0";
+            $checkStmt = $conn->prepare($checkSql);
+            $checkStmt->execute($ids);
+            $rows = $checkStmt->fetchAll();
+
+            if (count($rows) !== count($ids)) {
+                $conn->rollBack();
+                throw new \RuntimeException('One or more selected orders were not found or have been deleted.');
+            }
+
+            foreach ($rows as $row) {
+                if ($row['status'] !== 'requested') {
+                    $conn->rollBack();
+                    throw new \RuntimeException("Order #{$row['supplier_order_id']} is no longer in Requested status. Please refresh and try again.");
+                }
+            }
+
+            $updateSql = "UPDATE supplier_orders
+                          SET supplier_name = :supplier_name,
+                              unit_cost = :unit_cost,
+                              order_date = :order_date,
+                              expected_date = :expected_date,
+                              status = 'pending'
+                          WHERE supplier_order_id IN ({$placeholders})";
+            $params = [
+                'supplier_name' => $data['supplier_name'],
+                'unit_cost' => $data['unit_cost'],
+                'order_date' => $data['order_date'],
+                'expected_date' => $data['expected_date'],
+            ];
+            foreach ($ids as $idx => $id) {
+                $params[":id_{$idx}"] = $id;
+            }
+            $stmt = $conn->prepare($updateSql);
+            $stmt->execute($params);
+
+            $conn->commit();
+            return $stmt->rowCount();
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    // ─── MRP Snapshots ──────────────────────────────────────────────────────
+
+    public function saveMrpRun($po_id, $customer_id, $user_id, $sections, $consolidated) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $stmt = $conn->prepare("INSERT INTO mrp_runs (po_id, customer_id, user_id) VALUES (:po_id, :customer_id, :user_id)");
+            $stmt->execute(['po_id' => $po_id, 'customer_id' => $customer_id, 'user_id' => $user_id]);
+            $runId = $conn->lastInsertId();
+
+            $itemStmt = $conn->prepare("INSERT INTO mrp_run_items (run_id, fg_item_id, component_item_id, total_reqt, soh, allocated, pending, excess, remarks)
+                VALUES (:run_id, :fg_item_id, :component_item_id, :total_reqt, :soh, :allocated, :pending, :excess, :remarks)");
+
+            foreach ($sections as $sec) {
+                foreach ($sec['components'] as $comp) {
+                    $itemStmt->execute([
+                        'run_id' => $runId,
+                        'fg_item_id' => $sec['fg_item_id'],
+                        'component_item_id' => $comp['component_item_id'],
+                        'total_reqt' => $comp['total_reqt'],
+                        'soh' => $comp['soh'],
+                        'allocated' => $comp['allocated'],
+                        'pending' => $comp['pending'],
+                        'excess' => $comp['excess'],
+                        'remarks' => $comp['remarks']
+                    ]);
+                }
+            }
+
+            $conn->commit();
+            return $runId;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    public function getMrpRunsByPO($po_id) {
+        $sql = "SELECT mr.*, u.full_name AS user_name
+                FROM mrp_runs mr
+                JOIN users u ON mr.user_id = u.user_id
+                WHERE mr.po_id = :po_id
+                ORDER BY mr.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_id' => $po_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getMrpRunItems($run_id) {
+        $sql = "SELECT mri.*, i.item_code AS fg_code, i.item_description AS fg_name,
+                       ic.item_code AS component_code, ic.item_description AS component_name, ic.item_uom AS component_uom
+                FROM mrp_run_items mri
+                JOIN items i ON mri.fg_item_id = i.item_id
+                JOIN items ic ON mri.component_item_id = ic.item_id
+                WHERE mri.run_id = :run_id
+                ORDER BY mri.fg_item_id, mri.component_item_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['run_id' => $run_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function getExistingMrpRunForPO($po_id) {
+        $sql = "SELECT run_id FROM mrp_runs WHERE po_id = :po_id LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_id' => $po_id]);
+        return $stmt->fetch();
+    }
+
+    public function getLinkedSupplierOrdersForRun($run_id) {
+        $sql = "SELECT supplier_order_id, item_id, quantity, status
+                FROM supplier_orders
+                WHERE remarks = CONCAT('Auto-generated from MRP Run #', :run_id)
+                  AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['run_id' => $run_id]);
+        return $stmt->fetchAll();
+    }
+
+    public function cancelLinkedSupplierOrdersForRun($run_id) {
+        $sql = "UPDATE supplier_orders SET status = 'cancelled'
+                WHERE remarks = CONCAT('Auto-generated from MRP Run #', :run_id)
+                  AND status = 'requested' AND `remove` = 0";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['run_id' => $run_id]);
+        return $stmt->rowCount();
+    }
+
+    public function deleteMrpRun($run_id) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $linkedOrders = $this->getLinkedSupplierOrdersForRun($run_id);
+
+            foreach ($linkedOrders as $order) {
+                if (in_array($order['status'], ['pending', 'received', 'completed'])) {
+                    $conn->rollBack();
+                    return [
+                        'success' => false,
+                        'message' => 'Cannot delete MRP snapshot because associated Procurement POs have already been processed with suppliers.'
+                    ];
+                }
+            }
+
+            $this->cancelLinkedSupplierOrdersForRun($run_id);
+
+            $runStmt = $conn->prepare("DELETE FROM mrp_runs WHERE run_id = :run_id");
+            $runStmt->execute(['run_id' => $run_id]);
+
+            $conn->commit();
+            return ['success' => true];
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    public function getAllMrpRuns() {
+        $sql = "SELECT mr.*, u.full_name AS user_name,
+                       po.customer_po_number, po.total_quantity, po.produced_quantity, po.delivered_quantity,
+                       c.customer_name, c.customer_code
+                FROM mrp_runs mr
+                JOIN users u ON mr.user_id = u.user_id
+                JOIN purchase_orders po ON mr.po_id = po.po_id
+                JOIN customers c ON mr.customer_id = c.customer_id
+                ORDER BY mr.date_created DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getMrpRunSnapshotData($run_id) {
+        $conn = self::getConnection();
+
+        $run = $conn->prepare("SELECT mr.*, u.full_name AS user_name
+                FROM mrp_runs mr
+                JOIN users u ON mr.user_id = u.user_id
+                WHERE mr.run_id = :run_id");
+        $run->execute(['run_id' => $run_id]);
+        $runRow = $run->fetch();
+        if (!$runRow) return false;
+
+        $poStmt = $conn->prepare("SELECT po.*, c.customer_name, c.customer_code
+                FROM purchase_orders po
+                JOIN customers c ON po.customer_id = c.customer_id
+                WHERE po.po_id = :po_id");
+        $poStmt->execute(['po_id' => $runRow['po_id']]);
+        $poHeader = $poStmt->fetch();
+        if (!$poHeader) return false;
+
+        $allPoItems = $this->getPOItemsWithBOM($runRow['po_id']);
+
+        $snapshotItems = $this->getMrpRunItems($run_id);
+
+        $batchMeta = [];
+        foreach ($allPoItems as $poi) {
+            if (empty($poi['bom_id'])) continue;
+            $batchQty = floatval($poi['batch_qty'] ?: 1);
+            $batchMeta[$poi['item_id']] = [
+                'target_qty' => $poi['quantity'],
+                'item_uom' => $poi['item_uom'],
+                'batch_qty' => $batchQty,
+                'batch_uom' => $poi['batch_uom'],
+                'batches_needed' => floatval($poi['quantity']) / $batchQty,
+                'fg_code' => $poi['item_code'],
+                'fg_name' => $poi['item_description'],
+            ];
+        }
+
+        $sectionsGrouped = [];
+        foreach ($snapshotItems as $item) {
+            $fgId = $item['fg_item_id'];
+            if (!isset($sectionsGrouped[$fgId])) {
+                $meta = $batchMeta[$fgId] ?? [
+                    'target_qty' => 0, 'item_uom' => '', 'batch_qty' => 1,
+                    'batch_uom' => 'PCS', 'batches_needed' => 0,
+                    'fg_code' => $item['fg_code'], 'fg_name' => $item['fg_name'],
+                ];
+                $sectionsGrouped[$fgId] = [
+                    'fg_item_id' => $fgId,
+                    'fg_code' => $meta['fg_code'],
+                    'fg_name' => $meta['fg_name'],
+                    'target_qty' => $meta['target_qty'],
+                    'item_uom' => $meta['item_uom'],
+                    'batch_qty' => $meta['batch_qty'],
+                    'batch_uom' => $meta['batch_uom'],
+                    'batches_needed' => $meta['batches_needed'],
+                    'components' => [],
+                ];
+            }
+            $sectionsGrouped[$fgId]['components'][] = [
+                'component_item_id' => $item['component_item_id'],
+                'item_code' => $item['component_code'],
+                'item_description' => $item['component_name'],
+                'item_uom' => $item['component_uom'],
+                'total_reqt' => floatval($item['total_reqt']),
+                'soh' => floatval($item['soh']),
+                'allocated' => floatval($item['allocated']),
+                'pending' => floatval($item['pending']),
+                'supplier_pending' => floatval($item['pending'] ?? 0) - floatval($item['allocated'] ?? 0),
+                'excess' => floatval($item['excess']),
+                'remarks' => $item['remarks'],
+            ];
+        }
+        $mrpSections = array_values($sectionsGrouped);
+
+        $consolidatedMap = [];
+        foreach ($mrpSections as $section) {
+            foreach ($section['components'] as $row) {
+                $key = $row['item_code'];
+                if (!isset($consolidatedMap[$key])) {
+                    $consolidatedMap[$key] = $row;
+                } else {
+                    $consolidatedMap[$key]['total_reqt'] += $row['total_reqt'];
+                    $consolidatedMap[$key]['soh'] = $row['soh'];
+                    $consolidatedMap[$key]['allocated'] += $row['allocated'];
+                    $consolidatedMap[$key]['pending'] += $row['pending'];
+                    $consolidatedMap[$key]['supplier_pending'] = ($consolidatedMap[$key]['supplier_pending'] ?? 0) + ($row['supplier_pending'] ?? 0);
+                    $consolidatedMap[$key]['excess'] = ($consolidatedMap[$key]['soh'] - $consolidatedMap[$key]['allocated']) - $consolidatedMap[$key]['total_reqt'] + ($consolidatedMap[$key]['supplier_pending'] ?? 0);
+                    if ($consolidatedMap[$key]['excess'] < 0) {
+                        $consolidatedMap[$key]['remarks'] = 'LACKING';
+                    }
+                }
+            }
+        }
+        $consolidated = array_values($consolidatedMap);
+
+        return [
+            'po' => $poHeader,
+            'mrpSections' => $mrpSections,
+            'consolidated' => $consolidated,
+            'userName' => $runRow['user_name'],
+            'userDept' => $_SESSION['department'] ?? '',
+            'snapshotDate' => $runRow['date_created'],
+            'runId' => $run_id,
+        ];
     }
 }
