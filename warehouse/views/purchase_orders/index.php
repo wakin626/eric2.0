@@ -78,7 +78,13 @@
                         $qty = $item['quantity'] ?? 0;
                         $itemDelivered = intval($item['delivered_quantity'] ?? 0);
                         $itemPercent = $qty > 0 ? min(100, round(($itemDelivered / $qty) * 100)) : 0;
-                        $statusLabel = $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $qty ? 'Fully Delivered' : 'Partial (' . ($qty - $itemDelivered) . ' left)');
+                        $pcsPerCase = intval($item['uom_conversion'] ?? 0);
+                        $useCases = $pcsPerCase > 1;
+                        $displayQty = $useCases ? (int) ceil($qty / $pcsPerCase) : $qty;
+                        $displayDelivered = $useCases ? (int) ceil($itemDelivered / $pcsPerCase) : $itemDelivered;
+                        $displayRemaining = max(0, $displayQty - $displayDelivered);
+                        $displayUnit = $useCases ? 'cases' : 'pcs';
+                        $statusLabel = $itemDelivered <= 0 ? 'Pending' : ($itemDelivered >= $qty ? 'Fully Delivered' : 'Partial (' . $displayRemaining . ' ' . $displayUnit . ' left)');
                         $statusClass = $itemDelivered >= $qty ? 'bg-success' : ($itemDelivered > 0 ? 'bg-warning text-dark' : 'bg-secondary');
                     ?>
                     <tr>
@@ -94,7 +100,7 @@
                                 <div class="progress flex-grow-1 me-2" style="height: 12px; width: 50px;">
                                     <div class="progress-bar <?= $itemDelivered >= $qty ? 'bg-success' : 'bg-warning' ?>" style="width: <?= $itemPercent ?>%"></div>
                                 </div>
-                                <small class="text-muted text-nowrap"><?= $itemDelivered ?>/<?= $qty ?> pcs</small>
+                                <small class="text-muted text-nowrap"><?= $displayDelivered ?>/<?= $displayQty ?> <?= $displayUnit ?></small>
                                 <span class="badge <?= $statusClass ?> text-nowrap"><?= $statusLabel ?></span>
                             </div>
                         </td>
