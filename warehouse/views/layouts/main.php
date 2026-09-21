@@ -111,6 +111,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link <?= in_array($currentAction, ['index', 'create', 'edit', 'printLmr']) || str_contains($currentAction ?? '', 'mo') ? 'active' : '' ?>" href="?controller=mo&action=index">
+                            <i class="bi bi-clipboard-check me-2"></i>MO Entry
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link <?= ($currentAction ?? '') === 'mrp' ? 'active' : '' ?>" href="?controller=warehouse&action=mrp">
                             <i class="bi bi-calculator me-2"></i>MRP Sheet
                         </a>

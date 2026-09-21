@@ -14,7 +14,7 @@ class ProductionController {
     public function __construct() {
         $action = $_GET['action'] ?? '';
         if (!isset($_SESSION['user_id'])) {
-            if ($action === 'getPODetails') {
+            if ($action === 'getPODetails' || $action === 'getCustomerPOs' || $action === 'getItemBomInfo') {
                 header('Content-Type: application/json');
                 http_response_code(401);
                 echo json_encode(['error' => 'Session expired. Please log in again.']);
@@ -23,7 +23,8 @@ class ProductionController {
             header('Location: ?controller=auth&action=login');
             exit;
         }
-        if ($action !== 'getPODetails' && $action !== 'searchItems' && $action !== 'fgInput' && $action !== 'saveFgInput' && $action !== 'getLotsForInventory' && ($_SESSION['department'] ?? '') !== 'production') {
+        $publicActions = ['getPODetails', 'searchItems', 'fgInput', 'saveFgInput', 'getLotsForInventory', 'moEntry', 'getCustomerPOs', 'getItemBomInfo'];
+        if (!in_array($action, $publicActions, true) && ($_SESSION['department'] ?? '') !== 'production') {
             header('Location: ?controller=admin');
             exit;
         }
@@ -272,6 +273,57 @@ class ProductionController {
     public function fgInput() {
         $data['page_title'] = 'FG Input';
         $this->render('production/fg_input', $data);
+    }
+
+    public function moEntry() {
+        $data['page_title'] = 'MO Entry';
+        $data['customers'] = $this->catalogModel->getCustomers();
+        $data['items'] = $this->catalogModel->getItems();
+        $this->render('production/mo_entry', $data);
+    }
+
+    public function getCustomerPOs() {
+        header('Content-Type: application/json');
+        $customerId = intval($_GET['customer_id'] ?? 0);
+        if ($customerId <= 0) {
+            echo json_encode([]);
+            exit;
+        }
+
+        $pos = $this->warehouseModel->getOpenPOsByCustomer($customerId);
+        $payload = [];
+        foreach ($pos as $po) {
+            $poNumber = trim((string) ($po['customer_po_number'] ?? $po['po_number'] ?? ''));
+            if ($poNumber === '') {
+                $poNumber = 'PO #' . ($po['po_id'] ?? '');
+            }
+            $payload[] = [
+                'po_id' => $po['po_id'] ?? null,
+                'po_number' => $poNumber,
+                'po_date' => $po['customer_po_date'] ?? null,
+                'label' => $poNumber . (isset($po['customer_po_date']) && $po['customer_po_date'] ? ' • ' . date('Y-m-d', strtotime($po['customer_po_date'])) : '')
+            ];
+        }
+
+        echo json_encode($payload);
+        exit;
+    }
+
+    public function getItemBomInfo() {
+        header('Content-Type: application/json');
+        $itemId = intval($_GET['item_id'] ?? 0);
+        if ($itemId <= 0) {
+            echo json_encode(['bom_code' => '', 'batch_qty' => '', 'batch_uom' => '']);
+            exit;
+        }
+
+        $bom = $this->warehouseModel->hasBOM($itemId);
+        echo json_encode([
+            'bom_code' => $bom ? ($bom['bom_code'] ?? '') : '',
+            'batch_qty' => $bom ? ($bom['batch_qty'] ?? '') : '',
+            'batch_uom' => $bom ? ($bom['batch_uom'] ?? '') : '',
+        ]);
+        exit;
     }
 
     public function searchItems() {

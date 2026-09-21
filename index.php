@@ -41,7 +41,7 @@ $controller = $_GET['controller'] ?? 'auth';
 $action = $_GET['action'] ?? 'login';
 
 $authControllers = ['auth'];
-$warehouseControllers = ['warehouse'];
+$warehouseControllers = ['warehouse', 'mo'];
 $productionControllers = ['production'];
 $financeControllers = ['finance'];
 $qcControllers = ['qc'];

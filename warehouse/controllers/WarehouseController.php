@@ -25,7 +25,7 @@ class WarehouseController {
         $apiActions = ['getPODetails', 'getItemsByCustomer', 'backloadDelivery', 'getDeliveryLotsForBackload',
             'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
             'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery', 'searchItems',
-            'mrpRunDetail', 'purchasingPo', 'receivingPo'];
+            'mrpRunDetail', 'purchasingPo', 'receivingPo', 'moEntry', 'getCustomerPOs', 'getItemBomInfo'];
         if (!$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
@@ -66,6 +66,57 @@ class WarehouseController {
 
         $data['deliveries'] = $this->warehouseModel->getDeliveries();
         $this->render('dashboard', $data);
+    }
+
+    public function moEntry() {
+        $data['page_title'] = 'MO Entry';
+        $data['customers'] = $this->catalogModel->getCustomers();
+        $data['items'] = $this->catalogModel->getItems();
+        $this->render('mo_entry', $data);
+    }
+
+    public function getCustomerPOs() {
+        header('Content-Type: application/json');
+        $customerId = intval($_GET['customer_id'] ?? 0);
+        if ($customerId <= 0) {
+            echo json_encode([]);
+            exit;
+        }
+
+        $pos = $this->warehouseModel->getOpenPOsByCustomer($customerId);
+        $payload = [];
+        foreach ($pos as $po) {
+            $poNumber = trim((string) ($po['customer_po_number'] ?? $po['po_number'] ?? ''));
+            if ($poNumber === '') {
+                $poNumber = 'PO #' . ($po['po_id'] ?? '');
+            }
+            $payload[] = [
+                'po_id' => $po['po_id'] ?? null,
+                'po_number' => $poNumber,
+                'po_date' => $po['customer_po_date'] ?? null,
+                'label' => $poNumber . (isset($po['customer_po_date']) && $po['customer_po_date'] ? ' • ' . date('Y-m-d', strtotime($po['customer_po_date'])) : '')
+            ];
+        }
+
+        echo json_encode($payload);
+        exit;
+    }
+
+    public function getItemBomInfo() {
+        header('Content-Type: application/json');
+        $itemId = intval($_GET['item_id'] ?? 0);
+        if ($itemId <= 0) {
+            echo json_encode(['bom_code' => '', 'batch_qty' => '', 'batch_uom' => '']);
+            exit;
+        }
+
+        $bom = $this->warehouseModel->hasBOM($itemId);
+        echo json_encode([
+            'bom_code' => $bom ? ($bom['bom_code'] ?? '') : '',
+            'batch_qty' => $bom ? ($bom['batch_qty'] ?? '') : '',
+            'batch_uom' => $bom ? ($bom['batch_uom'] ?? '') : '',
+        ]);
+        exit;
     }
 
     public function purchaseOrders() {
