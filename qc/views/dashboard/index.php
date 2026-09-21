@@ -1,5 +1,64 @@
 <h4><i class="bi bi-clipboard-check me-2"></i>QC Dashboard</h4>
 
+<div class="card mb-4 shadow-sm border-0">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>Quarantine Queue</h5>
+        <span class="badge bg-warning text-dark"><?= count($pendingQcItems ?? []) ?> pending</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>PO Ref</th>
+                        <th>Supplier</th>
+                        <th>Item</th>
+                        <th>Lot</th>
+                        <th class="text-end">Received</th>
+                        <th>Received Date</th>
+                        <th>Remarks</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($pendingQcItems)): ?>
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">No goods currently awaiting QC approval.</td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($pendingQcItems as $item): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($item['customer_po_number'] ?? ($item['po_id'] ? 'PO #' . $item['po_id'] : '-')) ?></td>
+                                <td><?= htmlspecialchars($item['supplier_name'] ?? '-') ?></td>
+                                <td><strong><?= htmlspecialchars($item['item_code'] ?? '-') ?></strong><br><small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small></td>
+                                <td><?= htmlspecialchars($item['lot_number'] ?? '-') ?></td>
+                                <td class="text-end"><?= number_format((float) ($item['received_qty'] ?? 0), 4) ?></td>
+                                <td><?= !empty($item['received_date']) ? date('Y-m-d', strtotime($item['received_date'])) : '-' ?></td>
+                                <td><?= !empty($item['remarks']) ? htmlspecialchars($item['remarks']) : '<span class="text-muted">-</span>' ?></td>
+                                <td class="text-end">
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary inspect-qc-btn"
+                                            data-receiving-item-id="<?= (int) ($item['receiving_item_id'] ?? 0) ?>"
+                                            data-po-ref="<?= htmlspecialchars($item['customer_po_number'] ?? ($item['po_id'] ? 'PO #' . $item['po_id'] : '-')) ?>"
+                                            data-supplier="<?= htmlspecialchars($item['supplier_name'] ?? '-') ?>"
+                                            data-item-code="<?= htmlspecialchars($item['item_code'] ?? '-') ?>"
+                                            data-item-description="<?= htmlspecialchars($item['item_description'] ?? '-') ?>"
+                                            data-lot-number="<?= htmlspecialchars($item['lot_number'] ?? '-') ?>"
+                                            data-received-qty="<?= (float) ($item['received_qty'] ?? 0) ?>"
+                                            data-received-date="<?= !empty($item['received_date']) ? date('Y-m-d', strtotime($item['received_date'])) : '' ?>"
+                                            data-remarks="<?= htmlspecialchars($item['remarks'] ?? '') ?>">
+                                        <i class="bi bi-clipboard-check me-1"></i>Inspect
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
 <!-- Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-4">
@@ -228,6 +287,86 @@
     </div>
 </div>
 
+<!-- QC Inspection Modal -->
+<div class="modal fade" id="qcInspectionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="qcInspectionForm">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-clipboard-check me-2"></i>QC Inspection</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="receiving_item_id" id="qcReceivingItemId">
+                    <input type="hidden" name="received_qty" id="qcReceivedQtyHidden">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">PO Ref</label>
+                            <input type="text" id="qcPoRef" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Supplier</label>
+                            <input type="text" id="qcSupplier" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Item</label>
+                            <input type="text" id="qcItem" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Lot / Batch</label>
+                            <input type="text" id="qcLot" class="form-control" readonly>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Received Qty</label>
+                            <input type="number" id="qcReceivedQty" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Passed Qty <span class="text-danger">*</span></label>
+                            <input type="number" name="passed_qty" id="qcPassedQty" class="form-control" min="0" step="0.0001" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Rejected Qty <span class="text-danger">*</span></label>
+                            <input type="number" name="rejected_qty" id="qcRejectedQty" class="form-control" min="0" step="0.0001" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Decision <span class="text-danger">*</span></label>
+                            <select name="decision" id="qcDecision" class="form-select" required>
+                                <option value="">Select decision</option>
+                                <option value="PASSED">Passed</option>
+                                <option value="REJECTED">Rejected</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Inspector Name <span class="text-danger">*</span></label>
+                            <input type="text" name="inspector_name" id="qcInspectorName" class="form-control" value="<?= htmlspecialchars($_SESSION['full_name'] ?? '') ?>" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Inspection Date</label>
+                        <input type="text" id="qcReceivedDate" class="form-control" readonly>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        <textarea name="remarks" id="qcRemark" class="form-control" rows="3" placeholder="Optional notes for the QC decision..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Submit QC Decision</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <?php if ($totalPages > 1): ?>
 <?php $pages = \App\Helpers\Pagination::getPageRange($page, $totalPages); ?>
 <nav>
@@ -314,5 +453,78 @@ document.querySelectorAll('.sortable').forEach(th => {
         
         rows.forEach(row => tbody.appendChild(row));
     });
+});
+
+function openQcInspectionModal(button) {
+    const receivedQty = parseFloat(button.dataset.receivedQty || 0);
+    document.getElementById('qcReceivingItemId').value = button.dataset.receivingItemId || '';
+    document.getElementById('qcPoRef').value = button.dataset.poRef || '-';
+    document.getElementById('qcSupplier').value = button.dataset.supplier || '-';
+    document.getElementById('qcItem').value = (button.dataset.itemCode || '-') + ' - ' + (button.dataset.itemDescription || '-');
+    document.getElementById('qcLot').value = button.dataset.lotNumber || '-';
+    document.getElementById('qcReceivedQty').value = receivedQty.toFixed(4);
+    document.getElementById('qcReceivedQtyHidden').value = receivedQty.toFixed(4);
+    document.getElementById('qcPassedQty').value = receivedQty.toFixed(4);
+    document.getElementById('qcRejectedQty').value = '0';
+    document.getElementById('qcDecision').value = 'PASSED';
+    document.getElementById('qcRemark').value = button.dataset.remarks || '';
+    document.getElementById('qcReceivedDate').value = button.dataset.receivedDate || '';
+    new bootstrap.Modal(document.getElementById('qcInspectionModal')).show();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.inspect-qc-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+            openQcInspectionModal(this);
+        });
+    });
+
+    const form = document.getElementById('qcInspectionForm');
+    if (form) {
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const receivedQty = parseFloat(document.getElementById('qcReceivedQty').value || 0);
+            const passedQty = parseFloat(document.getElementById('qcPassedQty').value || 0);
+            const rejectedQty = parseFloat(document.getElementById('qcRejectedQty').value || 0);
+            const decision = document.getElementById('qcDecision').value;
+
+            if (!decision) {
+                alert('Please choose a QC decision.');
+                return;
+            }
+            if (Math.abs((passedQty + rejectedQty) - receivedQty) > 0.0001) {
+                alert('Passed Qty + Rejected Qty must equal Received Qty.');
+                return;
+            }
+            if (decision === 'PASSED' && passedQty <= 0) {
+                alert('Passed quantity must be greater than zero.');
+                return;
+            }
+            if (decision === 'REJECTED' && rejectedQty <= 0) {
+                alert('Rejected quantity must be greater than zero.');
+                return;
+            }
+
+            const payload = new FormData(form);
+            fetch('?controller=qc&action=apiInspect', {
+                method: 'POST',
+                body: payload,
+                credentials: 'same-origin'
+            }).then(function(response) {
+                return response.json().then(function(data) {
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.error || 'Failed to submit QC inspection.');
+                    }
+                    return data;
+                });
+            }).then(function() {
+                alert('QC decision submitted successfully.');
+                window.location.reload();
+            }).catch(function(error) {
+                alert(error.message || 'Unable to submit QC decision.');
+            });
+        });
+    }
 });
 </script>

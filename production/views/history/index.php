@@ -48,7 +48,6 @@
                     <th class="sortable" data-sort="new">New Lot Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="shift">Shift <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="status">Status <i class="bi bi-chevron-expand"></i></th>
-                    <th class="sortable" data-sort="totalpo">Total PO Qty <i class="bi bi-chevron-expand"></i></th>
                     <th class="sortable" data-sort="user">Updated By <i class="bi bi-chevron-expand"></i></th>
                     <th class="action-col">Report</th>
                 </tr>
@@ -124,7 +123,6 @@
                             <span class="text-muted">-</span>
                         <?php endif; ?>
                     </td>
-                    <td><?= $h['computed_po_qty'] ?? 0 ?></td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td class="action-col">
                         <?php
@@ -157,7 +155,7 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($history)): ?>
-                <tr><td colspan="14" class="text-center text-muted py-4">No production history yet</td></tr>
+                <tr><td colspan="13" class="text-center text-muted py-4">No production history yet</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

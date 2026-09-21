@@ -527,4 +527,33 @@ $record7->execute(['cleanup-duplicate-procurement-requests-v1']);
 
 // ─── End Phase 7 ──────────────────────────────────────────────────────
 
+// ─── Phase 8: Purchasing PO / Receiving PO status updates ───────────────
+
+echo "\n--- Phase 8: Purchasing PO / Receiving PO status updates ---\n";
+
+$soStatus = $pdo->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supplier_orders' AND COLUMN_NAME = 'status'")->fetchColumn();
+if ($soStatus !== false && strpos($soStatus, "'processed'") === false) {
+    $pdo->exec("ALTER TABLE supplier_orders MODIFY status ENUM('requested','pending','processed','partially_received','received','cancelled','completed') DEFAULT 'requested'");
+    echo "Updated: supplier_orders.status enum added 'processed', 'partially_received'\n";
+}
+
+// Migrate existing 'pending' with supplier to 'processed'
+$migrate = $pdo->exec("UPDATE supplier_orders SET status = 'processed' WHERE status = 'pending' AND supplier_name IS NOT NULL AND supplier_name != ''");
+echo "Migrated {$migrate} pending orders with supplier to 'processed'\n";
+
+// Migrate existing 'completed' to 'received'
+$migrate2 = $pdo->exec("UPDATE supplier_orders SET status = 'received' WHERE status = 'completed'");
+echo "Migrated {$migrate2} completed orders to 'received'\n";
+
+// Add index for receiving queries
+$pdo->exec("CREATE INDEX IF NOT EXISTS idx_supplier_orders_status_po ON supplier_orders(status, po_id)");
+echo "Created index: idx_supplier_orders_status_po\n";
+
+$record8 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (?)
+    ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP');
+$record8->execute(['purchasing-receiving-po-status-v1']);
+
+// ─── End Phase 8 ──────────────────────────────────────────────────────
+
 echo "\nSchema deployment complete.\n";

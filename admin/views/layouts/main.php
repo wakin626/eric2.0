@@ -148,11 +148,21 @@
 </a>
 </li>
 <li class="nav-item">
-<a class="nav-link <?= $currentAction === 'viewBackloads' ? 'active' : '' ?>" href="?controller=admin&action=viewBackloads">
-<i class="bi bi-arrow-return-left me-2"></i>Backloads
-</a>
-</li>
-<li class="nav-item">
+                        <a class="nav-link <?= $currentAction === 'viewBackloads' ? 'active' : '' ?>" href="?controller=admin&action=viewBackloads">
+                            <i class="bi bi-arrow-return-left me-2"></i>Backloads
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= in_array($currentAction, ['purchasingPo']) ? 'active' : '' ?>" href="?controller=admin&action=purchasingPo">
+                            <i class="bi bi-cart3 me-2"></i>Purchasing PO
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= $currentAction === 'receivingPo' ? 'active' : '' ?>" href="?controller=admin&action=receivingPo">
+                            <i class="bi bi-box-arrow-in-down me-2"></i>Receiving Purchasing PO
+                        </a>
+                    </li>
+                    <li class="nav-item">
 <a class="nav-link <?= $currentAction === 'productionHistory' ? 'active' : '' ?>" href="?controller=admin&action=productionHistory">
 <i class="bi bi-clock-history me-2"></i>Production History
 <?php if (!empty($reportsCount) && $reportsCount > 0): ?>

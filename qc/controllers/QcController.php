@@ -8,11 +8,20 @@ class QcController {
     private $qcModel;
 
     public function __construct() {
+        $action = $_GET['action'] ?? '';
+        $isApiAction = in_array($action, ['apiGetPending', 'apiInspect'], true);
+
         if (!isset($_SESSION['user_id'])) {
+            if ($isApiAction) {
+                header('Content-Type: application/json');
+                http_response_code(401);
+                echo json_encode(['success' => false, 'error' => 'Session expired. Please log in again.']);
+                exit;
+            }
             header('Location: ?controller=auth&action=login');
             exit;
         }
-        if (($_SESSION['department'] ?? '') !== 'qc') {
+        if (!$isApiAction && (($_SESSION['department'] ?? '') !== 'qc')) {
             header('Location: ?controller=admin');
             exit;
         }
@@ -20,6 +29,22 @@ class QcController {
     }
 
     public function index() {
+        header('Location: ?controller=qc&action=receivingInspection');
+        exit;
+    }
+
+    public function receivingInspection() {
+        $pendingQcItems = $this->qcModel->getPendingQcItems();
+
+        $data = [
+            'pendingQcItems' => $pendingQcItems,
+            'page_title' => 'Receiving Inspection'
+        ];
+
+        $this->render('receiving_inspection', $data);
+    }
+
+    public function deliveryInspection() {
         $search = $_GET['search'] ?? '';
         $filterCustomer = $_GET['filter_customer'] ?? '';
         $filterItem = $_GET['filter_item'] ?? '';
@@ -64,7 +89,87 @@ class QcController {
             'totalInspection' => $counts['total'],
             'inspectedCount' => $counts['inspected'],
             'remainingCount' => $counts['remaining'],
-            'page_title' => 'QC Dashboard'
+            'page_title' => 'For Delivery Inspection'
+        ];
+
+        $this->render('delivery_inspection', $data);
+    }
+
+    public function apiGetPending() {
+        header('Content-Type: application/json');
+        try {
+            echo json_encode(['success' => true, 'items' => $this->qcModel->getPendingQcItems()]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function apiInspect() {
+        header('Content-Type: application/json');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+            exit;
+        }
+
+        try {
+            $payload = $_POST;
+            if (empty($_POST)) {
+                $payload = json_decode(file_get_contents('php://input'), true) ?? [];
+            }
+            $result = $this->qcModel->recordQcInspection($payload);
+            echo json_encode(['success' => true, 'result' => $result]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function approveReceivingInspection($id = null) {
+        $receivingItemId = (int) ($id ?? ($_POST['receiving_item_id'] ?? $_GET['id'] ?? 0));
+        if ($receivingItemId <= 0) {
+            $_SESSION['error'] = 'Receiving item not found.';
+            header('Location: ?controller=qc');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $decision = strtoupper((string) ($_POST['decision'] ?? 'PASSED'));
+            $payload = [
+                'receiving_item_id' => $receivingItemId,
+                'decision' => $decision,
+                'received_qty' => (float) ($_POST['received_qty'] ?? 0),
+                'passed_qty' => (float) ($_POST['passed_qty'] ?? 0),
+                'rejected_qty' => (float) ($_POST['rejected_qty'] ?? 0),
+                'inspector_name' => trim((string) ($_POST['inspector_name'] ?? ($_SESSION['full_name'] ?? 'QC'))),
+                'remarks' => trim((string) ($_POST['remarks'] ?? '')),
+            ];
+
+            try {
+                $result = $this->qcModel->approveReceivingInspection($receivingItemId, $payload);
+                $_SESSION['success'] = 'Receiving inspection ' . strtolower($decision) . ' and stock status updated.';
+                header('Location: ?controller=qc');
+                exit;
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
+                header('Location: ?controller=qc');
+                exit;
+            }
+        }
+
+        $receivingItem = $this->qcModel->getReceivingItemById($receivingItemId);
+        if (!$receivingItem) {
+            $_SESSION['error'] = 'Receiving item not found.';
+            header('Location: ?controller=qc');
+            exit;
+        }
+
+        $data = [
+            'page_title' => 'Approve Receiving Inspection',
+            'receivingItem' => $receivingItem,
         ];
         $this->render('dashboard/index', $data);
     }

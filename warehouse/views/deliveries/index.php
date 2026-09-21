@@ -747,7 +747,7 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
         items.forEach(function(item) {
             var selectedPoId = poSelect && poSelect.value ? String(poSelect.value) : '';
             var visibleLots = (item.lots || []).filter(function(lot) {
-                return !selectedPoId || lot.in_selected_po === 1 || (lot.po_id && String(lot.po_id) === selectedPoId);
+                return !selectedPoId || lot.in_selected_po === 1;
             });
             if (selectedPoId && visibleLots.length === 0) {
                 return;

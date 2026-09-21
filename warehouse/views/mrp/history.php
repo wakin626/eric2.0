@@ -5,7 +5,7 @@
         <small class="text-muted">
             PO: <?= htmlspecialchars($poHeader['customer_po_number'] ?? '') ?>
             — <?= htmlspecialchars($poHeader['customer_name'] ?? '') ?>
-            — <?= number_format($poHeader['total_quantity'] ?? 0) ?> pcs
+            — <?= number_format($poHeader['total_quantity'] ?? 0) ?> cases
         </small>
         <?php endif; ?>
     </div>
@@ -51,7 +51,7 @@
                     <?php if (empty($selectedPO)): ?>
                     <td><code><?= htmlspecialchars($r['customer_po_number'] ?? '') ?></code></td>
                     <td><?= htmlspecialchars($r['customer_name'] ?? '') ?></td>
-                    <td class="text-end"><?= number_format($r['total_quantity'] ?? 0) ?> pcs</td>
+                    <td class="text-end"><?= number_format($r['total_quantity'] ?? 0) ?> cases</td>
                     <?php endif; ?>
                     <td><?= date('m/d/Y h:i A', strtotime($r['date_created'])) ?></td>
                     <td><?= htmlspecialchars($r['user_name'] ?? '') ?></td>

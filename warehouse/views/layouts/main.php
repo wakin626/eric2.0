@@ -101,6 +101,16 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link <?= in_array($currentAction, ['purchasingPo', 'createPurchasingPo']) ? 'active' : '' ?>" href="?controller=warehouse&action=purchasingPo">
+                            <i class="bi bi-cart3 me-2"></i>Purchasing PO
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?= $currentAction === 'receivingPo' ? 'active' : '' ?>" href="?controller=warehouse&action=receivingPo">
+                            <i class="bi bi-box-arrow-in-down me-2"></i>Receiving Purchasing PO
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link <?= ($currentAction ?? '') === 'mrp' ? 'active' : '' ?>" href="?controller=warehouse&action=mrp">
                             <i class="bi bi-calculator me-2"></i>MRP Sheet
                         </a>

@@ -48,6 +48,7 @@
                             <option value="finance" <?= ($old['department'] ?? '') == 'finance' ? 'selected' : '' ?>>Finance</option>
                             <option value="qc" <?= ($old['department'] ?? '') == 'qc' ? 'selected' : '' ?>>QC</option>
                             <option value="qa" <?= ($old['department'] ?? '') == 'qa' ? 'selected' : '' ?>>QA</option>
+                            <option value="rnd" <?= ($old['department'] ?? '') == 'rnd' ? 'selected' : '' ?>>R&D</option>
                         </select>
                     </div>
                 </div>

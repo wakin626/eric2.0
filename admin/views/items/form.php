@@ -28,10 +28,10 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-<div class="col-md-4">
-    <label class="form-label">Unit of Measurement</label>
-    <input type="text" class="form-control" name="item_uom" value="<?= htmlspecialchars($item['item_uom'] ?? 'PCS') ?>">
-</div>
+                <div class="col-md-4">
+                    <label class="form-label">Unit of Measurement</label>
+                    <input type="text" class="form-control" name="item_uom" value="<?= htmlspecialchars($item['item_uom'] ?? 'PCS') ?>">
+                </div>
                 <div class="col-md-4">
                     <label class="form-label">Cases Conversion</label>
                     <input type="number" name="uom_conversion" class="form-control" min="1"
@@ -57,4 +57,3 @@
         </form>
     </div>
 </div>
-

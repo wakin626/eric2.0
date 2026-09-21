@@ -169,6 +169,21 @@ document.addEventListener('DOMContentLoaded', function() {
                                 if (pcsInput && !pcsInput.value && item.uom_conversion) {
                                     pcsInput.value = item.uom_conversion;
                                 }
+
+                                var bomBadge = entry.querySelector('.bom-status-badge');
+                                if (bomBadge) bomBadge.remove();
+                                fetch('?controller=production&action=checkItemBom&item_id=' + item.item_id)
+                                    .then(function(r) { return r.json(); })
+                                    .then(function(bom) {
+                                        var badge = document.createElement('span');
+                                        badge.className = 'bom-status-badge ms-2';
+                                        if (bom.has_bom) {
+                                            badge.innerHTML = '<span class="badge bg-success"><i class="bi bi-check-circle"></i> BOM</span>';
+                                        } else {
+                                            badge.innerHTML = '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> No BOM</span>';
+                                        }
+                                        selectedItemName.parentNode.insertBefore(badge, selectedItemName.nextSibling);
+                                    });
                             });
                             div.addEventListener('mouseenter', function() { this.style.background = '#f0f4ff'; });
                             div.addEventListener('mouseleave', function() { this.style.background = ''; });
@@ -298,6 +313,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!shift) {
                 missing.push('Shift');
                 entry.querySelector('select[name="shift[]"]').classList.add('is-invalid');
+            }
+
+            var bomBadge = entry.querySelector('.bom-status-badge');
+            if (bomBadge && bomBadge.querySelector('.bg-danger')) {
+                missing.push('No BOM');
             }
 
             if (missing.length > 0) {

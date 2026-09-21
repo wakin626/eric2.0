@@ -76,18 +76,7 @@
                     <h5 class="mb-0" style="color: #fff; font-weight: 700; letter-spacing: 0.5px; font-size: 1rem;"><?= ucfirst($_SESSION['department'] ?? 'QC') ?></h5>
                     <small style="color: #64748b; font-size: 0.7rem;"><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
-                <ul class="nav flex-column sidebar-menu">
-                    <li class="nav-item">
-                        <a class="nav-link <?= $page_title == 'QC Dashboard' ? 'active' : '' ?>" href="?controller=qc">
-                            <i class="bi bi-speedometer2 me-2"></i>Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item mt-auto">
-                        <a class="nav-link" href="?controller=auth&action=logout" style="color: #64748b; transition: all 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#64748b'">
-                            <i class="bi bi-box-arrow-left me-2"></i>Logout
-                        </a>
-                    </li>
-                </ul>
+                <?php include __DIR__ . '/../sidebar.php'; ?>
             </nav>
             
             <div class="main-wrapper" id="mainWrapper">

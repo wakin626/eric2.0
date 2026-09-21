@@ -3,31 +3,61 @@ namespace App\Controllers;
 
 use App\Models\CustomerModel;
 use App\Models\ItemModel;
+use App\Models\CustomerFinishedGoodModel;
 use App\Models\WarehouseModel;
+use App\Models\BackloadModel;
+use App\Models\CatalogModel;
+use App\Models\RawMaterialModel;
+use App\Models\BomModel;
 use App\Helpers\Pagination;
 use App\Helpers\CsvExport;
 use App\Helpers\XlsxExport;
 use App\Models\AuditModel;
 use App\Helpers\NotificationHelper;
+use App\Helpers\SpreadsheetReader;
 
 class AdminController {
     private $customerModel;
     private $itemModel;
+    private $cfgModel;
     private $warehouseModel;
+    private $backloadModel;
+    private $catalogModel;
+    private $rawMaterialModel;
+    private $bomModel;
 
     public function __construct() {
         if (!isset($_SESSION['user_id'])) {
             header('Location: ?controller=auth&action=login');
             exit;
         }
+        $action = $_GET['action'] ?? '';
+        $rndOnlyActions = [
+            'rawMaterials', 'rawMaterialCreate', 'rawMaterialUpdate',
+            'rawMaterialDelete', 'rawMaterialToggleStatus',
+            'rawMaterialImportPreview', 'rawMaterialImportConfirm', 'whereUsed',
+            'boms', 'bomCreate', 'bomEdit', 'bomUpdate', 'bomDelete',
+            'bomAddItem', 'bomUpdateItem', 'bomRemoveItem',
+            'bomImportPreview', 'bomImportConfirm'
+        ];
+        if (in_array($action, $rndOnlyActions)) {
+            $_SESSION['error'] = 'Raw Materials and BOM are managed by the R&D department.';
+            header('Location: ?controller=admin');
+            exit;
+        }
         $this->customerModel = new CustomerModel();
         $this->itemModel = new ItemModel();
+        $this->cfgModel = new CustomerFinishedGoodModel();
         $this->warehouseModel = new WarehouseModel();
+        $this->backloadModel = new BackloadModel();
+        $this->catalogModel = new CatalogModel();
+        $this->rawMaterialModel = new RawMaterialModel();
+        $this->bomModel = new BomModel();
     }
 
     public function index() {
         $data['customers'] = $this->customerModel->getAll(false);
-        $data['items'] = $this->itemModel->getAll(false);
+        $data['items'] = $this->cfgModel->getAll(false);
         $allPOs = $this->warehouseModel->getPurchaseOrders();
         $data['allPOCount'] = count($allPOs);
         $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
@@ -179,13 +209,13 @@ class AdminController {
 
         $hasFilters = ($search !== '' || $customerFilter !== '');
         if ($hasFilters) {
-            $allItems = $this->itemModel->getAllFiltered($filters);
+            $allItems = $this->cfgModel->getAllFiltered($filters);
             $data['items'] = $allItems;
             $data['page'] = 1;
             $data['totalPages'] = 1;
             $data['total'] = count($allItems);
         } else {
-            $allItems = $this->itemModel->getAll(false);
+            $allItems = $this->cfgModel->getAll(false);
             $pagination = Pagination::paginate($allItems, 10);
             $data['items'] = $pagination['items'];
             $data['page'] = $pagination['page'];
@@ -206,7 +236,7 @@ class AdminController {
         $filters = [];
         if ($search) $filters['search'] = $search;
         if ($customerFilter) $filters['customer_id'] = $customerFilter;
-        $allItems = $this->itemModel->getAllFiltered($filters);
+        $allItems = $this->cfgModel->getAllFiltered($filters);
 
         $headers = ['Code', 'Description', 'Customer', 'UOM', 'Conversion'];
         $rows = [];
@@ -228,7 +258,7 @@ class AdminController {
         $filters = [];
         if ($search) $filters['search'] = $search;
         if ($customerFilter) $filters['customer_id'] = $customerFilter;
-        $allItems = $this->itemModel->getAllFiltered($filters);
+        $allItems = $this->cfgModel->getAllFiltered($filters);
 
         $data['items'] = $allItems;
         $data['search'] = $search;
@@ -243,7 +273,7 @@ class AdminController {
     public function itemCreate() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
-                $result = $this->itemModel->create($_POST);
+                $result = $this->cfgModel->create($_POST);
                 if ($result) {
                     AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created item: ' . ($_POST['item_description'] ?? ''), null, ['item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['item_description'] ?? ''], 'item', $result);
                     $_SESSION['success'] = 'Item created successfully';
@@ -277,7 +307,7 @@ class AdminController {
         $id = $_GET['id'] ?? null;
         $search = $_GET['search'] ?? '';
         $customerFilter = $_GET['customer_id'] ?? '';
-        $data['item'] = $this->itemModel->getById($id);
+        $data['item'] = $this->cfgModel->getById($id);
         if (!$data['item']) {
             $_SESSION['error'] = 'Item not found';
             $redirect = '?controller=admin&action=items';
@@ -288,8 +318,8 @@ class AdminController {
             exit;
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $oldItem = $this->itemModel->getById($id);
-            $result = $this->itemModel->update($id, $_POST);
+            $oldItem = $this->cfgModel->getById($id);
+            $result = $this->cfgModel->update($id, $_POST);
             if ($result) {
                 AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item: ' . ($oldItem['item_description'] ?? ''), $oldItem, ['item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['item_description'] ?? ''], 'item', $id);
                 $_SESSION['success'] = 'Item updated successfully';
@@ -309,8 +339,8 @@ class AdminController {
     public function itemDelete() {
         $id = $_GET['id'] ?? null;
         try {
-            $oldItem = $this->itemModel->getById($id);
-            $this->itemModel->softDelete($id);
+            $oldItem = $this->cfgModel->getById($id);
+            $this->cfgModel->softDelete($id);
             AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted item: ' . ($oldItem['item_description'] ?? $id), $oldItem, null, 'item', $id);
             $_SESSION['success'] = 'Item deleted successfully';
         } catch (\Exception $e) {
@@ -330,8 +360,8 @@ class AdminController {
     public function itemToggleStatus() {
         $id = $_GET['id'] ?? null;
         try {
-            $oldItem = $this->itemModel->getById($id);
-            $this->itemModel->toggleStatus($id);
+            $oldItem = $this->cfgModel->getById($id);
+            $this->cfgModel->toggleStatus($id);
             $newStatus = $oldItem['status'] ? 'Inactive' : 'Active';
             AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled item status to ' . $newStatus . ': ' . ($oldItem['item_description'] ?? $id), $oldItem, null, 'item', $id);
             $_SESSION['success'] = 'Item status changed to ' . $newStatus;
@@ -396,8 +426,8 @@ class AdminController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $id = $_POST['item_id'] ?? null;
-                $oldItem = $this->itemModel->getById($id);
-                $result = $this->itemModel->update($id, $_POST);
+                $oldItem = $this->cfgModel->getById($id);
+                $result = $this->cfgModel->update($id, $_POST);
                 if ($result) {
                     AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated item (inline): ' . ($oldItem['item_description'] ?? ''), $oldItem, ['item_code' => $_POST['item_code'] ?? '', 'description' => $_POST['item_description'] ?? ''], 'item', $id);
                     $_SESSION['success'] = 'Item updated successfully';
@@ -881,7 +911,12 @@ public function deleteProductionHistory() {
             echo json_encode([]);
             exit;
         }
-        $lots = $this->warehouseModel->getLotsByPOItem($poiId);
+        $conn = \App\Core\BaseModel::getConnection();
+        $stmt = $conn->prepare("SELECT po_id FROM purchase_order_items WHERE poi_id = ?");
+        $stmt->execute([$poiId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $poId = $row ? $row['po_id'] : null;
+        $lots = $this->warehouseModel->getLotsByPOItem($poiId, $poId);
         echo json_encode($lots);
         exit;
     }
@@ -1155,10 +1190,10 @@ public function deleteProductionHistory() {
         if ($search) $filters['search'] = $search;
         if ($filterCustomer) $filters['customer_id'] = $filterCustomer;
 
-        $allBackloads = $this->warehouseModel->getBackloads($filters);
+        $allBackloads = $this->backloadModel->getBackloads($filters);
         $pagination = Pagination::paginate($allBackloads, 15);
 
-        $customers = $this->warehouseModel->getCustomers();
+        $customers = $this->catalogModel->getCustomers();
 
         $data['backloads'] = $pagination['items'];
         $data['page'] = $pagination['page'];
@@ -1169,6 +1204,628 @@ public function deleteProductionHistory() {
         $data['customers'] = $customers;
         $data['page_title'] = 'Backloads';
         $this->render('backloads/index', $data);
+    }
+
+    // ─── Raw Materials Management ─────────────────────────────────────────────
+
+    public function rawMaterials() {
+        $search = $_GET['search'] ?? '';
+        $categoryFilter = $_GET['category'] ?? '';
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+        if ($categoryFilter) $filters['category'] = $categoryFilter;
+
+        $hasFilters = ($search !== '' || $categoryFilter !== '');
+        if ($hasFilters) {
+            $all = $this->rawMaterialModel->getAllFiltered($filters);
+            $data['rawMaterials'] = $all;
+            $data['page'] = 1;
+            $data['totalPages'] = 1;
+            $data['total'] = count($all);
+        } else {
+            $all = $this->rawMaterialModel->getAll(false);
+            $pagination = Pagination::paginate($all, 15);
+            $data['rawMaterials'] = $pagination['items'];
+            $data['page'] = $pagination['page'];
+            $data['totalPages'] = $pagination['totalPages'];
+            $data['total'] = $pagination['total'];
+        }
+        $data['search'] = $search;
+        $data['categoryFilter'] = $categoryFilter;
+        $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['page_title'] = 'Raw Materials & Packaging';
+        $this->render('raw_materials/index', $data);
+    }
+
+    public function rawMaterialCreate() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $result = $this->rawMaterialModel->create($_POST);
+                if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created raw material: ' . ($_POST['trade_name'] ?? ''), null, ['item_code' => $_POST['item_code'] ?? '', 'trade_name' => $_POST['trade_name'] ?? ''], 'raw_material', $result);
+                    $_SESSION['success'] = 'Raw material created successfully';
+                    header('Location: ?controller=admin&action=rawMaterials');
+                    exit;
+                }
+            } catch (\PDOException $e) {
+                $_SESSION['error'] = $this->getDbErrorMessage($e, 'item_code', 'Item code');
+                header('Location: ?controller=admin&action=rawMaterials');
+                exit;
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
+                header('Location: ?controller=admin&action=rawMaterials');
+                exit;
+            }
+        }
+        header('Location: ?controller=admin&action=rawMaterials');
+        exit;
+    }
+
+    public function rawMaterialUpdate() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $id = $_POST['raw_material_id'] ?? null;
+                $old = $this->rawMaterialModel->getById($id);
+                $result = $this->rawMaterialModel->update($id, $_POST);
+                if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated raw material: ' . ($old['trade_name'] ?? ''), $old, ['item_code' => $_POST['item_code'] ?? '', 'trade_name' => $_POST['trade_name'] ?? ''], 'raw_material', $id);
+                    $_SESSION['success'] = 'Raw material updated successfully';
+                }
+            } catch (\PDOException $e) {
+                $_SESSION['error'] = $this->getDbErrorMessage($e, 'item_code', 'Item code');
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
+            }
+        }
+        header('Location: ?controller=admin&action=rawMaterials');
+        exit;
+    }
+
+    public function rawMaterialDelete() {
+        $id = $_GET['id'] ?? null;
+        try {
+            $old = $this->rawMaterialModel->getById($id);
+            $this->rawMaterialModel->softDelete($id);
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deactivated raw material: ' . ($old['trade_name'] ?? $id), $old, null, 'raw_material', $id);
+            $_SESSION['success'] = 'Raw material deactivated';
+        } catch (\Exception $e) {
+            $_SESSION['error'] = 'Failed to deactivate: ' . $e->getMessage();
+        }
+        header('Location: ?controller=admin&action=rawMaterials');
+        exit;
+    }
+
+    public function rawMaterialToggleStatus() {
+        $id = $_GET['id'] ?? null;
+        try {
+            $old = $this->rawMaterialModel->getById($id);
+            $this->rawMaterialModel->toggleStatus($id);
+            $newStatus = $old['is_active'] ? 'Inactive' : 'Active';
+            AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Toggled raw material status to ' . $newStatus . ': ' . ($old['trade_name'] ?? $id), $old, null, 'raw_material', $id);
+            $_SESSION['success'] = 'Raw material status changed to ' . $newStatus;
+        } catch (\Exception $e) {
+            $_SESSION['error'] = 'Failed to update status: ' . $e->getMessage();
+        }
+        header('Location: ?controller=admin&action=rawMaterials');
+        exit;
+    }
+
+    // ─── BOM Management ──────────────────────────────────────────────────────
+
+    public function boms() {
+        $search = $_GET['search'] ?? '';
+        $filters = [];
+        if ($search) $filters['search'] = $search;
+
+        $hasFilters = ($search !== '');
+        if ($hasFilters) {
+            $all = $this->bomModel->getAllFiltered($filters);
+            $data['boms'] = $all;
+            $data['page'] = 1;
+            $data['totalPages'] = 1;
+            $data['total'] = count($all);
+        } else {
+            $all = $this->bomModel->getAll();
+            $pagination = Pagination::paginate($all, 15);
+            $data['boms'] = $pagination['items'];
+            $data['page'] = $pagination['page'];
+            $data['totalPages'] = $pagination['totalPages'];
+            $data['total'] = $pagination['total'];
+        }
+        $data['search'] = $search;
+        $data['allItems'] = $this->itemModel->getAll(false);
+        $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['page_title'] = 'BOM Recipes';
+        $this->render('boms/index', $data);
+    }
+
+    public function bomCreate() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $fgItemId = $_POST['fg_item_id'] ?? null;
+                $bomCode = trim($_POST['bom_code'] ?? '');
+                if (!$fgItemId) {
+                    throw new \Exception("Finished good item is required.");
+                }
+                $existing = $this->bomModel->getBomForItem($fgItemId);
+                if ($existing) {
+                    throw new \Exception("A BOM already exists for this finished good. Edit the existing one.");
+                }
+                $result = $this->bomModel->create($fgItemId, $bomCode ?: null);
+                if ($result) {
+                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created BOM for item #' . $fgItemId, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode], 'bom', $result);
+                    $_SESSION['success'] = 'BOM created successfully';
+                    header('Location: ?controller=admin&action=bomEdit&id=' . $result);
+                    exit;
+                }
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
+                header('Location: ?controller=admin&action=boms');
+                exit;
+            }
+        }
+        header('Location: ?controller=admin&action=boms');
+        exit;
+    }
+
+    public function bomEdit() {
+        $id = $_GET['id'] ?? null;
+        $data['bom'] = $this->bomModel->getById($id);
+        if (!$data['bom']) {
+            $_SESSION['error'] = 'BOM not found';
+            header('Location: ?controller=admin&action=boms');
+            exit;
+        }
+        $data['bomItems'] = $this->bomModel->getItemsByBomId($id);
+        $data['allItems'] = $this->itemModel->getAll(false);
+        $conn = \App\Core\BaseModel::getConnection();
+        $stmt = $conn->prepare("SELECT item_id, item_code, item_description, item_uom
+            FROM items WHERE item_type IN ('RM','PM','SFG') AND status = 1 AND `remove` = 0
+            ORDER BY item_code ASC");
+        $stmt->execute();
+        $data['allIngredients'] = $stmt->fetchAll();
+        $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['page_title'] = 'Edit BOM - ' . ($data['bom']['fg_name'] ?? '');
+        $this->render('boms/edit', $data);
+    }
+
+    public function bomUpdate() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $id = $_POST['bom_id'] ?? null;
+                $fgItemId = $_POST['fg_item_id'] ?? null;
+                $bomCode = trim($_POST['bom_code'] ?? '');
+                if (!$fgItemId) {
+                    throw new \Exception("Finished good item is required.");
+                }
+                $this->bomModel->update($id, $fgItemId, $bomCode ?: null);
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated BOM #' . $id, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode], 'bom', $id);
+                $_SESSION['success'] = 'BOM updated';
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
+            }
+        }
+        header('Location: ?controller=admin&action=bomEdit&id=' . ($_POST['bom_id'] ?? ''));
+        exit;
+    }
+
+    public function bomDelete() {
+        $id = $_GET['id'] ?? null;
+        try {
+            $old = $this->bomModel->getById($id);
+            $this->bomModel->delete($id);
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted BOM: ' . ($old['fg_name'] ?? $id), $old, null, 'bom', $id);
+            $_SESSION['success'] = 'BOM deleted';
+        } catch (\Exception $e) {
+            $_SESSION['error'] = 'Failed to delete BOM: ' . $e->getMessage();
+        }
+        header('Location: ?controller=admin&action=boms');
+        exit;
+    }
+
+    public function bomAddItem() {
+        header('Content-Type: application/json');
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $bomId = $_POST['bom_id'] ?? null;
+            $itemId = $_POST['item_id'] ?? null;
+            $dosageRate = $_POST['dosage_rate'] ?? 0;
+            $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
+
+            if (!$bomId || !$itemId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'BOM ID and ingredient item are required']);
+                exit;
+            }
+
+            $result = $this->bomModel->addItem($bomId, $itemId, $dosageRate, $wastagePct);
+            AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Added ingredient to BOM #' . $bomId, null, ['item_id' => $itemId, 'dosage_rate' => $dosageRate], 'bom_item', $result);
+            echo json_encode(['success' => true, 'id' => $result]);
+        } catch (\Exception $e) {
+            error_log('bomAddItem error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to add item: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
+    public function bomUpdateItem() {
+        header('Content-Type: application/json');
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $bomItemId = $_POST['bom_item_id'] ?? null;
+            $itemId = $_POST['item_id'] ?? null;
+            $dosageRate = $_POST['dosage_rate'] ?? 0;
+            $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
+
+            if (!$bomItemId || !$itemId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'BOM item ID and ingredient item are required']);
+                exit;
+            }
+
+            $result = $this->bomModel->updateItem($bomItemId, $itemId, $dosageRate, $wastagePct);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            error_log('bomUpdateItem error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to update item']);
+        }
+        exit;
+    }
+
+    public function bomRemoveItem() {
+        header('Content-Type: application/json');
+        try {
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+                exit;
+            }
+            $itemId = $_POST['item_id'] ?? null;
+            if (!$itemId) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Item ID required']);
+                exit;
+            }
+            $this->bomModel->removeItem($itemId);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            error_log('bomRemoveItem error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to remove item']);
+        }
+        exit;
+    }
+
+    public function whereUsed() {
+        header('Content-Type: application/json');
+        $itemId = $_GET['item_id'] ?? null;
+        if (!$itemId) {
+            echo json_encode([]);
+            exit;
+        }
+        $results = $this->bomModel->getBomsByItem($itemId);
+        echo json_encode($results);
+        exit;
+    }
+
+    // ─── Bulk Import: Raw Materials ────────────────────────────────────────────
+
+    public function rawMaterialImportPreview() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['import_file'])) {
+            $_SESSION['error'] = 'No file uploaded.';
+            header('Location: ?controller=admin&action=rawMaterials');
+            exit;
+        }
+
+        $file = $_FILES['import_file'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'xlsx'])) {
+            $_SESSION['error'] = 'Only .csv and .xlsx files are supported.';
+            header('Location: ?controller=admin&action=rawMaterials');
+            exit;
+        }
+        if ($file['size'] > 5 * 1024 * 1024) {
+            $_SESSION['error'] = 'File size must be less than 5MB.';
+            header('Location: ?controller=admin&action=rawMaterials');
+            exit;
+        }
+
+        try {
+            $rows = SpreadsheetReader::read($file['tmp_name']);
+        } catch (\Exception $e) {
+            $_SESSION['error'] = 'Failed to read file: ' . $e->getMessage();
+            header('Location: ?controller=admin&action=rawMaterials');
+            exit;
+        }
+
+        $validCategories = ['raw_material', 'packaging'];
+        $validUoms = ['Kg', 'g', 'L', 'mL', 'pcs', 'm', 'roll'];
+        $preview = [];
+
+        foreach ($rows as $idx => $row) {
+            $rowNum = $idx + 2;
+            $errors = [];
+            $itemCode = trim($row['ITEM_CODE'] ?? '');
+            $tradeName = trim($row['TRADE_NAME'] ?? '');
+            $category = strtolower(trim($row['CATEGORY'] ?? 'raw_material'));
+            $uom = trim($row['UOM'] ?? 'Kg');
+            $stock = floatval($row['STOCK_ON_HAND'] ?? 0);
+            $reorder = floatval($row['REORDER_LEVEL'] ?? 0);
+
+            if ($itemCode === '') $errors[] = 'ITEM_CODE is required';
+            if ($tradeName === '') $errors[] = 'TRADE_NAME is required';
+            if (!in_array($category, $validCategories)) $errors[] = 'Invalid CATEGORY: ' . htmlspecialchars($category);
+            if (!in_array($uom, $validUoms)) $errors[] = 'Invalid UOM: ' . htmlspecialchars($uom);
+
+            $existing = $itemCode !== '' ? $this->rawMaterialModel->getByCode($itemCode) : null;
+            $status = $existing ? 'update' : 'new';
+
+            $preview[] = [
+                'row' => $rowNum,
+                'item_code' => $itemCode,
+                'trade_name' => $tradeName,
+                'category' => $category,
+                'uom' => $uom,
+                'stock_on_hand' => $stock,
+                'reorder_level' => $reorder,
+                'status' => $status,
+                'errors' => $errors,
+            ];
+        }
+
+        $_SESSION['import_preview_rm'] = $preview;
+        $data['preview'] = $preview;
+        $data['newCount'] = count(array_filter($preview, fn($r) => $r['status'] === 'new' && empty($r['errors'])));
+        $data['updateCount'] = count(array_filter($preview, fn($r) => $r['status'] === 'update' && empty($r['errors'])));
+        $data['errorCount'] = count(array_filter($preview, fn($r) => !empty($r['errors'])));
+        $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['page_title'] = 'Import Raw Materials - Preview';
+        $this->render('raw_materials/import_preview', $data);
+    }
+
+    public function rawMaterialImportConfirm() {
+        $preview = $_SESSION['import_preview_rm'] ?? null;
+        if (!$preview) {
+            $_SESSION['error'] = 'No import data found. Please upload again.';
+            header('Location: ?controller=admin&action=rawMaterials');
+            exit;
+        }
+        unset($_SESSION['import_preview_rm']);
+
+        $imported = 0;
+        $updated = 0;
+        $errors = 0;
+
+        foreach ($preview as $row) {
+            if (!empty($row['errors'])) {
+                $errors++;
+                continue;
+            }
+            $data = [
+                'item_code' => $row['item_code'],
+                'trade_name' => $row['trade_name'],
+                'category' => $row['category'],
+                'uom' => $row['uom'],
+                'stock_on_hand' => $row['stock_on_hand'],
+                'reorder_level' => $row['reorder_level'],
+                'is_active' => 1
+            ];
+            try {
+                $existing = $this->rawMaterialModel->getByCode($row['item_code']);
+                $this->rawMaterialModel->upsertByCode($data);
+                if ($existing) {
+                    $updated++;
+                } else {
+                    $imported++;
+                }
+            } catch (\Exception $e) {
+                $errors++;
+            }
+        }
+
+        AuditModel::log($_SESSION['user_id'], 'IMPORT', 'admin', "Bulk imported raw materials: {$imported} new, {$updated} updated, {$errors} errors", null, ['imported' => $imported, 'updated' => $updated, 'errors' => $errors], 'raw_material', null);
+        $_SESSION['success'] = "Import complete: {$imported} new, {$updated} updated, {$errors} errors";
+        header('Location: ?controller=admin&action=rawMaterials');
+        exit;
+    }
+
+    // ─── Bulk Import: BOM Recipes ─────────────────────────────────────────────
+
+    public function bomImportPreview() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['import_file'])) {
+            $_SESSION['error'] = 'No file uploaded.';
+            header('Location: ?controller=admin&action=boms');
+            exit;
+        }
+
+        $file = $_FILES['import_file'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'xlsx'])) {
+            $_SESSION['error'] = 'Only .csv and .xlsx files are supported.';
+            header('Location: ?controller=admin&action=boms');
+            exit;
+        }
+        if ($file['size'] > 5 * 1024 * 1024) {
+            $_SESSION['error'] = 'File size must be less than 5MB.';
+            header('Location: ?controller=admin&action=boms');
+            exit;
+        }
+
+        try {
+            $rows = SpreadsheetReader::read($file['tmp_name']);
+        } catch (\Exception $e) {
+            $_SESSION['error'] = 'Failed to read file: ' . $e->getMessage();
+            header('Location: ?controller=admin&action=boms');
+            exit;
+        }
+
+        $conn = self::getConnection();
+        $preview = [];
+
+        foreach ($rows as $idx => $row) {
+            $rowNum = $idx + 2;
+            $errors = [];
+            $fgCode = trim($row['FG_ITEM_CODE'] ?? '');
+            $bomCode = trim($row['BOM_CODE'] ?? '');
+            $rmCode = trim($row['RM_CODE'] ?? '');
+            $dosage = floatval($row['DOSAGE_RATE'] ?? 0);
+            $wastage = floatval($row['WASTAGE_PCT'] ?? 0);
+
+            if ($fgCode === '') $errors[] = 'FG_ITEM_CODE is required';
+            if ($rmCode === '') $errors[] = 'RM_CODE is required';
+            if ($dosage <= 0) $errors[] = 'DOSAGE_RATE must be > 0';
+
+            $fgItem = null;
+            if ($fgCode !== '') {
+                $stmt = $conn->prepare("SELECT item_id, item_code, item_description FROM items WHERE item_code = :code AND `remove` = 0");
+                $stmt->execute(['code' => $fgCode]);
+                $fgItem = $stmt->fetch();
+                if (!$fgItem) $errors[] = 'FG item not found: ' . htmlspecialchars($fgCode);
+            }
+
+            $rmItem = null;
+            if ($rmCode !== '') {
+                $rmItem = $this->rawMaterialModel->getByCode($rmCode);
+                if (!$rmItem) $errors[] = 'Raw material not found: ' . htmlspecialchars($rmCode);
+            }
+
+            $existingBom = null;
+            if ($fgItem) {
+                $existingBom = $this->bomModel->getBomForItem($fgItem['item_id']);
+            }
+
+            $preview[] = [
+                'row' => $rowNum,
+                'fg_item_code' => $fgCode,
+                'fg_item_id' => $fgItem['item_id'] ?? null,
+                'fg_name' => $fgItem['item_description'] ?? '',
+                'bom_code' => $bomCode,
+                'rm_code' => $rmCode,
+                'rm_id' => $rmItem['id'] ?? null,
+                'rm_name' => $rmItem['trade_name'] ?? '',
+                'dosage_rate' => $dosage,
+                'wastage_pct' => $wastage,
+                'existing_bom_id' => $existingBom['id'] ?? null,
+                'status' => $existingBom ? 'update' : 'new',
+                'errors' => $errors,
+            ];
+        }
+
+        $_SESSION['import_preview_bom'] = $preview;
+        $validRows = array_filter($preview, fn($r) => empty($r['errors']));
+        $fgGroups = [];
+        foreach ($validRows as $r) {
+            $fgGroups[$r['fg_item_code']] = true;
+        }
+        $data['preview'] = $preview;
+        $data['fgCount'] = count($fgGroups);
+        $data['lineCount'] = count($validRows);
+        $data['errorCount'] = count(array_filter($preview, fn($r) => !empty($r['errors'])));
+        $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
+        $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['page_title'] = 'Import BOM Recipes - Preview';
+        $this->render('boms/import_preview', $data);
+    }
+
+    public function bomImportConfirm() {
+        $preview = $_SESSION['import_preview_bom'] ?? null;
+        if (!$preview) {
+            $_SESSION['error'] = 'No import data found. Please upload again.';
+            header('Location: ?controller=admin&action=boms');
+            exit;
+        }
+        unset($_SESSION['import_preview_bom']);
+
+        $validRows = array_filter($preview, fn($r) => empty($r['errors']));
+        $fgGroups = [];
+        foreach ($validRows as $r) {
+            $fgGroups[$r['fg_item_code']][] = $r;
+        }
+
+        $bomsCreated = 0;
+        $bomsUpdated = 0;
+        $lineCount = 0;
+        $errors = count(array_filter($preview, fn($r) => !empty($r['errors'])));
+
+        foreach ($fgGroups as $fgCode => $group) {
+            $first = $group[0];
+            try {
+                $bomId = $first['existing_bom_id'];
+                if ($bomId) {
+                    $this->bomModel->update($bomId, $first['fg_item_id'], $first['bom_code'] ?: null);
+                    $bomsUpdated++;
+                } else {
+                    $bomId = $this->bomModel->create($first['fg_item_id'], $first['bom_code'] ?: null);
+                    $bomsCreated++;
+                }
+
+                $items = [];
+                foreach ($group as $r) {
+                    if ($r['item_id']) {
+                        $items[] = [
+                            'item_id' => $r['item_id'],
+                            'dosage_rate' => $r['dosage_rate'],
+                            'wastage_allowance_pct' => $r['wastage_pct']
+                        ];
+                        $lineCount++;
+                    }
+                }
+                $this->bomModel->replaceBomItems($bomId, $items);
+            } catch (\Exception $e) {
+                $errors++;
+            }
+        }
+
+        AuditModel::log($_SESSION['user_id'], 'IMPORT', 'admin', "Bulk imported BOMs: {$bomsCreated} created, {$bomsUpdated} updated, {$lineCount} line items, {$errors} errors", null, ['boms_created' => $bomsCreated, 'boms_updated' => $bomsUpdated, 'line_items' => $lineCount, 'errors' => $errors], 'bom', null);
+        $_SESSION['success'] = "BOM import complete: {$bomsCreated} created, {$bomsUpdated} updated, {$lineCount} line items imported";
+        header('Location: ?controller=admin&action=boms');
+        exit;
+    }
+
+    // ─── Purchasing PO / Receiving PO (View Only for Admin) ────────────────────
+
+    public function purchasingPo() {
+        $filters = [
+            'status' => $_GET['status'] ?? '',
+            'search' => $_GET['search'] ?? '',
+        ];
+        $orders = $this->warehouseModel->getPurchasingPoFiltered($filters);
+        $data['page_title'] = 'Purchasing PO (View Only)';
+        $data['orders'] = $orders;
+        $data['filters'] = $filters;
+        $data['readOnly'] = true;
+        $this->render('purchasingPo/index', $data);
+    }
+
+    public function receivingPo() {
+        $filters = [
+            'status' => $_GET['status'] ?? '',
+            'supplier' => $_GET['supplier'] ?? '',
+            'search' => $_GET['search'] ?? '',
+        ];
+        $orders = $this->warehouseModel->getReceivingPoFiltered($filters);
+        $suppliers = $this->warehouseModel->getPurchasingPoSuppliers();
+
+        $data['page_title'] = 'Receiving Purchasing PO (View Only)';
+        $data['orders'] = $orders;
+        $data['filters'] = $filters;
+        $data['suppliers'] = $suppliers;
+        $data['readOnly'] = true;
+        $this->render('receivingPo/index', $data);
     }
 
     private function render($view, $data = []) {

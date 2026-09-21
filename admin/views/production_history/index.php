@@ -166,11 +166,9 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if (!empty($h['poi_id'])): ?>
-                            <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>', <?= $h['added_quantity'] ?>)">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                        <?php endif; ?>
+                        <button class="btn btn-sm btn-outline-primary" onclick="openEditModal(<?= $h['history_id'] ?>, '<?= htmlspecialchars(addslashes($h['lot_number'] ?? ''), ENT_QUOTES) ?>', <?= $h['added_quantity'] ?>)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
                         <a href="?controller=admin&action=deleteProductionHistory&id=<?= $h['history_id'] ?>"
                            class="btn btn-sm btn-outline-danger"
                            onclick="return confirm('Delete this production entry and roll back its quantity?')"

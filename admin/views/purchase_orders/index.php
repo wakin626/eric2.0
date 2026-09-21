@@ -183,7 +183,7 @@
                         <thead>
                             <tr>
                                 <th>Lot No.</th>
-                                <th class="text-end">Qty Produced</th>
+                                <th class="text-end">Qty Delivered</th>
                             </tr>
                         </thead>
                         <tbody id="lotTrackerBody">
@@ -217,14 +217,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">Loading...</td></tr>';
         foot.style.display = 'none';
-        fetch('?controller=admin&action=getLotsByPOItem&poi_id=' + poiId)
+        fetch('?controller=admin&action=getLotsByPOItem&poi_id=' + poiId + '&_t=' + Date.now())
             .then(function(r) { return r.json(); })
             .then(function(lots) {
                 tbody.innerHTML = '';
                 if (lots && lots.length > 0) {
                     var total = 0;
                     lots.forEach(function(lot) {
-                        var qty = parseInt(lot.quantity_produced) || 0;
+                        var qty = parseInt(lot.quantity_delivered || lot.quantity_produced) || 0;
                         total += qty;
                         tbody.innerHTML += '<tr>' +
                             '<td><strong>' + (lot.lot_number || '-') + '</strong></td>' +

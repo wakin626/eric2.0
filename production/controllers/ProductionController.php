@@ -2,12 +2,14 @@
 namespace App\Controllers;
 
 use App\Models\WarehouseModel;
+use App\Models\CatalogModel;
 use App\Models\AuditModel;
 use App\Helpers\Pagination;
 use App\Helpers\NotificationHelper;
 
 class ProductionController {
     private $warehouseModel;
+    private $catalogModel;
 
     public function __construct() {
         $action = $_GET['action'] ?? '';
@@ -26,6 +28,7 @@ class ProductionController {
             exit;
         }
         $this->warehouseModel = new WarehouseModel();
+        $this->catalogModel = new CatalogModel();
     }
 
     public function index() {
@@ -279,13 +282,30 @@ class ProductionController {
                 echo json_encode([]);
                 exit;
             }
-            $items = $this->warehouseModel->searchItems($query);
+            $items = $this->catalogModel->searchItems($query);
             echo json_encode($items);
         } catch (\Exception $e) {
             error_log('searchItems error: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode(['error' => 'Failed to search items']);
         }
+        exit;
+    }
+
+    public function checkItemBom() {
+        header('Content-Type: application/json');
+        $itemId = intval($_GET['item_id'] ?? 0);
+        if ($itemId <= 0) {
+            echo json_encode(['has_bom' => false]);
+            exit;
+        }
+        $bom = $this->warehouseModel->hasBOM($itemId);
+        echo json_encode([
+            'has_bom' => (bool) $bom,
+            'bom_code' => $bom ? $bom['bom_code'] : null,
+            'batch_qty' => $bom ? floatval($bom['batch_qty']) : 0,
+            'batch_uom' => $bom ? $bom['batch_uom'] : null
+        ]);
         exit;
     }
 
@@ -363,13 +383,19 @@ class ProductionController {
                     $item = $itemCache[$item_id];
                     if (!$item) continue;
 
+                    $bom = $this->warehouseModel->hasBOM($item_id);
+                    if (!$bom) {
+                        throw new \RuntimeException('Row ' . ($i + 1) . ': Item "' . $item['item_code'] . '" has no BOM defined. Create a BOM before producing this item.');
+                    }
+
                     $savedItemDescriptions[] = $item['item_description'];
 
                     $autoStsRef = 'STS-' . str_pad($nextNum, 4, '0', STR_PAD_LEFT);
                     $nextNum++;
 
-                    $existingLot = $this->warehouseModel->getLotByItemAndLotNumber($item_id, $lotNumber);
-                    $previousLotQty = $existingLot ? intval($existingLot['quantity_produced']) : 0;
+                    $lotQtyStmt = $conn->prepare("SELECT COALESCE(SUM(added_quantity), 0) as total_qty FROM production_history WHERE item_id = :item_id AND lot_number = :lot_number AND is_removed = 0");
+                    $lotQtyStmt->execute(['item_id' => $item_id, 'lot_number' => $lotNumber]);
+                    $previousLotQty = intval($lotQtyStmt->fetchColumn());
 
                     $pcsVal = intval($pcsPerCases[$i] ?? 0);
                     if ($pcsVal <= 0) {
@@ -618,7 +644,12 @@ class ProductionController {
                 echo json_encode([]);
                 exit;
             }
-            $lots = $this->warehouseModel->getLotsByPOItem($poiId);
+            $conn = \App\Core\BaseModel::getConnection();
+            $stmt = $conn->prepare("SELECT po_id FROM purchase_order_items WHERE poi_id = ?");
+            $stmt->execute([$poiId]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+            $poId = $row ? $row['po_id'] : null;
+            $lots = $this->warehouseModel->getLotsByPOItem($poiId, $poId);
             echo json_encode($lots);
         } catch (\Exception $e) {
             error_log('getLotsByPOItem error: ' . $e->getMessage());

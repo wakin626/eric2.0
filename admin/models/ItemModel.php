@@ -9,7 +9,7 @@ class ItemModel extends BaseModel {
     public function getAll($activeOnly = true) {
         $sql = "SELECT i.*, c.customer_name FROM {$this->table} i
                 LEFT JOIN customers c ON i.customer_id = c.customer_id AND c.`remove` = 0
-                WHERE i.`remove` = 0";
+                WHERE i.`remove` = 0 AND i.item_type = 'FG'";
         if ($activeOnly) {
             $sql .= " AND i.status = 1";
         }
@@ -46,8 +46,8 @@ class ItemModel extends BaseModel {
             throw new \Exception("Item code already exists for this customer.");
         }
 
-        $sql = "INSERT INTO {$this->table} (item_code, item_description, customer_id, item_uom, uom_conversion, item_size, item_amount) 
-                VALUES (:item_code, :item_description, :customer_id, :item_uom, :uom_conversion, :item_size, :item_amount)";
+        $sql = "INSERT INTO {$this->table} (item_code, item_description, customer_id, item_uom, uom_conversion, item_size, item_amount, item_type) 
+                VALUES (:item_code, :item_description, :customer_id, :item_uom, :uom_conversion, :item_size, :item_amount, 'FG')";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'item_code' => $data['item_code'],
@@ -143,7 +143,7 @@ class ItemModel extends BaseModel {
     public function getAllFiltered($filters = [], $activeOnly = false) {
         $sql = "SELECT i.*, c.customer_name FROM {$this->table} i
                 LEFT JOIN customers c ON i.customer_id = c.customer_id AND c.`remove` = 0
-                WHERE i.`remove` = 0";
+                WHERE i.`remove` = 0 AND i.item_type = 'FG'";
         $params = [];
 
         if ($activeOnly) {

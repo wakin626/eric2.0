@@ -2176,7 +2176,7 @@ class WarehouseController {
 
                 $this->notifyProcurementOfReceipt($order, $receivedQty);
 
-                $_SESSION['success'] = 'Shipment received successfully. Stock updated.';
+                $_SESSION['success'] = 'Shipment received successfully. Goods are now in QC quarantine pending approval.';
                 header('Location: ?controller=warehouse&action=receivingPo');
                 exit;
             } catch (\Exception $e) {

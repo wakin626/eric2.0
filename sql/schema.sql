@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
-    department ENUM('admin', 'warehouse', 'production', 'finance', 'qc', 'qa') NOT NULL,
+    department ENUM('admin', 'warehouse', 'production', 'finance', 'qc', 'qa', 'rnd') NOT NULL,
     status TINYINT(1) DEFAULT 1 COMMENT '0=inactive, 1=active',
     `remove` TINYINT(1) DEFAULT 0 COMMENT '0=active, 1=soft deleted',
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,

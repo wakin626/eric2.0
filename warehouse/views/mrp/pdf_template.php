@@ -77,6 +77,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <th class="num">SOH</th>
                 <th class="num">Allocated</th>
                 <th class="num">Pending PO/RR</th>
+                <th class="num">Supplier</th>
                 <th class="num">EXCESS / (LACKING)</th>
                 <th>Date</th>
                 <th>Remarks</th>
@@ -92,6 +93,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <td class="num"><?= number_format($row['soh'], 2) ?></td>
                 <td class="num"><?= number_format($row['allocated'], 2) ?></td>
                 <td class="num"><?= number_format($row['pending'], 2) ?></td>
+                <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? number_format($row['supplier_pending'], 2) : '0.00' ?></td>
                 <td class="num <?= $row['excess'] < 0 ? 'negative' : '' ?>">
                     <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
                 </td>
@@ -120,6 +122,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <th class="num">SOH</th>
                 <th class="num">Allocated</th>
                 <th class="num">Pending PO/RR</th>
+                <th class="num">Supplier</th>
                 <th class="num">EXCESS / (LACKING)</th>
                 <th>Remarks</th>
             </tr>
@@ -134,6 +137,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <td class="num"><?= number_format($row['soh'], 2) ?></td>
                 <td class="num"><?= number_format($row['allocated'], 2) ?></td>
                 <td class="num"><?= number_format($row['pending'], 2) ?></td>
+                <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? number_format($row['supplier_pending'], 2) : '0.00' ?></td>
                 <td class="num <?= $row['excess'] < 0 ? 'negative' : '' ?>">
                     <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
                 </td>

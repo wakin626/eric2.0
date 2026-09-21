@@ -101,4 +101,246 @@ class QcModel extends BaseModel {
             'history_id' => $historyId
         ]);
     }
+
+    public function getPendingQcItems() {
+        $sql = "SELECT
+                    ri.id AS receiving_item_id,
+                    ri.po_ref AS customer_po_number,
+                    ri.supplier AS supplier_name,
+                    ri.item_code,
+                    ri.item_name AS item_description,
+                    ri.uom AS item_uom,
+                    ri.received_qty,
+                    ri.passed_qty,
+                    ri.rejected_qty,
+                    ri.lot_number,
+                    ri.received_date,
+                    ri.remarks,
+                    ri.qc_status
+                FROM receiving_items ri
+                WHERE ri.qc_status = 'PENDING_QC'
+                ORDER BY ri.received_date ASC, ri.id ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getReceivingItemById($id) {
+        $sql = "SELECT
+                    ri.*,
+                    ri.id AS receiving_item_id,
+                    ri.po_ref AS customer_po_number,
+                    ri.supplier AS supplier_name,
+                    ri.item_name AS item_description,
+                    ri.uom AS item_uom
+                FROM receiving_items ri
+                WHERE ri.id = :id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['id' => $id]);
+        return $stmt->fetch();
+    }
+
+    public function createReceivingItem($data) {
+        $sql = "INSERT INTO receiving_items (
+                    po_ref, supplier, item_code, item_name, uom,
+                    ordered_qty, received_qty, passed_qty, rejected_qty,
+                    lot_number, expiry_date, dr_invoice_no, received_date,
+                    remarks, qc_status
+                ) VALUES (
+                    :po_ref, :supplier, :item_code, :item_name, :uom,
+                    :ordered_qty, :received_qty, :passed_qty, :rejected_qty,
+                    :lot_number, :expiry_date, :dr_invoice_no, :received_date,
+                    :remarks, :qc_status
+                )";
+
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute([
+            'po_ref' => $data['po_ref'] ?? ($data['po_id'] ?? null),
+            'supplier' => $data['supplier_name'] ?? null,
+            'item_code' => $data['item_code'] ?? null,
+            'item_name' => $data['item_description'] ?? null,
+            'uom' => $data['uom'] ?? null,
+            'ordered_qty' => $data['ordered_qty'] ?? ($data['received_qty'] ?? 0),
+            'received_qty' => $data['received_qty'] ?? 0,
+            'passed_qty' => $data['passed_qty'] ?? 0,
+            'rejected_qty' => $data['rejected_qty'] ?? 0,
+            'lot_number' => $data['lot_number'] ?? null,
+            'expiry_date' => $data['expiry_date'] ?? null,
+            'dr_invoice_no' => $data['dr_invoice_no'] ?? null,
+            'received_date' => $data['received_date'] ?? date('Y-m-d'),
+            'remarks' => $data['remarks'] ?? null,
+            'qc_status' => 'PENDING_QC',
+        ]);
+
+        return (int) self::getConnection()->lastInsertId();
+    }
+
+    public function recordQcInspection($data) {
+        $receivingItemId = (int) ($data['receiving_item_id'] ?? 0);
+        $decision = strtoupper((string) ($data['decision'] ?? ''));
+        $receivedQty = (float) ($data['received_qty'] ?? 0);
+        $passedQty = (float) ($data['passed_qty'] ?? 0);
+        $rejectedQty = (float) ($data['rejected_qty'] ?? 0);
+        $inspectorName = trim((string) ($data['inspector_name'] ?? ''));
+        $remarks = trim((string) ($data['remarks'] ?? ''));
+
+        if ($receivingItemId <= 0) {
+            throw new \RuntimeException('Receiving item is required.');
+        }
+        if (!in_array($decision, ['PASSED', 'REJECTED'], true)) {
+            throw new \RuntimeException('QC decision must be PASSED or REJECTED.');
+        }
+        if ($receivedQty <= 0) {
+            throw new \RuntimeException('Received quantity must be greater than zero.');
+        }
+        if (abs(($passedQty + $rejectedQty) - $receivedQty) > 0.0001) {
+            throw new \RuntimeException('Passed + rejected quantities must equal the received quantity.');
+        }
+        if ($decision === 'PASSED' && $passedQty <= 0) {
+            throw new \RuntimeException('Passed quantity must be greater than zero for accepted goods.');
+        }
+        if ($decision === 'REJECTED' && $rejectedQty <= 0) {
+            throw new \RuntimeException('Rejected quantity must be greater than zero for rejected goods.');
+        }
+        if ($inspectorName === '') {
+            throw new \RuntimeException('Inspector name is required.');
+        }
+
+        $receivingItem = $this->getReceivingItemById($receivingItemId);
+        if (!$receivingItem) {
+            throw new \RuntimeException('Receiving item was not found.');
+        }
+
+        $finalStatus = $decision;
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+
+        try {
+            $inspectorUserId = (int) ($_SESSION['user_id'] ?? 0);
+
+            $insStmt = $conn->prepare("INSERT INTO qc_inspections (
+                    receiving_item_id, decision, passed_qty, rejected_qty, inspector_name, remarks, inspected_at
+                ) VALUES (
+                    :receiving_item_id, :decision, :passed_qty, :rejected_qty, :inspector_name, :remarks, NOW()
+                )");
+            $insStmt->execute([
+                'receiving_item_id' => $receivingItemId,
+                'decision' => $decision,
+                'passed_qty' => $passedQty,
+                'rejected_qty' => $rejectedQty,
+                'inspector_name' => $inspectorName,
+                'remarks' => $remarks,
+            ]);
+
+            $updateStmt = $conn->prepare("UPDATE receiving_items
+                SET qc_status = :status,
+                    inspected_by = :inspector_id,
+                    inspected_at = NOW(),
+                    remarks = :remarks,
+                    passed_qty = :passed_qty,
+                    rejected_qty = :rejected_qty
+                WHERE id = :receiving_item_id");
+            $updateStmt->execute([
+                'status' => $finalStatus,
+                'inspector_id' => $inspectorUserId ?: null,
+                'remarks' => $remarks,
+                'passed_qty' => $passedQty,
+                'rejected_qty' => $rejectedQty,
+                'receiving_item_id' => $receivingItemId,
+            ]);
+
+            if (!empty($receivingItem['po_ref'])) {
+                $poRef = trim((string) $receivingItem['po_ref']);
+                $poId = preg_replace('/\D+/', '', $poRef);
+                if ($poId !== '') {
+                    $poStatus = ($decision === 'PASSED') ? 'received' : 'rejected';
+                    $conn->prepare("UPDATE supplier_orders SET status = :status, last_update = NOW() WHERE po_id = :po_id AND `remove` = 0")->execute([
+                        'status' => $poStatus,
+                        'po_id' => (int) $poId,
+                    ]);
+                }
+            }
+
+            $qtyToRelease = $decision === 'PASSED' ? $passedQty : $rejectedQty;
+            if ($qtyToRelease > 0) {
+                $conn->prepare("UPDATE inventory_balances
+                    SET qty_for_inspect = GREATEST(qty_for_inspect - :qty_to_release, 0)
+                    WHERE item_id = :item_id AND site_code = 'MAIN'")->execute([
+                    'qty_to_release' => $qtyToRelease,
+                    'item_id' => $receivingItem['item_id'],
+                ]);
+            }
+
+            if ($decision === 'PASSED' && $passedQty > 0) {
+                $stockSql = "INSERT INTO inventory_stock (
+                                item_id, site_code, lot_number, qty_on_hand, qty_blocked, qty_rejected, status, source_receiving_item_id, reference_type, reference_id, updated_at
+                            ) VALUES (
+                                :item_id, 'MAIN', :lot_number, :qty_on_hand, 0, 0, 'PASSED', :source_receiving_item_id, 'receiving_item', :source_id, NOW()
+                            ) ON DUPLICATE KEY UPDATE
+                                qty_on_hand = qty_on_hand + VALUES(qty_on_hand),
+                                status = 'PASSED',
+                                updated_at = NOW()";
+                $conn->prepare($stockSql)->execute([
+                    'item_id' => $receivingItem['item_id'],
+                    'lot_number' => $receivingItem['lot_number'],
+                    'qty_on_hand' => $passedQty,
+                    'source_receiving_item_id' => $receivingItemId,
+                    'source_id' => $receivingItemId,
+                ]);
+
+                $conn->prepare("INSERT INTO inventory_balances (item_id, site_code, qty_on_hand, qty_for_inspect)
+                    VALUES (:item_id, 'MAIN', :qty_on_hand, 0)
+                    ON DUPLICATE KEY UPDATE qty_on_hand = qty_on_hand + VALUES(qty_on_hand)")->execute([
+                    'item_id' => $receivingItem['item_id'],
+                    'qty_on_hand' => $passedQty,
+                ]);
+            }
+
+            if ($decision === 'REJECTED' && $rejectedQty > 0) {
+                $stockSql = "INSERT INTO inventory_stock (
+                                item_id, site_code, lot_number, qty_on_hand, qty_blocked, qty_rejected, status, source_receiving_item_id, reference_type, reference_id, updated_at
+                            ) VALUES (
+                                :item_id, 'MAIN', :lot_number, 0, :qty_blocked, :qty_rejected, 'REJECTED', :source_receiving_item_id, 'receiving_item', :source_id, NOW()
+                            ) ON DUPLICATE KEY UPDATE
+                                qty_blocked = qty_blocked + VALUES(qty_blocked),
+                                qty_rejected = qty_rejected + VALUES(qty_rejected),
+                                status = 'REJECTED',
+                                updated_at = NOW()";
+                $conn->prepare($stockSql)->execute([
+                    'item_id' => $receivingItem['item_id'],
+                    'lot_number' => $receivingItem['lot_number'],
+                    'qty_blocked' => $rejectedQty,
+                    'qty_rejected' => $rejectedQty,
+                    'source_receiving_item_id' => $receivingItemId,
+                    'source_id' => $receivingItemId,
+                ]);
+            }
+
+            $conn->commit();
+            return [
+                'success' => true,
+                'decision' => $decision,
+                'receiving_item_id' => $receivingItemId,
+            ];
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    public function approveReceivingInspection($id, $data = []) {
+        $receivingItemId = (int) ($id ?: ($data['receiving_item_id'] ?? 0));
+        $decision = strtoupper((string) ($data['decision'] ?? 'PASSED'));
+        $payload = [
+            'receiving_item_id' => $receivingItemId,
+            'decision' => $decision,
+            'received_qty' => isset($data['received_qty']) ? (float) $data['received_qty'] : 0,
+            'passed_qty' => isset($data['passed_qty']) ? (float) $data['passed_qty'] : 0,
+            'rejected_qty' => isset($data['rejected_qty']) ? (float) $data['rejected_qty'] : 0,
+            'inspector_name' => trim((string) ($data['inspector_name'] ?? '')) ?: ($_SESSION['full_name'] ?? 'QC'),
+            'remarks' => trim((string) ($data['remarks'] ?? '')),
+        ];
+
+        return $this->recordQcInspection($payload);
+    }
 }

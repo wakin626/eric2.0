@@ -3433,6 +3433,7 @@ public function searchItems($query) {
             // Determine new status
             $newStatus = ($newReceivedQty >= $orderedQty) ? 'received' : 'partially_received';
 
+            $qcGateStatus = 'pending_qc';
             $sql = "UPDATE supplier_orders 
                     SET received_qty = :received_qty,
                         received_date = :received_date,
@@ -3443,15 +3444,16 @@ public function searchItems($query) {
             $stmt->execute([
                 'received_qty' => $newReceivedQty,
                 'received_date' => $data['received_date'],
-                'status' => $newStatus,
+                'status' => $qcGateStatus,
                 'id' => $id
             ]);
 
-            // Update inventory_balances
+            // Gatekeeping: received goods sit in inspection hold until QC approves them.
+            // Available SOH is computed from qty_on_hand only; qty_for_inspect is excluded.
             $conn->prepare("
-                INSERT INTO inventory_balances (item_id, site_code, qty_on_hand) 
-                VALUES (:item_id, 'MAIN', :qty) 
-                ON DUPLICATE KEY UPDATE qty_on_hand = qty_on_hand + :qty2
+                INSERT INTO inventory_balances (item_id, site_code, qty_on_hand, qty_for_inspect)
+                VALUES (:item_id, 'MAIN', 0, :qty)
+                ON DUPLICATE KEY UPDATE qty_for_inspect = qty_for_inspect + :qty2
             ")->execute([
                 'item_id' => $order['item_id'],
                 'qty' => $receivedQty,
