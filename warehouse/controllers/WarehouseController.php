@@ -2,6 +2,8 @@
 namespace App\Controllers;
 
 use App\Models\WarehouseModel;
+use App\Models\BackloadModel;
+use App\Models\CatalogModel;
 use App\Models\AuditModel;
 use App\Helpers\Pagination;
 use App\Helpers\NotificationHelper;
@@ -9,6 +11,8 @@ use App\Helpers\XlsxExport;
 
 class WarehouseController {
     private $warehouseModel;
+    private $backloadModel;
+    private $catalogModel;
 
     public function __construct() {
         if (!isset($_SESSION['user_id'])) {
@@ -21,18 +25,41 @@ class WarehouseController {
         $apiActions = ['getPODetails', 'getItemsByCustomer', 'backloadDelivery', 'getDeliveryLotsForBackload',
             'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
             'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery', 'searchItems',
-            'mrpRunDetail'];
+            'mrpRunDetail', 'purchasingPo', 'receivingPo'];
         if (!$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
         }
         $this->warehouseModel = new WarehouseModel();
+        $this->backloadModel = new BackloadModel();
+        $this->catalogModel = new CatalogModel();
+    }
+
+    private function redirectToRoleHome(string $action): void {
+        $department = $_SESSION['department'] ?? 'warehouse';
+        $controller = ($department === 'admin') ? 'admin' : 'warehouse';
+        header('Location: ?controller=' . $controller . '&action=' . $action);
+        exit;
+    }
+
+    private function enforceReadOnlyPurchasingPo(): void {
+        if (($_SESSION['department'] ?? '') !== 'warehouse') {
+            $_SESSION['error'] = 'Purchasing PO is read-only for this role.';
+            $this->redirectToRoleHome('purchasingPo');
+        }
+    }
+
+    private function enforceWarehouseReceivingAccess(): void {
+        if (($_SESSION['department'] ?? '') !== 'warehouse') {
+            $_SESSION['error'] = 'Only warehouse users can receive purchasing shipments.';
+            $this->redirectToRoleHome('receivingPo');
+        }
     }
 
     public function index() {
         $data['page_title'] = 'Warehouse Dashboard';
-        $data['customers'] = $this->warehouseModel->getCustomers();
-        $data['items'] = $this->warehouseModel->getItems();
+        $data['customers'] = $this->catalogModel->getCustomers();
+        $data['items'] = $this->catalogModel->getItems();
         $data['purchase_orders'] = $this->warehouseModel->getActivePOsForDashboard(5);
         $poIds = array_column($data['purchase_orders'], 'po_id');
         $data['po_items_map'] = $this->warehouseModel->getPurchaseOrderItemsByPOIds($poIds);
@@ -140,8 +167,8 @@ class WarehouseController {
             }
         }
         $data['page_title'] = 'Create PO';
-        $data['customers'] = $this->warehouseModel->getCustomers();
-        $data['items'] = $this->warehouseModel->getItems();
+        $data['customers'] = $this->catalogModel->getCustomers();
+        $data['items'] = $this->catalogModel->getItems();
         $this->render('purchase_orders/create', $data);
     }
 
@@ -361,7 +388,7 @@ class WarehouseController {
             echo json_encode([]);
             exit;
         }
-        $items = $this->warehouseModel->getItemsByCustomer($customer_id);
+        $items = $this->catalogModel->getItemsByCustomer($customer_id);
         echo json_encode($items);
         exit;
     }
@@ -623,10 +650,10 @@ class WarehouseController {
         if ($search) $filters['search'] = $search;
         if ($filterCustomer) $filters['customer_id'] = $filterCustomer;
 
-        $allBackloads = $this->warehouseModel->getBackloads($filters);
+        $allBackloads = $this->backloadModel->getBackloads($filters);
         $pagination = Pagination::paginate($allBackloads, 15);
 
-        $customers = $this->warehouseModel->getCustomers();
+        $customers = $this->catalogModel->getCustomers();
 
         $data['backloads'] = $pagination['items'];
         $data['page'] = $pagination['page'];
@@ -690,7 +717,7 @@ class WarehouseController {
         $delivery_id = $_GET['delivery_id'] ?? null;
         if (!$delivery_id) { echo json_encode([]); exit; }
 
-        $lots = $this->warehouseModel->getDeliveryLotsForBackload($delivery_id);
+        $lots = $this->backloadModel->getDeliveryLotsForBackload($delivery_id);
         echo json_encode($lots);
         exit;
     }
@@ -739,7 +766,7 @@ class WarehouseController {
 
                 $poiId = $lot['poi_id'];
 
-                $this->warehouseModel->createBackload([
+                $this->backloadModel->createBackload([
                     'delivery_id' => $delivery_id,
                     'po_id' => $delivery['po_id'],
                     'poi_id' => $poiId,
@@ -866,7 +893,7 @@ class WarehouseController {
                             $toSplitRet -= $sibRet;
                         }
                         if ($sibQty > 0) {
-                            $item = $poiId ? $this->warehouseModel->getItemByPoiId($poiId) : $this->warehouseModel->getItemById($lot['item_id'] ?? null);
+                            $item = $poiId ? $this->catalogModel->getItemByPoiId($poiId) : $this->catalogModel->getItemById($lot['item_id'] ?? null);
                             $lotItems[] = [
                                 'lot_id' => $sibId,
                                 'poi_id' => $poiId,
@@ -887,7 +914,7 @@ class WarehouseController {
                     if ($deliveryQty > $remaining) $deliveryQty = $remaining;
                     if ($returnedQty > $deliveryQty) $returnedQty = $deliveryQty;
                     if ($deliveryQty <= 0) continue;
-                    $item = $poiId ? $this->warehouseModel->getItemByPoiId($poiId) : $this->warehouseModel->getItemById($lot['item_id'] ?? null);
+                    $item = $poiId ? $this->catalogModel->getItemByPoiId($poiId) : $this->catalogModel->getItemById($lot['item_id'] ?? null);
                     $lotItems[] = [
                         'lot_id' => $lotId,
                         'poi_id' => $poiId,
@@ -1291,7 +1318,7 @@ class WarehouseController {
                 $remaining = $this->warehouseModel->getLotRemaining($lotId);
                 if ($remaining <= 0) continue;
                 $poiId = $lot['poi_id'] ?? null;
-                $item = $this->warehouseModel->getItemByPoiId($poiId);
+                $item = $this->catalogModel->getItemByPoiId($poiId);
                 $lotItems[] = [
                     'lot_id' => $lotId,
                     'poi_id' => $poiId,
@@ -1948,35 +1975,25 @@ class WarehouseController {
         exit;
     }
 
-    // ─── Procurement PO ───────────────────────────────────────────────────────
+    // ─── Purchasing PO (renamed from Procurement PO) ────────────────────────────
 
-    public function searchItems() {
-        header('Content-Type: application/json');
-        $query = trim($_GET['q'] ?? '');
-        if (strlen($query) < 1) {
-            echo json_encode([]);
-            exit;
-        }
-        $items = $this->warehouseModel->searchItems($query);
-        echo json_encode($items);
-        exit;
-    }
-
-    public function supplierOrders() {
+    public function purchasingPo() {
         $filters = [
             'status' => $_GET['status'] ?? '',
             'search' => $_GET['search'] ?? '',
         ];
-        $orders = $this->warehouseModel->getSupplierOrdersFiltered($filters);
-        $data['page_title'] = 'Procurement PO';
+        $orders = $this->warehouseModel->getPurchasingPoFiltered($filters);
+        $data['page_title'] = 'Purchasing PO';
         $data['orders'] = $orders;
         $data['filters'] = $filters;
-        $this->render('supplierOrders/index', $data);
+        $data['readOnly'] = (($_SESSION['department'] ?? '') !== 'warehouse');
+        $this->render('purchasingPo/index', $data);
     }
 
-    public function createSupplierOrder() {
+    public function createPurchasingPo() {
+        $this->enforceReadOnlyPurchasingPo();
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ?controller=warehouse&action=supplierOrders');
+            header('Location: ?controller=warehouse&action=purchasingPo');
             exit;
         }
         try {
@@ -1992,7 +2009,7 @@ class WarehouseController {
                 throw new \RuntimeException('Supplier name, item, and quantity are required.');
             }
 
-            $this->warehouseModel->createSupplierOrder([
+            $this->warehouseModel->createPurchasingPo([
                 'supplier_name' => $supplierName,
                 'item_id' => $itemId,
                 'quantity' => $quantity,
@@ -2003,72 +2020,18 @@ class WarehouseController {
                 'created_by' => $_SESSION['user_id']
             ]);
 
-            $_SESSION['success'] = 'Procurement PO created successfully.';
+            $_SESSION['success'] = 'Purchasing PO created successfully.';
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
         }
-        header('Location: ?controller=warehouse&action=supplierOrders');
+        header('Location: ?controller=warehouse&action=purchasingPo');
         exit;
     }
 
-    public function receiveSupplierOrder() {
-        $id = intval($_GET['id'] ?? 0);
-        if ($id <= 0) {
-            header('Location: ?controller=warehouse&action=supplierOrders');
-            exit;
-        }
-        $order = $this->warehouseModel->getSupplierOrderById($id);
-        if (!$order) {
-            $_SESSION['error'] = 'Procurement PO not found.';
-            header('Location: ?controller=warehouse&action=supplierOrders');
-            exit;
-        }
-
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            try {
-                $receivedQty = floatval($_POST['received_qty'] ?? 0);
-                if ($receivedQty <= 0) {
-                    throw new \RuntimeException('Received quantity must be greater than zero.');
-                }
-                $this->warehouseModel->receiveSupplierOrder($id, $receivedQty);
-                $_SESSION['success'] = 'Procurement PO received. Stock updated.';
-            } catch (\Exception $e) {
-                $_SESSION['error'] = $e->getMessage();
-            }
-            header('Location: ?controller=warehouse&action=supplierOrders');
-            exit;
-        }
-
-        $data['page_title'] = 'Receive Procurement PO';
-        $data['order'] = $order;
-        $this->render('supplierOrders/receive', $data);
-    }
-
-    public function cancelSupplierOrder() {
-        $id = intval($_GET['id'] ?? 0);
-        if ($id > 0 && $this->warehouseModel->cancelSupplierOrder($id)) {
-            $_SESSION['success'] = 'Procurement PO cancelled.';
-        } else {
-            $_SESSION['error'] = 'Failed to cancel procurement PO.';
-        }
-        header('Location: ?controller=warehouse&action=supplierOrders');
-        exit;
-    }
-
-    public function deleteSupplierOrder() {
-        $id = intval($_GET['id'] ?? 0);
-        if ($id > 0 && $this->warehouseModel->deleteSupplierOrder($id)) {
-            $_SESSION['success'] = 'Procurement PO deleted.';
-        } else {
-            $_SESSION['error'] = 'Failed to delete procurement PO.';
-        }
-        header('Location: ?controller=warehouse&action=supplierOrders');
-        exit;
-    }
-
-    public function processSupplierOrder() {
+    public function processPurchasingPo() {
+        $this->enforceReadOnlyPurchasingPo();
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ?controller=warehouse&action=supplierOrders');
+            header('Location: ?controller=warehouse&action=purchasingPo');
             exit;
         }
         try {
@@ -2081,7 +2044,7 @@ class WarehouseController {
                 throw new \RuntimeException('Supplier name and quantity are required.');
             }
 
-            $this->warehouseModel->processSupplierOrder($id, [
+            $this->warehouseModel->processPurchasingPo($id, [
                 'supplier_name' => $supplierName,
                 'quantity' => $quantity,
                 'unit_cost' => floatval($_POST['unit_cost'] ?? 0),
@@ -2091,17 +2054,18 @@ class WarehouseController {
                 'po_id' => !empty($_POST['po_id']) ? intval($_POST['po_id']) : null,
             ]);
 
-            $_SESSION['success'] = 'Procurement PO processed and moved to Pending.';
+            $_SESSION['success'] = 'Purchasing PO processed successfully.';
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
         }
-        header('Location: ?controller=warehouse&action=supplierOrders');
+        header('Location: ?controller=warehouse&action=purchasingPo');
         exit;
     }
 
-    public function batchProcessSupplierOrders() {
+    public function batchProcessPurchasingPo() {
+        $this->enforceReadOnlyPurchasingPo();
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ?controller=warehouse&action=supplierOrders');
+            header('Location: ?controller=warehouse&action=purchasingPo');
             exit;
         }
         try {
@@ -2115,19 +2079,138 @@ class WarehouseController {
                 throw new \RuntimeException('Supplier name is required.');
             }
 
-            $this->warehouseModel->batchProcessSupplierOrders($orderIds, [
+            $this->warehouseModel->batchProcessPurchasingPo($orderIds, [
                 'supplier_name' => $supplierName,
                 'unit_cost' => floatval($_POST['unit_cost'] ?? 0),
                 'order_date' => $_POST['order_date'] ?: null,
                 'expected_date' => $_POST['expected_date'] ?: null,
             ]);
 
-            $_SESSION['success'] = count($orderIds) . ' procurement PO(s) processed and moved to Pending.';
+            $_SESSION['success'] = count($orderIds) . ' purchasing PO(s) processed successfully.';
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
         }
-        header('Location: ?controller=warehouse&action=supplierOrders');
+        header('Location: ?controller=warehouse&action=purchasingPo');
         exit;
+    }
+
+    public function cancelPurchasingPo() {
+        $this->enforceReadOnlyPurchasingPo();
+        $id = intval($_GET['id'] ?? 0);
+        if ($id > 0 && $this->warehouseModel->cancelPurchasingPo($id)) {
+            $_SESSION['success'] = 'Purchasing PO cancelled.';
+        } else {
+            $_SESSION['error'] = 'Failed to cancel purchasing PO.';
+        }
+        header('Location: ?controller=warehouse&action=purchasingPo');
+        exit;
+    }
+
+    public function deletePurchasingPo() {
+        $this->enforceReadOnlyPurchasingPo();
+        $id = intval($_GET['id'] ?? 0);
+        if ($id > 0 && $this->warehouseModel->deletePurchasingPo($id)) {
+            $_SESSION['success'] = 'Purchasing PO deleted.';
+        } else {
+            $_SESSION['error'] = 'Failed to delete purchasing PO.';
+        }
+        header('Location: ?controller=warehouse&action=purchasingPo');
+        exit;
+    }
+
+    // ─── Receiving Purchasing PO ────────────────────────────────────────────────
+
+    public function receivingPo() {
+        $filters = [
+            'status' => $_GET['status'] ?? '',
+            'supplier' => $_GET['supplier'] ?? '',
+            'search' => $_GET['search'] ?? '',
+        ];
+        $orders = $this->warehouseModel->getReceivingPoFiltered($filters);
+        $suppliers = $this->warehouseModel->getPurchasingPoSuppliers();
+
+        $data['page_title'] = 'Receiving Purchasing PO';
+        $data['orders'] = $orders;
+        $data['filters'] = $filters;
+        $data['suppliers'] = $suppliers;
+        $data['readOnly'] = (($_SESSION['department'] ?? '') !== 'warehouse');
+        $this->render('receivingPo/index', $data);
+    }
+
+    public function receivePurchasingPo() {
+        $this->enforceWarehouseReceivingAccess();
+        $id = intval($_GET['id'] ?? $_POST['supplier_order_id'] ?? 0);
+        if ($id <= 0) {
+            header('Location: ?controller=warehouse&action=receivingPo');
+            exit;
+        }
+        $order = $this->warehouseModel->getPurchasingPoById($id);
+        if (!$order) {
+            $_SESSION['error'] = 'Purchasing PO not found.';
+            header('Location: ?controller=warehouse&action=receivingPo');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $receivedQty = floatval($_POST['received_qty'] ?? 0);
+                if ($receivedQty <= 0) {
+                    throw new \RuntimeException('Received quantity must be greater than zero.');
+                }
+
+                $lotNumber = trim($_POST['lot_number'] ?? '') ?: null;
+                $expiryDate = $_POST['expiry_date'] ?: null;
+                $deliveryReceiptNo = trim($_POST['delivery_receipt_no'] ?? '') ?: null;
+                $receivedDate = $_POST['received_date'] ?: date('Y-m-d');
+                $remarks = trim($_POST['remarks'] ?? '') ?: null;
+
+                $this->warehouseModel->receivePurchasingPo($id, [
+                    'received_qty' => $receivedQty,
+                    'lot_number' => $lotNumber,
+                    'expiry_date' => $expiryDate,
+                    'delivery_receipt_no' => $deliveryReceiptNo,
+                    'received_date' => $receivedDate,
+                    'remarks' => $remarks,
+                    'received_by' => $_SESSION['user_id']
+                ]);
+
+                $this->notifyProcurementOfReceipt($order, $receivedQty);
+
+                $_SESSION['success'] = 'Shipment received successfully. Stock updated.';
+                header('Location: ?controller=warehouse&action=receivingPo');
+                exit;
+            } catch (\Exception $e) {
+                $_SESSION['error'] = $e->getMessage();
+            }
+        }
+
+        header('Location: ?controller=warehouse&action=receivingPo&receive=' . $id);
+        exit;
+    }
+
+    private function notifyProcurementOfReceipt($order, $receivedQty) {
+        try {
+            $poRef = $order['customer_po_number'] ?? ($order['po_id'] ? 'PO #' . $order['po_id'] : 'SO #' . $order['supplier_order_id']);
+            $itemDesc = $order['item_description'] ?? '';
+            $supplier = $order['supplier_name'] ?? 'Unknown Supplier';
+            $newReceived = floatval($order['received_qty'] ?? 0) + floatval($receivedQty);
+            $status = $newReceived >= floatval($order['quantity']) ? 'fully received' : 'partially received';
+
+            $message = "Purchasing PO {$poRef} ({$itemDesc}) from {$supplier} has been {$status}. Received qty: " . number_format($receivedQty, 4);
+
+            foreach (['admin', 'finance'] as $department) {
+                NotificationHelper::create(
+                    'receipt',
+                    'Purchasing PO Received',
+                    $message,
+                    $department,
+                    '?controller=warehouse&action=receivingPo',
+                    $_SESSION['user_id'] ?? null
+                );
+            }
+        } catch (\Exception $e) {
+            error_log('notifyProcurementOfReceipt error: ' . $e->getMessage());
+        }
     }
 
     // ─── MRP Snapshots ────────────────────────────────────────────────────────
@@ -2332,6 +2415,43 @@ class WarehouseController {
             }
         }
         header("Location: ?controller=warehouse&action=mrpHistory&po_id={$poId}");
+        exit;
+    }
+
+    // ─── Backward Compatibility (Procurement PO → Purchasing PO) ────────────────
+
+    public function supplierOrders() {
+        header('Location: ?controller=warehouse&action=purchasingPo');
+        exit;
+    }
+
+    public function createSupplierOrder() {
+        header('Location: ?controller=warehouse&action=createPurchasingPo');
+        exit;
+    }
+
+    public function receiveSupplierOrder() {
+        header('Location: ?controller=warehouse&action=receivingPo');
+        exit;
+    }
+
+    public function cancelSupplierOrder() {
+        header('Location: ?controller=warehouse&action=cancelPurchasingPo&id=' . ($_GET['id'] ?? ''));
+        exit;
+    }
+
+    public function deleteSupplierOrder() {
+        header('Location: ?controller=warehouse&action=deletePurchasingPo&id=' . ($_GET['id'] ?? ''));
+        exit;
+    }
+
+    public function processSupplierOrder() {
+        header('Location: ?controller=warehouse&action=processPurchasingPo');
+        exit;
+    }
+
+    public function batchProcessSupplierOrders() {
+        header('Location: ?controller=warehouse&action=batchProcessPurchasingPo');
         exit;
     }
 
