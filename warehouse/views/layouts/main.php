@@ -80,7 +80,7 @@
             <!-- SIDEBAR NAV - Slides in/out via CSS transform -->
             <nav class="sidebar" id="sidebar">
                 <div class="text-center py-3 border-bottom" style="border-color: rgba(255,255,255,0.08) !important">
-                    <h5 class="mb-0" style="color: #fff; font-weight: 700; letter-spacing: 0.5px; font-size: 1rem;"><?= ucfirst($_SESSION['department'] ?? 'Warehouse') ?></h5>
+                    <h5 class="mb-0" style="color: #fff; font-weight: 700; letter-spacing: 0.5px; font-size: 1rem;"><?= htmlspecialchars(ucfirst($_SESSION['department'] ?? 'Warehouse')) ?></h5>
                     <small style="color: #64748b; font-size: 0.7rem;"><?= htmlspecialchars($_SESSION['full_name'] ?? '') ?></small>
                 </div>
                 <?php $currentAction = $_GET['action'] ?? ''; ?>

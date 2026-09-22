@@ -328,22 +328,12 @@ class WarehouseModel extends BaseModel {
         $conn->prepare("UPDATE purchase_orders SET delivered_quantity = :delivered WHERE po_id = :po_id")
             ->execute(['delivered' => $totalDelivered, 'po_id' => $poId]);
 
-        $hasCompletedAt = (bool)$conn->query("SHOW COLUMNS FROM purchase_orders LIKE 'completed_at'")->fetch();
         if ($allItemsComplete) {
-            if ($hasCompletedAt) {
-                $conn->prepare("UPDATE purchase_orders SET status = 'delivered', completed_at = COALESCE(completed_at, NOW()) WHERE po_id = :po_id")
-                    ->execute(['po_id' => $poId]);
-            } else {
-                $conn->prepare("UPDATE purchase_orders SET status = 'delivered' WHERE po_id = :po_id")
-                    ->execute(['po_id' => $poId]);
-            }
-        } elseif ($hasCompletedAt) {
+            $conn->prepare("UPDATE purchase_orders SET status = 'delivered', completed_at = COALESCE(completed_at, NOW()) WHERE po_id = :po_id")
+                ->execute(['po_id' => $poId]);
+        } else {
             $conn->prepare("UPDATE purchase_orders SET status = CASE WHEN :delivered > 0 THEN 'accepted' ELSE 'pending' END,
                     completed_at = NULL WHERE po_id = :po_id")
-                ->execute(['delivered' => $totalDelivered, 'po_id' => $poId]);
-        } else {
-            $conn->prepare("UPDATE purchase_orders SET status = CASE WHEN :delivered > 0 THEN 'accepted' ELSE 'pending' END
-                    WHERE po_id = :po_id")
                 ->execute(['delivered' => $totalDelivered, 'po_id' => $poId]);
         }
         return true;
@@ -1245,9 +1235,12 @@ class WarehouseModel extends BaseModel {
                     WHERE po_id = :po_id AND lot_items IS NOT NULL AND `remove` = 0");
             $stmt2->execute(['po_id' => $po_id]);
         } else {
+            // For independent lots, search deliveries containing this lot_id in JSON
+            $lotIdJson = json_encode(intval($lot_id));
             $stmt2 = $conn->prepare("SELECT lot_items FROM deliveries 
-                    WHERE lot_items IS NOT NULL AND `remove` = 0");
-            $stmt2->execute();
+                    WHERE lot_items IS NOT NULL AND `remove` = 0
+                    AND lot_items LIKE :pattern");
+            $stmt2->execute(['pattern' => '%"lot_id":' . $lot_id . '%']);
         }
         $deliveredJson = 0;
         while ($r = $stmt2->fetch()) {
@@ -2946,7 +2939,9 @@ public function searchItems($query) {
         $placeholders = implode(',', array_fill(0, count($bom_ids), '?'));
         $sql = "SELECT bi.bom_id, bi.item_id AS component_item_id, bi.dosage_rate, bi.wastage_allowance_pct,
                        i.item_code, i.item_description, i.item_uom,
-                       COALESCE(v.total_soh, 0) AS soh
+                       COALESCE(v.total_soh, 0) AS soh,
+                       COALESCE(v.total_allocated, 0) AS allocated,
+                       COALESCE(v.available_stock, 0) AS available_stock
                 FROM fg_bom_items bi
                 JOIN items i ON bi.item_id = i.item_id AND i.`remove` = 0
                 LEFT JOIN view_inventory_status v ON v.item_id = bi.item_id
@@ -2994,6 +2989,19 @@ public function searchItems($query) {
                 LIMIT 1";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['item_id' => $item_id]);
+        return $stmt->fetch() ?: false;
+    }
+
+    public function getBomByCode($bomCode) {
+        $sql = "SELECT b.id, b.bom_code, b.batch_qty, b.batch_uom,
+                       b.fg_item_id,
+                       i.item_code AS fg_code, i.item_description AS fg_name
+                FROM fg_boms b
+                JOIN items i ON b.fg_item_id = i.item_id AND i.`remove` = 0
+                WHERE b.bom_code = :bom_code
+                LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['bom_code' => $bomCode]);
         return $stmt->fetch() ?: false;
     }
 

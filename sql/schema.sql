@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     produced_quantity INT DEFAULT 0,
     delivered_quantity INT DEFAULT 0,
     `remove` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=active, 1=soft deleted',
+    completed_at DATETIME NULL COMMENT 'Timestamp when all items were fully delivered',
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     FOREIGN KEY (requested_by) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     produced_quantity INT DEFAULT 0 COMMENT 'Produced quantity per item',
     delivered_quantity INT DEFAULT 0 COMMENT 'Delivered quantity per item',
     unit_price DECIMAL(15,2) NOT NULL,
+    item_code VARCHAR(100) NULL COMMENT 'Denormalized item code for reporting',
     FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id),
     FOREIGN KEY (item_id) REFERENCES items(item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -212,4 +214,106 @@ CREATE TABLE IF NOT EXISTS advance_production_consumption (
     normal_po_id INT NOT NULL,
     quantity INT NOT NULL COMMENT 'How much was allocated',
     date_allocated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Supplier Orders Table (Purchasing PO / Receiving PO)
+CREATE TABLE IF NOT EXISTS supplier_orders (
+    supplier_order_id INT AUTO_INCREMENT PRIMARY KEY,
+    supplier_name VARCHAR(255) NOT NULL,
+    item_id INT NOT NULL,
+    quantity DECIMAL(15,2) NOT NULL DEFAULT 0,
+    received_qty DECIMAL(15,2) DEFAULT 0,
+    unit_cost DECIMAL(15,2) DEFAULT 0,
+    order_date DATE NULL,
+    expected_date DATE NULL,
+    received_date DATE NULL,
+    remarks TEXT NULL,
+    status ENUM('requested','pending','processed','partially_received','received','completed','cancelled') DEFAULT 'pending',
+    created_by INT NULL,
+    po_id INT NULL,
+    `remove` TINYINT(1) NOT NULL DEFAULT 0,
+    date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_id) REFERENCES items(item_id),
+    FOREIGN KEY (created_by) REFERENCES users(user_id),
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Inventory Balances Table
+CREATE TABLE IF NOT EXISTS inventory_balances (
+    balance_id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id INT NOT NULL,
+    site_code VARCHAR(50) NOT NULL DEFAULT 'MAIN',
+    qty_on_hand DECIMAL(15,2) DEFAULT 0,
+    qty_for_inspect DECIMAL(15,2) DEFAULT 0,
+    last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_inventory_item_site (item_id, site_code),
+    FOREIGN KEY (item_id) REFERENCES items(item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Manufacturing Orders Table
+CREATE TABLE IF NOT EXISTS manufacturing_orders (
+    mo_id INT AUTO_INCREMENT PRIMARY KEY,
+    mo_number VARCHAR(100) NOT NULL,
+    mo_type VARCHAR(50) NOT NULL DEFAULT 'Standard',
+    mo_site VARCHAR(100) NOT NULL DEFAULT '001 - Sterling Technopark',
+    order_date DATE NULL,
+    due_date DATE NULL,
+    planned_start_date DATE NULL,
+    priority INT NOT NULL DEFAULT 3,
+    reference_no VARCHAR(100) NULL,
+    mo_status VARCHAR(50) NOT NULL DEFAULT 'Planned',
+    customer_id INT NULL,
+    customer_code VARCHAR(50) NULL,
+    customer_name VARCHAR(150) NULL,
+    batch_lot_no VARCHAR(100) NULL,
+    po_number VARCHAR(100) NULL,
+    created_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_manufacturing_orders_number (mo_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Manufacturing Order Items Table
+CREATE TABLE IF NOT EXISTS manufacturing_order_items (
+    moi_id INT AUTO_INCREMENT PRIMARY KEY,
+    mo_id INT NOT NULL,
+    item_id INT NULL,
+    item_code VARCHAR(100) NULL,
+    item_description VARCHAR(255) NULL,
+    uom VARCHAR(50) NULL,
+    item_type VARCHAR(50) NULL,
+    site VARCHAR(100) NULL,
+    qty_ordered DECIMAL(15,2) NOT NULL DEFAULT 0,
+    so_number VARCHAR(100) NULL,
+    bom_code VARCHAR(100) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_mo_items_mo_id (mo_id),
+    CONSTRAINT fk_mo_items_mo FOREIGN KEY (mo_id) REFERENCES manufacturing_orders(mo_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- MRP Runs Table
+CREATE TABLE IF NOT EXISTS mrp_runs (
+    run_id INT AUTO_INCREMENT PRIMARY KEY,
+    po_id INT NOT NULL,
+    customer_id INT NULL,
+    user_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- MRP Run Items Table
+CREATE TABLE IF NOT EXISTS mrp_run_items (
+    run_item_id INT AUTO_INCREMENT PRIMARY KEY,
+    run_id INT NOT NULL,
+    fg_item_id INT NULL,
+    component_item_id INT NULL,
+    total_reqt DECIMAL(15,4) DEFAULT 0,
+    soh DECIMAL(15,4) DEFAULT 0,
+    allocated DECIMAL(15,4) DEFAULT 0,
+    pending DECIMAL(15,4) DEFAULT 0,
+    excess DECIMAL(15,4) DEFAULT 0,
+    remarks VARCHAR(50) NULL,
+    FOREIGN KEY (run_id) REFERENCES mrp_runs(run_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -138,6 +138,9 @@
                 <tr class="<?= $isActive ? '' : 'text-decoration-line-through opacity-50' ?>">
                     <td><strong class="text-primary">
                     <?= $d['customer_po_number'] ?>
+                    <?php if (!empty($d['is_over_shipment'])): ?>
+                        <span class="badge bg-warning text-dark ms-2">[Over-Delivered]</span>
+                    <?php endif; ?>
                     </strong></td>
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><small><?= $itemSummary ?></small></td>
@@ -929,33 +932,38 @@ document.addEventListener('DOMContentLoaded', populateDeliveryFilters);
         var poRemaining = item.po_quantity - (item.po_delivered || 0);
         if (poRemaining < 0) poRemaining = 0;
 
-        var existingHtml = w.innerHTML;
         var overShipWarn = '';
         if (qty > 0 && qty > poRemaining) {
+            var excessQty = qty - poRemaining;
             if (poConv > 0) {
-                overShipWarn = '<small class="text-danger fw-bold"><i class="bi bi-exclamation-circle"></i> Cannot exceed remaining balance of ' + Math.floor(poRemaining / poConv) + ' CS (' + poRemaining + ' pcs) for this PO item.</small>';
+                var remainingCases = Math.max(0, Math.floor(poRemaining / poConv));
+                overShipWarn = '<div class="alert alert-warning py-2 px-2 mb-0 mt-2 small text-dark" role="alert">' +
+                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
+                    '<strong>Warning: Over-Delivery Detected</strong><br>' +
+                    '<span>The quantity entered (<strong>' + qty + ' cases</strong>) exceeds the remaining balance for this PO (<strong>' + remainingCases + ' cases</strong> required). This delivery will result in an excess of <strong>' + excessQty + ' cases</strong>.</span>' +
+                    '</div>';
             } else {
-                overShipWarn = '<small class="text-danger fw-bold"><i class="bi bi-exclamation-circle"></i> Cannot exceed remaining balance of ' + poRemaining + ' pcs for this PO item.</small>';
+                overShipWarn = '<div class="alert alert-warning py-2 px-2 mb-0 mt-2 small text-dark" role="alert">' +
+                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
+                    '<strong>Warning: Over-Delivery Detected</strong><br>' +
+                    '<span>The quantity entered (<strong>' + qty + ' pcs</strong>) exceeds the remaining balance for this PO (<strong>' + poRemaining + ' pcs</strong> required). This delivery will result in an excess of <strong>' + excessQty + ' pcs</strong>.</span>' +
+                    '</div>';
             }
-            qtyEl.classList.add('is-invalid');
+            qtyEl.classList.add('is-warning');
+            qtyEl.style.borderColor = '#f59e0b';
         } else {
-            qtyEl.classList.remove('is-invalid');
+            qtyEl.classList.remove('is-warning');
+            qtyEl.style.borderColor = '';
         }
 
-        if (overShipWarn) {
-            w.innerHTML = existingHtml ? existingHtml + '<br>' + overShipWarn : overShipWarn;
-        } else {
-            w.innerHTML = existingHtml.replace(/<br><small class="text-danger fw-bold">.*?<\/small>$/, '').replace(/<small class="text-danger fw-bold">.*?<\/small>$/, '');
-        }
-
+        w.innerHTML = overShipWarn || '';
         updateSubmitButton();
     }
 
     function updateSubmitButton() {
         var saveBtn = document.querySelector('#createDeliveryModal form button[type="submit"]');
         if (!saveBtn) return;
-        var anyOver = document.querySelectorAll('#availableItemsContainer .is-invalid').length > 0;
-        saveBtn.disabled = anyOver;
+        saveBtn.disabled = false;
     }
 
     poSelect.addEventListener('change', function() {
@@ -1093,17 +1101,8 @@ document.querySelector('#createDeliveryModal form').addEventListener('submit', f
 
     var overItems = checkOverShipment(lotData, allItemsData);
     if (overItems.length > 0) {
-        var msg = 'Delivery blocked. The following items exceed remaining PO balance:\n\n';
-        overItems.forEach(function(item) {
-            var conv = item.po_uom_conversion || 0;
-            if (conv > 0) {
-                msg += item.item_code + ': ' + item.attempted.toLocaleString() + ' pcs (' + Math.floor(item.attempted / conv) + ' CS) requested, ' + item.remaining.toLocaleString() + ' pcs (' + Math.floor(item.remaining / conv) + ' CS) remaining\n';
-            } else {
-                msg += item.item_code + ': ' + item.attempted.toLocaleString() + ' pcs requested, ' + item.remaining.toLocaleString() + ' pcs remaining\n';
-            }
-        });
-        alert(msg);
-        return;
+        var warningMessage = 'Warning: Over-delivery detected for the selected PO items. The delivery will still be saved, but the PO balance will exceed the original quantity.';
+        console.warn(warningMessage, overItems);
     }
 
     var drNumber = document.getElementById('modalDrNumber').value.trim();

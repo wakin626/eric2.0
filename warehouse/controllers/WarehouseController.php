@@ -163,7 +163,21 @@ class WarehouseController {
     public function createPO() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
-                $customer_id = $_POST['customer_id'];
+                $customer_id = intval($_POST['customer_id'] ?? 0);
+                if ($customer_id <= 0) {
+                    throw new \RuntimeException('Please select a valid customer.');
+                }
+
+                $items = json_decode($_POST['items_json'] ?? '', true);
+                if (!is_array($items) || empty($items)) {
+                    throw new \RuntimeException('Please add at least one item to the purchase order.');
+                }
+                foreach ($items as $item) {
+                    if (empty($item['item_id']) || !isset($item['quantity']) || intval($item['quantity']) <= 0) {
+                        throw new \RuntimeException('Each item must have a valid item and quantity greater than zero.');
+                    }
+                }
+
                 $production_type = $_POST['production_type'] ?? 'normal';
                 $conn = \App\Core\BaseModel::getConnection();
 
@@ -212,7 +226,7 @@ class WarehouseController {
                 exit;
             } catch (\Exception $e) {
                 error_log('createPO error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Failed to create purchase order: ' . $e->getMessage();
+                $_SESSION['error'] = 'Failed to create purchase order. Please check your input and try again.';
                 header('Location: ?controller=warehouse&action=createPO');
                 exit;
             }
@@ -342,22 +356,29 @@ class WarehouseController {
                     'item_id' => $oldItems[$poiId]['item_id'] ?? 0,
                     'old_quantity' => $oldItems[$poiId]['quantity'] ?? 0,
                 ];
-                // Cascade delete all related data for removed PO items
-                $conn->prepare("DELETE FROM production_lots WHERE poi_id = :poi_id")
+                // Cascade removal: soft-delete where supported, hard-delete where not
+                // production_lots: has is_removed column
+                $conn->prepare("UPDATE production_lots SET `is_removed` = 1 WHERE poi_id = :poi_id AND `is_removed` = 0")
                     ->execute(['poi_id' => $poiId]);
-                $conn->prepare("DELETE FROM production_history WHERE poi_id = :poi_id")
+                // production_history: has is_removed column
+                $conn->prepare("UPDATE production_history SET `is_removed` = 1 WHERE poi_id = :poi_id AND `is_removed` = 0")
                     ->execute(['poi_id' => $poiId]);
+                // production_reports: no soft-delete column, hard delete
                 $conn->prepare("DELETE FROM production_reports WHERE poi_id = :poi_id")
                     ->execute(['poi_id' => $poiId]);
+                // delivery_reports: no soft-delete column, hard delete
                 $conn->prepare("DELETE FROM delivery_reports WHERE poi_id = :poi_id")
                     ->execute(['poi_id' => $poiId]);
-                // Delete delivery_receipts for this PO's deliveries first (FK dependency)
-                $conn->prepare("DELETE dr FROM delivery_receipts dr 
+                // delivery_receipts: soft-delete via joined deliveries
+                $conn->prepare("UPDATE delivery_receipts dr 
                     INNER JOIN deliveries d ON dr.delivery_id = d.delivery_id 
-                    WHERE d.poi_id = :poi_id")
+                    SET dr.`remove` = 1 
+                    WHERE d.poi_id = :poi_id AND dr.`remove` = 0")
                     ->execute(['poi_id' => $poiId]);
-                $conn->prepare("DELETE FROM deliveries WHERE poi_id = :poi_id")
+                // deliveries: has remove column
+                $conn->prepare("UPDATE deliveries SET `remove` = 1 WHERE poi_id = :poi_id AND `remove` = 0")
                     ->execute(['poi_id' => $poiId]);
+                // purchase_order_items: no soft-delete column, hard delete (parent record)
                 $conn->prepare("DELETE FROM purchase_order_items WHERE poi_id = :poi_id")
                     ->execute(['poi_id' => $poiId]);
             }
@@ -393,18 +414,15 @@ class WarehouseController {
                 'customer_po_date' => $_POST['customer_po_date'] ?? '',
                 'production_type' => $_POST['production_type'] ?? 'normal',
             ];
-            // Always include items in new_values so diff works even when only header fields change
-            if (!empty($oldItems)) {
+            // Build new items state from POST data (the actual submitted items)
+            if (!empty($items)) {
                 $newValues['items'] = array_map(function($item) {
                     return [
-                        'poi_id' => $item['poi_id'],
-                        'item_id' => $item['item_id'],
-                        'quantity' => $item['quantity'],
+                        'poi_id' => $item['poi_id'] ?? null,
+                        'item_id' => $item['item_id'] ?? null,
+                        'quantity' => $item['quantity'] ?? 0,
                     ];
-                }, array_values($oldItems));
-            }
-            if (!empty($itemChanges)) {
-                $newValues['items'] = $itemChanges;
+                }, array_values($items));
             }
             $poLabel = $po['customer_po_number'] ?? $po['po_number'] ?? 'PO #' . $po_id;
             AuditModel::log($_SESSION['user_id'], 'UPDATE', 'warehouse', 'Updated purchase order ' . $poLabel . ' with the latest header and item changes', $oldValues, $newValues, 'purchase_order', $po_id);
@@ -446,9 +464,10 @@ class WarehouseController {
 
     public function getPODetails() {
         header('Content-Type: application/json');
-        $id = $_GET['id'] ?? null;
-        $po = $this->warehouseModel->getPurchaseOrderById($id);
-        $po_items = $this->warehouseModel->getPurchaseOrderItems($id);
+        try {
+            $id = $_GET['id'] ?? null;
+            $po = $this->warehouseModel->getPurchaseOrderById($id);
+            $po_items = $this->warehouseModel->getPurchaseOrderItems($id);
         
         // Fetch all active deliveries for this PO and map them to their corresponding items
         $deliveries = $this->warehouseModel->getDeliveriesByPOId($id);
@@ -615,6 +634,12 @@ class WarehouseController {
         
         echo json_encode(['po' => $po, 'po_items' => $po_items]);
         exit;
+        } catch (\Exception $e) {
+            error_log('getPODetails error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['error' => 'Failed to load PO details']);
+            exit;
+        }
     }
 
     public function getLotsByPOItem() {
@@ -657,26 +682,23 @@ class WarehouseController {
         $data['deliveries'] = $pagination['items'];
         $deliveryIds = array_column($pagination['items'], 'delivery_id');
         $receiptsMap = [];
+        $backloadsMap = [];
         if (!empty($deliveryIds)) {
-            $placeholders = implode(',', array_fill(0, count($deliveryIds), '?'));
             $conn = $this->warehouseModel::getConnection();
+            $placeholders = implode(',', array_fill(0, count($deliveryIds), '?'));
             $stmt = $conn->prepare("SELECT * FROM delivery_receipts WHERE delivery_id IN ($placeholders) AND `remove` = 0 ORDER BY date_created ASC");
             $stmt->execute($deliveryIds);
             foreach ($stmt->fetchAll() as $r) {
                 $receiptsMap[$r['delivery_id']][] = $r;
             }
-        }
-        $data['receipts_map'] = $receiptsMap;
 
-        $backloadsMap = [];
-        if (!empty($deliveryIds)) {
-            $placeholders = implode(',', array_fill(0, count($deliveryIds), '?'));
             $blStmt = $conn->prepare("SELECT * FROM backloads WHERE delivery_id IN ($placeholders) AND `remove` = 0 ORDER BY date_created ASC");
             $blStmt->execute($deliveryIds);
             foreach ($blStmt->fetchAll() as $bl) {
                 $backloadsMap[$bl['delivery_id']][] = $bl;
             }
         }
+        $data['receipts_map'] = $receiptsMap;
         $data['backloads_map'] = $backloadsMap;
 
         $data['page'] = $pagination['page'];
@@ -861,7 +883,7 @@ class WarehouseController {
             $lotIdsRaw = $_POST['lot_ids'] ?? '';
             $delivery_date = $_POST['delivery_date'] ?? date('Y-m-d');
             $remarks = $_POST['remarks'] ?? '';
-            $isOverShipment = intval($_POST['is_over_shipment'] ?? 0) ? 1 : 0;
+            $isOverShipment = 0;
             if (empty($dr_number) || empty($lotIdsRaw) || empty($plate_number) || empty($vehicle_type) || empty($logistic_provider)) {
                 $_SESSION['error'] = 'Missing required fields for delivery.';
                 header('Location: ?controller=warehouse&action=deliveries');
@@ -2198,6 +2220,13 @@ class WarehouseController {
         $order = $this->warehouseModel->getPurchasingPoById($id);
         if (!$order) {
             $_SESSION['error'] = 'Purchasing PO not found.';
+            header('Location: ?controller=warehouse&action=receivingPo');
+            exit;
+        }
+
+        $orderStatus = $order['status'] ?? '';
+        if (in_array($orderStatus, ['cancelled', 'received'])) {
+            $_SESSION['error'] = 'Cannot receive a purchasing PO with status "' . ucfirst($orderStatus) . '".';
             header('Location: ?controller=warehouse&action=receivingPo');
             exit;
         }

@@ -35,6 +35,7 @@
                         <th>MO Number</th>
                         <th>Customer</th>
                         <th>Item Code</th>
+                        <th>BOM</th>
                         <th>Qty Ordered</th>
                         <th>Batch / Lot No</th>
                         <th>Planned Start Date</th>
@@ -45,14 +46,43 @@
                 <tbody>
                     <?php if (empty($orders)): ?>
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">No manufacturing orders found.</td>
+                            <td colspan="9" class="text-center text-muted py-4">No manufacturing orders found.</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($orders as $mo): ?>
                             <tr>
-                                <td><strong><?= htmlspecialchars($mo['mo_number'] ?? '-') ?></strong></td>
+                                <td>
+                                    <strong>
+                                        <a href="?controller=mo&action=view&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="text-decoration-none">
+                                            <?= htmlspecialchars($mo['mo_number'] ?? '-') ?>
+                                        </a>
+                                    </strong>
+                                </td>
                                 <td><?= htmlspecialchars($mo['customer_name'] ?? $mo['customer_code'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($mo['item_code'] ?? '-') ?></td>
+                                <td>
+                                    <?php
+                                    $bomCode = null;
+                                    if (!empty($mo['items'])) {
+                                        foreach ($mo['items'] as $mi) {
+                                            if (!empty($mi['bom_code'])) {
+                                                $bomCode = $mi['bom_code'];
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    ?>
+                                    <?php if ($bomCode): ?>
+                                        <span class="text-muted"><?= htmlspecialchars($bomCode) ?></span>
+                                        <button class="btn btn-sm btn-outline-info ms-1 view-bom-btn"
+                                                data-mo-id="<?= (int) ($mo['mo_id'] ?? 0) ?>"
+                                                title="View BOM Breakdown">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    <?php else: ?>
+                                        <small class="text-danger">No BOM</small>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= htmlspecialchars($mo['qty_ordered'] ?? 0) ?></td>
                                 <td><?= htmlspecialchars($mo['batch_lot_no'] ?? '-') ?></td>
                                 <td><?= !empty($mo['planned_start_date']) ? date('Y-m-d', strtotime($mo['planned_start_date'])) : '-' ?></td>
@@ -67,10 +97,17 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
+                                        <a href="?controller=mo&action=view&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-info" title="View Details"><i class="bi bi-eye"></i></a>
                                         <a href="?controller=mo&action=edit&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-primary">Edit</a>
-                                        <a href="?controller=mo&action=release&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-success">Release MO</a>
+                                        <?php if (($mo['mo_status'] ?? '') === 'Planned'): ?>
+                                            <a href="?controller=mo&action=release&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-success">Release MO</a>
+                                        <?php endif; ?>
                                         <?php if (($mo['mo_status'] ?? '') === 'Released'): ?>
                                             <a href="?controller=mo&action=printLmr&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-dark" target="_blank">Print LMR</a>
+                                            <form method="POST" action="?controller=mo&action=cancel" class="d-inline" onsubmit="return confirm('Cancel this MO and release all allocated materials?');">
+                                                <input type="hidden" name="mo_id" value="<?= (int) ($mo['mo_id'] ?? 0) ?>">
+                                                <button type="submit" class="btn btn-outline-danger">Cancel</button>
+                                            </form>
                                         <?php else: ?>
                                             <button class="btn btn-outline-secondary" type="button" disabled>Print LMR</button>
                                         <?php endif; ?>
@@ -84,3 +121,103 @@
         </div>
     </div>
 </div>
+
+<!-- BOM Breakdown Modal -->
+<div class="modal fade" id="bomBreakdownModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>BOM Feasibility Breakdown</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="bomBreakdownBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-info" role="status"></div>
+                    <p class="mt-2 text-muted">Loading BOM data...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.view-bom-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var moId = this.getAttribute('data-mo-id');
+        var modal = new bootstrap.Modal(document.getElementById('bomBreakdownModal'));
+        var body = document.getElementById('bomBreakdownBody');
+        body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-info"></div><p class="mt-2 text-muted">Loading...</p></div>';
+        modal.show();
+
+        fetch('?controller=mo&action=getBomBreakdown&mo_id=' + moId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    body.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+                    return;
+                }
+                var html = '';
+                html += '<div class="row mb-3">';
+                html += '<div class="col-md-3"><strong>MO:</strong> ' + (data.mo.mo_number || '-') + '</div>';
+                html += '<div class="col-md-3"><strong>Customer:</strong> ' + (data.mo.customer_name || data.mo.customer_code || '-') + '</div>';
+                html += '<div class="col-md-3"><strong>Status:</strong> <span class="badge bg-info">' + (data.mo.mo_status || '-') + '</span></div>';
+                html += '</div>';
+
+                var anyShortage = false;
+                data.breakdown.forEach(function(item) {
+                    if (item.has_shortage) anyShortage = true;
+                    html += '<div class="card mb-3">';
+                    html += '<div class="card-header d-flex justify-content-between align-items-center">';
+                    html += '<strong>' + item.item_code + ' &mdash; ' + item.item_description + '</strong>';
+                    html += '<span class="badge bg-secondary">Qty: ' + item.qty_ordered.toLocaleString() + '</span>';
+                    html += '</div>';
+                    html += '<div class="card-body p-0">';
+
+                    if (item.bom_status === 'no_bom') {
+                        html += '<div class="p-3 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>No BOM defined for this item.</div>';
+                    } else if (item.bom_status === 'not_found') {
+                        html += '<div class="p-3 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>BOM "' + (item.bom_code || '') + '" not found in system.</div>';
+                    } else {
+                        html += '<div class="px-3 py-2 bg-light border-bottom small">';
+                        html += 'BOM: <strong>' + item.bom_code + '</strong> &nbsp;|&nbsp; Batch Size: <strong>' + item.batch_qty + '</strong> &nbsp;|&nbsp; Batches Needed: <strong>' + item.batches_needed + '</strong>';
+                        html += '</div>';
+                        html += '<table class="table table-sm mb-0">';
+                        html += '<thead class="table-light"><tr>';
+                        html += '<th>Item Code</th><th>Description</th><th class="text-end">Required Qty</th><th class="text-end">SOH</th><th class="text-end">Allocated</th><th class="text-end">Net Available</th><th>Status</th>';
+                        html += '</tr></thead><tbody>';
+                        item.components.forEach(function(c) {
+                            var statusBadge = c.status === 'available'
+                                ? '<span class="badge bg-success"><i class="bi bi-check-lg"></i> Available</span>'
+                                : '<span class="badge bg-danger"><i class="bi bi-x-lg"></i> Lacking ' + c.shortage.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:4}) + ' ' + (c.item_uom || '') + '</span>';
+                            html += '<tr>';
+                            html += '<td>' + c.item_code + '</td>';
+                            html += '<td>' + c.item_description + '</td>';
+                            html += '<td class="text-end">' + c.required_qty.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:4}) + '</td>';
+                            html += '<td class="text-end">' + c.soh.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:4}) + '</td>';
+                            html += '<td class="text-end">' + (c.allocated || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:4}) + '</td>';
+                            html += '<td class="text-end">' + c.net_available.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:4}) + '</td>';
+                            html += '<td>' + statusBadge + '</td>';
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                    }
+                    html += '</div></div>';
+                });
+
+                if (anyShortage) {
+                    html = '<div class="alert alert-danger mb-3"><i class="bi bi-exclamation-triangle me-1"></i><strong>Stock shortages detected.</strong> Some materials lack sufficient inventory.</div>' + html;
+                } else {
+                    html = '<div class="alert alert-success mb-3"><i class="bi bi-check-circle me-1"></i><strong>All materials available.</strong> This MO can be safely released.</div>' + html;
+                }
+
+                body.innerHTML = html;
+            })
+            .catch(function(err) {
+                body.innerHTML = '<div class="alert alert-danger">Failed to load BOM data.</div>';
+            });
+    });
+});
+</script>
