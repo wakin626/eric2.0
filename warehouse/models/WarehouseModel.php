@@ -3232,13 +3232,15 @@ public function searchItems($query) {
         $where = ["so.`remove` = 0"];
         $params = [];
 
-        if (!empty($filters['status'])) {
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
             $where[] = "so.status = :status";
             $params['status'] = $filters['status'];
-        } else {
-            // Default: show only requested and pending for purchasing module
-            $where[] = "so.status IN ('requested', 'pending')";
+        } elseif (empty($filters['status'])) {
+            // Keep the full lifecycle visible so rows remain available as they move through
+            // requested -> pending -> for inspection -> approved/rejected without being hidden.
+            $where[] = "so.status IN ('requested', 'pending', 'processed', 'partially_received', 'For Inspection', 'received', 'rejected', 'cancelled')";
         }
+        // status === 'all' → no status clause (full history for audit/traceability)
         if (!empty($filters['supplier_name'])) {
             $where[] = "so.supplier_name LIKE :supplier_name";
             $params['supplier_name'] = '%' . $filters['supplier_name'] . '%';
@@ -3264,9 +3266,11 @@ public function searchItems($query) {
     }
 
     public function getPurchasingPoById($id) {
-        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom,
+                       po.customer_po_number
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
+                LEFT JOIN purchase_orders po ON so.po_id = po.po_id
                 WHERE so.supplier_order_id = :id AND so.`remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
@@ -3276,8 +3280,8 @@ public function searchItems($query) {
     public function createPurchasingPo($data) {
         $status = $data['status'] ?? 'requested';
         $poId = $data['po_id'] ?? null;
-        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, unit_cost, order_date, expected_date, remarks, created_by, status, po_id)
-                VALUES (:supplier_name, :item_id, :quantity, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id)";
+        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, unit_cost, order_date, expected_date, remarks, created_by, status, po_id, received_qty, received_date)
+                VALUES (:supplier_name, :item_id, :quantity, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id, 0, NULL)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'supplier_name' => $data['supplier_name'],
@@ -3303,7 +3307,7 @@ public function searchItems($query) {
                     expected_date = :expected_date,
                     remarks = :remarks,
                     po_id = :po_id,
-                    status = 'processed'
+                    status = 'pending'
                 WHERE supplier_order_id = :id AND status IN ('requested', 'pending')";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
@@ -3348,7 +3352,7 @@ public function searchItems($query) {
                               unit_cost = :unit_cost,
                               order_date = :order_date,
                               expected_date = :expected_date,
-                              status = 'processed'
+                              status = 'pending'
                           WHERE supplier_order_id IN ({$placeholders})";
             $params = [
                 'supplier_name' => $data['supplier_name'],
@@ -3371,10 +3375,52 @@ public function searchItems($query) {
     }
 
     public function cancelPurchasingPo($id) {
-        $sql = "UPDATE supplier_orders SET status = 'cancelled' WHERE supplier_order_id = :id";
-        $stmt = self::getConnection()->prepare($sql);
-        $stmt->execute(['id' => $id]);
-        return $stmt->rowCount() > 0;
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $order = $this->getPurchasingPoById($id);
+            if (!$order) {
+                throw new \RuntimeException('Purchasing PO not found.');
+            }
+            if (in_array($order['status'], ['cancelled', 'received', 'completed'])) {
+                throw new \RuntimeException('Cannot cancel a purchasing PO with status "' . ucfirst($order['status']) . '".');
+            }
+
+            // Pull any pending QC queue entries for this order so ghost items
+            // do not remain in the inspection queue, and release their
+            // inspection hold quantity. Staging rows are retained (CANCELLED).
+            $pendings = $conn->prepare(
+                "SELECT id, item_code, received_qty FROM receiving_items
+                 WHERE supplier_order_id = :sid AND qc_status = 'PENDING_QC'"
+            );
+            $pendings->execute(['sid' => $id]);
+            foreach ($pendings->fetchAll() as $pi) {
+                $holdQty = floatval($pi['received_qty']);
+                if ($holdQty > 0) {
+                    $conn->prepare(
+                        "UPDATE inventory_balances
+                         SET qty_for_inspect = GREATEST(qty_for_inspect - :qty, 0)
+                         WHERE item_id = :item_id AND site_code = 'MAIN'"
+                    )->execute(['qty' => $holdQty, 'item_id' => $order['item_id']]);
+                }
+                $conn->prepare(
+                    "UPDATE receiving_items
+                     SET qc_status = 'CANCELLED',
+                         remarks = CONCAT(COALESCE(remarks, ''), CASE WHEN COALESCE(remarks,'') = '' THEN '' ELSE ' | ' END, 'Cancelled with purchasing PO #', :sid)
+                     WHERE id = :rid"
+                )->execute(['sid' => $id, 'rid' => $pi['id']]);
+            }
+
+            $conn->prepare(
+                "UPDATE supplier_orders SET status = 'cancelled', last_update = NOW() WHERE supplier_order_id = :id"
+            )->execute(['id' => $id]);
+
+            $conn->commit();
+            return true;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
     }
 
     public function deletePurchasingPo($id) {
@@ -3387,13 +3433,18 @@ public function searchItems($query) {
     // ─── Receiving Purchasing PO ────────────────────────────────────────────────
 
     public function getReceivingPoFiltered($filters = []) {
-        $where = ["so.`remove` = 0", "so.status IN ('pending', 'processed', 'partially_received', 'received')"];
+        $where = ["so.`remove` = 0"];
         $params = [];
 
-        if (!empty($filters['status'])) {
+        if (!empty($filters['status']) && $filters['status'] !== 'all') {
             $where[] = "so.status = :status";
             $params['status'] = $filters['status'];
+        } elseif (empty($filters['status'])) {
+            // Warehouse receiving is only for orders that have already been processed by purchasing.
+            // Requested rows remain in purchasing and are intentionally excluded from the receiving queue.
+            $where[] = "so.status IN ('pending', 'processed', 'partially_received', 'For Inspection', 'received', 'rejected', 'cancelled')";
         }
+        // status === 'all' → no status clause (full history for audit/traceability)
         if (!empty($filters['supplier'])) {
             $where[] = "so.supplier_name = :supplier";
             $params['supplier'] = $filters['supplier'];
@@ -3419,7 +3470,7 @@ public function searchItems($query) {
     }
 
     public function getPurchasingPoSuppliers() {
-        $sql = "SELECT DISTINCT supplier_name FROM supplier_orders WHERE `remove` = 0 AND status IN ('pending', 'processed', 'partially_received', 'received') ORDER BY supplier_name";
+        $sql = "SELECT DISTINCT supplier_name FROM supplier_orders WHERE `remove` = 0 AND status IN ('pending', 'processed', 'partially_received', 'For Inspection', 'received', 'rejected', 'cancelled') ORDER BY supplier_name";
         $stmt = self::getConnection()->query($sql);
         return $stmt->fetchAll(\PDO::FETCH_COLUMN);
     }
@@ -3438,10 +3489,71 @@ public function searchItems($query) {
             $orderedQty = floatval($order['quantity']);
             $newReceivedQty = $currentReceived + $receivedQty;
 
-            // Determine new status
-            $newStatus = ($newReceivedQty >= $orderedQty) ? 'received' : 'partially_received';
+            // Server-side guard: never receive more than ordered.
+            if ($receivedQty <= 0) {
+                throw new \RuntimeException('Received quantity must be greater than zero.');
+            }
+            $remaining = $orderedQty - $currentReceived;
+            if ($newReceivedQty > $orderedQty + 0.0001) {
+                throw new \RuntimeException(
+                    'Cannot receive ' . number_format($receivedQty, 4) . ' — only ' .
+                    number_format(max($remaining, 0), 4) . ' remaining of ' . number_format($orderedQty, 4) . '.'
+                );
+            }
 
-            $qcGateStatus = 'pending_qc';
+            // Resolve PO ref up front (used for staging + duplicate check).
+            $poRef = $order['customer_po_number'] ?? null;
+            if (!$poRef) {
+                $poRef = $order['po_id'] ? ('PO #' . $order['po_id']) : ('SO #' . $id);
+            }
+            $remarksParts = [];
+            if (!empty($data['lot_number'])) $remarksParts[] = 'Lot: ' . $data['lot_number'];
+            if (!empty($data['expiry_date'])) $remarksParts[] = 'Expiry: ' . $data['expiry_date'];
+            if (!empty($data['delivery_receipt_no'])) $remarksParts[] = 'DR: ' . $data['delivery_receipt_no'];
+            if (!empty($data['remarks'])) $remarksParts[] = $data['remarks'];
+            $stagingRemarks = $remarksParts ? implode(' | ', $remarksParts) : null;
+
+            // Duplicate prevention: if a pending inspection row already exists
+            // for this po_ref + item_code on this PO line (double-click /
+            // resubmit), update it instead of creating a second QC queue
+            // entry. Quantities on the supplier order were already applied by
+            // the first submission.
+            $dup = $conn->prepare(
+                "SELECT id FROM receiving_items
+                 WHERE supplier_order_id = :sid
+                   AND po_ref = :po_ref
+                   AND item_code = :item_code
+                   AND qc_status = 'PENDING_QC'
+                 LIMIT 1"
+            );
+            $dup->execute(['sid' => $id, 'po_ref' => $poRef, 'item_code' => $order['item_code']]);
+            $dupRow = $dup->fetch();
+            if ($dupRow) {
+                $conn->prepare(
+                    "UPDATE receiving_items
+                     SET received_qty = :received_qty,
+                         received_date = :received_date,
+                         lot_number = :lot_number,
+                         expiry_date = :expiry_date,
+                         dr_invoice_no = :dr_invoice_no,
+                         remarks = :remarks
+                     WHERE id = :rid"
+                )->execute([
+                    'received_qty' => $receivedQty,
+                    'received_date' => $data['received_date'],
+                    'lot_number' => $data['lot_number'] ?? null,
+                    'expiry_date' => $data['expiry_date'] ?? null,
+                    'dr_invoice_no' => $data['delivery_receipt_no'] ?? null,
+                    'remarks' => $stagingRemarks,
+                    'rid' => $dupRow['id'],
+                ]);
+                $conn->commit();
+                return ['success' => true, 'receiving_item_id' => (int) $dupRow['id'], 'duplicate' => true];
+            }
+
+            // Status transitions to 'For Inspection' only here: explicit modal
+            // submission with received_qty > 0 (guarded above).
+            $qcGateStatus = 'For Inspection';
             $sql = "UPDATE supplier_orders 
                     SET received_qty = :received_qty,
                         received_date = :received_date,
@@ -3455,6 +3567,35 @@ public function searchItems($query) {
                 'status' => $qcGateStatus,
                 'id' => $id
             ]);
+
+            // Stage the receipt for the QC inspection queue (same transaction).
+            $conn->prepare("
+                INSERT INTO receiving_items
+                    (po_ref, supplier, item_code, item_name, uom,
+                     ordered_qty, received_qty, passed_qty, rejected_qty,
+                     lot_number, expiry_date, dr_invoice_no, received_date,
+                     remarks, qc_status, supplier_order_id)
+                VALUES
+                    (:po_ref, :supplier, :item_code, :item_name, :uom,
+                     :ordered_qty, :received_qty, 0, 0,
+                     :lot_number, :expiry_date, :dr_invoice_no, :received_date,
+                     :remarks, 'PENDING_QC', :supplier_order_id)
+            ")->execute([
+                'po_ref' => $poRef,
+                'supplier' => $order['supplier_name'],
+                'item_code' => $order['item_code'],
+                'item_name' => $order['item_description'],
+                'uom' => $order['item_uom'],
+                'ordered_qty' => $orderedQty,
+                'received_qty' => $receivedQty,
+                'lot_number' => $data['lot_number'] ?? null,
+                'expiry_date' => $data['expiry_date'] ?? null,
+                'dr_invoice_no' => $data['delivery_receipt_no'] ?? null,
+                'received_date' => $data['received_date'],
+                'remarks' => $stagingRemarks,
+                'supplier_order_id' => $id,
+            ]);
+            $receivingItemId = (int) $conn->lastInsertId();
 
             // Gatekeeping: received goods sit in inspection hold until QC approves them.
             // Available SOH is computed from qty_on_hand only; qty_for_inspect is excluded.
@@ -3485,7 +3626,7 @@ public function searchItems($query) {
             }
 
             $conn->commit();
-            return true;
+            return ['success' => true, 'receiving_item_id' => $receivingItemId];
         } catch (\Exception $e) {
             $conn->rollBack();
             throw $e;

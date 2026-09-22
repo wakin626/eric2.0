@@ -110,16 +110,49 @@ class QcModel extends BaseModel {
                     ri.item_code,
                     ri.item_name AS item_description,
                     ri.uom AS item_uom,
+                    ri.ordered_qty,
                     ri.received_qty,
                     ri.passed_qty,
                     ri.rejected_qty,
                     ri.lot_number,
                     ri.received_date,
                     ri.remarks,
-                    ri.qc_status
+                    ri.qc_status,
+                    ri.supplier_order_id,
+                    i.item_id
                 FROM receiving_items ri
+                LEFT JOIN items i ON ri.item_code = i.item_code
                 WHERE ri.qc_status = 'PENDING_QC'
                 ORDER BY ri.received_date ASC, ri.id ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    public function getCompletedQcItems() {
+        $sql = "SELECT
+                    ri.id AS receiving_item_id,
+                    ri.po_ref AS customer_po_number,
+                    ri.supplier AS supplier_name,
+                    ri.item_code,
+                    ri.item_name AS item_description,
+                    ri.uom AS item_uom,
+                    ri.ordered_qty,
+                    ri.received_qty,
+                    ri.passed_qty,
+                    ri.rejected_qty,
+                    ri.lot_number,
+                    ri.received_date,
+                    ri.inspected_at,
+                    ri.inspected_by,
+                    ri.remarks,
+                    ri.qc_status,
+                    ri.supplier_order_id,
+                    i.item_id
+                FROM receiving_items ri
+                LEFT JOIN items i ON ri.item_code = i.item_code
+                WHERE ri.qc_status IN ('PASSED', 'REJECTED')
+                ORDER BY ri.inspected_at DESC, ri.id DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
@@ -132,8 +165,10 @@ class QcModel extends BaseModel {
                     ri.po_ref AS customer_po_number,
                     ri.supplier AS supplier_name,
                     ri.item_name AS item_description,
-                    ri.uom AS item_uom
+                    ri.uom AS item_uom,
+                    i.item_id
                 FROM receiving_items ri
+                LEFT JOIN items i ON ri.item_code = i.item_code
                 WHERE ri.id = :id";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
@@ -141,6 +176,41 @@ class QcModel extends BaseModel {
     }
 
     public function createReceivingItem($data) {
+        // Duplicate prevention: one pending inspection row per po_ref + item_code.
+        $poRef = $data['po_ref'] ?? ($data['po_id'] ?? null);
+        $itemCode = $data['item_code'] ?? null;
+        $conn = self::getConnection();
+        if ($poRef !== null && $itemCode !== null) {
+            $dup = $conn->prepare(
+                "SELECT id FROM receiving_items
+                 WHERE po_ref = :po_ref AND item_code = :item_code AND qc_status = 'PENDING_QC'
+                 LIMIT 1"
+            );
+            $dup->execute(['po_ref' => $poRef, 'item_code' => $itemCode]);
+            $dupRow = $dup->fetch();
+            if ($dupRow) {
+                $conn->prepare(
+                    "UPDATE receiving_items
+                     SET received_qty = :received_qty,
+                         received_date = :received_date,
+                         lot_number = :lot_number,
+                         expiry_date = :expiry_date,
+                         dr_invoice_no = :dr_invoice_no,
+                         remarks = :remarks
+                     WHERE id = :rid"
+                )->execute([
+                    'received_qty' => $data['received_qty'] ?? 0,
+                    'received_date' => $data['received_date'] ?? date('Y-m-d'),
+                    'lot_number' => $data['lot_number'] ?? null,
+                    'expiry_date' => $data['expiry_date'] ?? null,
+                    'dr_invoice_no' => $data['dr_invoice_no'] ?? null,
+                    'remarks' => $data['remarks'] ?? null,
+                    'rid' => $dupRow['id'],
+                ]);
+                return (int) $dupRow['id'];
+            }
+        }
+
         $sql = "INSERT INTO receiving_items (
                     po_ref, supplier, item_code, item_name, uom,
                     ordered_qty, received_qty, passed_qty, rejected_qty,
@@ -210,6 +280,16 @@ class QcModel extends BaseModel {
         if (!$receivingItem) {
             throw new \RuntimeException('Receiving item was not found.');
         }
+        // Server-side duplicate guard: a queue entry can only be inspected once
+        // (blocks double-clicked Approve/Reject submits).
+        $currentQcStatus = strtoupper((string) ($receivingItem['qc_status'] ?? ''));
+        if ($currentQcStatus !== 'PENDING_QC') {
+            throw new \RuntimeException('This receiving item has already been inspected (status: ' . $currentQcStatus . ').');
+        }
+        $itemId = (int) ($receivingItem['item_id'] ?? 0);
+        if ($itemId <= 0) {
+            throw new \RuntimeException('Could not resolve item for receiving item #' . $receivingItemId . '.');
+        }
 
         $finalStatus = $decision;
         $conn = self::getConnection();
@@ -249,15 +329,18 @@ class QcModel extends BaseModel {
                 'receiving_item_id' => $receivingItemId,
             ]);
 
-            if (!empty($receivingItem['po_ref'])) {
-                $poRef = trim((string) $receivingItem['po_ref']);
-                $poId = preg_replace('/\D+/', '', $poRef);
-                if ($poId !== '') {
-                    $poStatus = ($decision === 'PASSED') ? 'received' : 'rejected';
-                    $conn->prepare("UPDATE supplier_orders SET status = :status, last_update = NOW() WHERE po_id = :po_id AND `remove` = 0")->execute([
-                        'status' => $poStatus,
-                        'po_id' => (int) $poId,
-                    ]);
+            // Reflect QC decision on the source supplier order (never delete/hide it).
+            $supplierOrderId = (int) ($receivingItem['supplier_order_id'] ?? 0);
+            if ($supplierOrderId > 0) {
+                if ($decision === 'PASSED') {
+                    $conn->prepare("UPDATE supplier_orders
+                        SET status = IF(received_qty >= quantity, 'received', 'partially_received'),
+                            last_update = NOW()
+                        WHERE supplier_order_id = :sid AND `remove` = 0")->execute(['sid' => $supplierOrderId]);
+                } else {
+                    $conn->prepare("UPDATE supplier_orders
+                        SET status = 'rejected', last_update = NOW()
+                        WHERE supplier_order_id = :sid AND `remove` = 0")->execute(['sid' => $supplierOrderId]);
                 }
             }
 
@@ -267,7 +350,7 @@ class QcModel extends BaseModel {
                     SET qty_for_inspect = GREATEST(qty_for_inspect - :qty_to_release, 0)
                     WHERE item_id = :item_id AND site_code = 'MAIN'")->execute([
                     'qty_to_release' => $qtyToRelease,
-                    'item_id' => $receivingItem['item_id'],
+                    'item_id' => $itemId,
                 ]);
             }
 
@@ -281,7 +364,7 @@ class QcModel extends BaseModel {
                                 status = 'PASSED',
                                 updated_at = NOW()";
                 $conn->prepare($stockSql)->execute([
-                    'item_id' => $receivingItem['item_id'],
+                    'item_id' => $itemId,
                     'lot_number' => $receivingItem['lot_number'],
                     'qty_on_hand' => $passedQty,
                     'source_receiving_item_id' => $receivingItemId,
@@ -291,7 +374,7 @@ class QcModel extends BaseModel {
                 $conn->prepare("INSERT INTO inventory_balances (item_id, site_code, qty_on_hand, qty_for_inspect)
                     VALUES (:item_id, 'MAIN', :qty_on_hand, 0)
                     ON DUPLICATE KEY UPDATE qty_on_hand = qty_on_hand + VALUES(qty_on_hand)")->execute([
-                    'item_id' => $receivingItem['item_id'],
+                    'item_id' => $itemId,
                     'qty_on_hand' => $passedQty,
                 ]);
             }
@@ -307,7 +390,7 @@ class QcModel extends BaseModel {
                                 status = 'REJECTED',
                                 updated_at = NOW()";
                 $conn->prepare($stockSql)->execute([
-                    'item_id' => $receivingItem['item_id'],
+                    'item_id' => $itemId,
                     'lot_number' => $receivingItem['lot_number'],
                     'qty_blocked' => $rejectedQty,
                     'qty_rejected' => $rejectedQty,

@@ -7,11 +7,14 @@
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="receivingPo">
             <select name="status" class="form-select form-select-sm" style="width:180px">
-                <option value="">All Status</option>
+                <option value="">Active Orders</option>
+                <option value="all" <?= ($filters['status'] ?? '') === 'all' ? 'selected' : '' ?>>All Statuses</option>
                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
                 <option value="processed" <?= ($filters['status'] ?? '') === 'processed' ? 'selected' : '' ?>>Processed</option>
                 <option value="partially_received" <?= ($filters['status'] ?? '') === 'partially_received' ? 'selected' : '' ?>>Partially Received</option>
+                <option value="For Inspection" <?= ($filters['status'] ?? '') === 'For Inspection' ? 'selected' : '' ?>>For Inspection</option>
                 <option value="received" <?= ($filters['status'] ?? '') === 'received' ? 'selected' : '' ?>>Received</option>
+                <option value="rejected" <?= ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' ?>>Rejected</option>
             </select>
             <select name="supplier" class="form-select form-select-sm" style="width:200px">
                 <option value="">All Suppliers</option>
@@ -51,6 +54,10 @@
                 </tr>
                 <?php else: ?>
                 <?php foreach ($orders as $o): ?>
+                <?php
+                    $status = strtolower(trim((string) ($o['status'] ?? '')));
+                    $remainingQty = floatval($o['quantity']) - floatval($o['received_qty'] ?? 0);
+                ?>
                 <tr>
                     <td><?= $o['supplier_order_id'] ?></td>
                     <td><?= $o['customer_po_number'] ?? ($o['po_id'] ? 'PO #' . $o['po_id'] : 'SO #' . $o['supplier_order_id']) ?></td>
@@ -61,20 +68,30 @@
                     <td class="text-end"><?= $o['received_qty'] > 0 ? number_format($o['received_qty'], 4) : '<span class="text-muted">-</span>' ?></td>
                     <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
                     <td>
-                        <?php if ($o['status'] === 'processed'): ?>
+                        <?php if ($status === 'requested'): ?>
+                            <span class="badge bg-info">Requested</span>
+                        <?php elseif ($status === 'pending'): ?>
+                            <span class="badge bg-warning text-dark">Pending</span>
+                        <?php elseif ($status === 'processed'): ?>
                             <span class="badge bg-primary">Processed</span>
-                        <?php elseif ($o['status'] === 'partially_received'): ?>
+                        <?php elseif ($status === 'partially_received'): ?>
                             <span class="badge bg-info text-dark">Partially Received</span>
-                        <?php elseif ($o['status'] === 'received'): ?>
-                            <span class="badge bg-success">Received</span>
+                        <?php elseif ($status === 'for inspection'): ?>
+                            <span class="badge bg-warning text-dark">For Inspection</span>
+                        <?php elseif (in_array($status, ['approved', 'received'])): ?>
+                            <span class="badge bg-success">Received & Approved</span>
+                        <?php elseif ($status === 'rejected'): ?>
+                            <span class="badge bg-danger">Rejected</span>
+                        <?php elseif ($status === 'cancelled'): ?>
+                            <span class="badge bg-secondary">Cancelled</span>
                         <?php else: ?>
-                            <span class="badge bg-secondary"><?= ucfirst($o['status']) ?></span>
+                            <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst((string) ($o['status'] ?? 'Unknown'))) ?: 'Unknown' ?></span>
                         <?php endif; ?>
                     </td>
                     <td>
                         <?php if ($isReadOnly): ?>
                             <span class="text-muted">-</span>
-                        <?php elseif (in_array($o['status'], ['pending', 'processed', 'partially_received'])): ?>
+                        <?php elseif (in_array($status, ['pending', 'processed']) && $remainingQty > 0.0001): ?>
                             <button class="btn btn-sm btn-success receive-shipment-btn"
                                     data-id="<?= $o['supplier_order_id'] ?>"
                                     data-supplier="<?= htmlspecialchars($o['supplier_name']) ?>"
@@ -87,6 +104,14 @@
                                     title="Receive Shipment">
                                 <i class="bi bi-box-arrow-in-down"></i> Receive
                             </button>
+                        <?php elseif ($status === 'requested'): ?>
+                            <span class="badge bg-secondary">Awaiting Purchasing</span>
+                        <?php elseif ($status === 'for inspection'): ?>
+                            <span class="badge bg-warning text-dark">In QC Queue</span>
+                        <?php elseif (in_array($status, ['approved', 'received'])): ?>
+                            <span class="badge bg-success">Received & Approved</span>
+                        <?php elseif ($status === 'rejected'): ?>
+                            <span class="badge bg-danger">Rejected</span>
                         <?php else: ?>
                             <span class="text-muted">-</span>
                         <?php endif; ?>
@@ -104,7 +129,8 @@
 <div class="modal fade" id="receiveShipmentModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="?controller=warehouse&action=receivePurchasingPo" id="receiveShipmentForm">
+            <form method="POST" action="?controller=warehouse&action=receivePurchasingPo" id="receiveShipmentForm"
+                  onsubmit="return submitReceiveFormOnce(this);">
                 <input type="hidden" name="supplier_order_id" id="recvOrderId">
                 <div class="modal-header">
                     <h5 class="modal-title"><i class="bi bi-box-arrow-in-down me-2"></i>Receive Shipment</h5>
@@ -143,13 +169,13 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold">Received Quantity <span class="text-danger">*</span></label>
-                        <input type="number" name="received_qty" id="recvReceivedQty" class="form-control" min="0.01" step="0.0001" required>
+                        <input type="number" name="received_qty" id="recvReceivedQty" class="form-control" min="0.0001" step="0.0001" required>
                         <small class="text-muted">Enter the quantity actually received (may differ from ordered).</small>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Lot / Batch Number</label>
-                            <input type="text" name="lot_number" id="recvLotNumber" class="form-control" placeholder="Optional">
+                            <label class="form-label fw-bold">Lot / Batch Number <span class="text-danger">*</span></label>
+                            <input type="text" name="lot_number" id="recvLotNumber" class="form-control" placeholder="Required" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Expiry Date</label>
@@ -179,6 +205,16 @@
 </div>
 
 <script>
+function submitReceiveFormOnce(form) {
+    // Prevent accidental double-clicks from submitting the form twice.
+    var submitBtn = form.querySelector('button[type=submit]');
+    if (submitBtn) {
+        if (submitBtn.disabled) return false;
+        submitBtn.disabled = true;
+    }
+    return true;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.receive-shipment-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {

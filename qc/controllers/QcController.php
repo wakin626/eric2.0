@@ -35,9 +35,11 @@ class QcController {
 
     public function receivingInspection() {
         $pendingQcItems = $this->qcModel->getPendingQcItems();
+        $completedQcItems = $this->qcModel->getCompletedQcItems();
 
         $data = [
             'pendingQcItems' => $pendingQcItems,
+            'completedQcItems' => $completedQcItems,
             'page_title' => 'Receiving Inspection'
         ];
 

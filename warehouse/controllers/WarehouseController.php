@@ -71,7 +71,8 @@ class WarehouseController {
     public function moEntry() {
         $data['page_title'] = 'MO Entry';
         $data['customers'] = $this->catalogModel->getCustomers();
-        $data['items'] = $this->catalogModel->getItems();
+        $data['items'] = [];
+        $data['allItems'] = $this->catalogModel->getItems();
         $this->render('mo_entry', $data);
     }
 
@@ -2170,10 +2171,14 @@ class WarehouseController {
     public function cancelPurchasingPo() {
         $this->enforceReadOnlyPurchasingPo();
         $id = intval($_GET['id'] ?? 0);
-        if ($id > 0 && $this->warehouseModel->cancelPurchasingPo($id)) {
-            $_SESSION['success'] = 'Purchasing PO cancelled.';
-        } else {
-            $_SESSION['error'] = 'Failed to cancel purchasing PO.';
+        try {
+            if ($id <= 0) {
+                throw new \RuntimeException('Invalid purchasing PO.');
+            }
+            $this->warehouseModel->cancelPurchasingPo($id);
+            $_SESSION['success'] = 'Purchasing PO cancelled. Any pending QC inspection entries were cleared from the queue.';
+        } catch (\Exception $e) {
+            $_SESSION['error'] = $e->getMessage();
         }
         header('Location: ?controller=warehouse&action=purchasingPo');
         exit;
@@ -2224,9 +2229,15 @@ class WarehouseController {
             exit;
         }
 
-        $orderStatus = $order['status'] ?? '';
-        if (in_array($orderStatus, ['cancelled', 'received'])) {
-            $_SESSION['error'] = 'Cannot receive a purchasing PO with status "' . ucfirst($orderStatus) . '".';
+        $orderStatus = strtolower(trim((string) ($order['status'] ?? '')));
+        if ($orderStatus === 'requested') {
+            $_SESSION['error'] = 'This purchasing order is still in Requested status. Purchasing must process it before warehouse receiving can proceed.';
+            header('Location: ?controller=warehouse&action=receivingPo');
+            exit;
+        }
+
+        if (in_array($orderStatus, ['cancelled', 'received', 'rejected', 'for inspection'])) {
+            $_SESSION['error'] = 'Cannot receive a purchasing PO with status "' . ucfirst($order['status'] ?? 'Unknown') . '".';
             header('Location: ?controller=warehouse&action=receivingPo');
             exit;
         }
@@ -2244,7 +2255,7 @@ class WarehouseController {
                 $receivedDate = $_POST['received_date'] ?: date('Y-m-d');
                 $remarks = trim($_POST['remarks'] ?? '') ?: null;
 
-                $this->warehouseModel->receivePurchasingPo($id, [
+                $result = $this->warehouseModel->receivePurchasingPo($id, [
                     'received_qty' => $receivedQty,
                     'lot_number' => $lotNumber,
                     'expiry_date' => $expiryDate,
@@ -2255,8 +2266,14 @@ class WarehouseController {
                 ]);
 
                 $this->notifyProcurementOfReceipt($order, $receivedQty);
+                try {
+                    $poRef = $order['customer_po_number'] ?? ($order['po_id'] ? 'PO #' . $order['po_id'] : 'SO #' . $id);
+                    NotificationHelper::qcInspectionNeeded($poRef, $lotNumber ?: ($order['item_code'] ?? 'N/A'), $_SESSION['user_id'] ?? null);
+                } catch (\Exception $e) {
+                    error_log('qcInspectionNeeded error: ' . $e->getMessage());
+                }
 
-                $_SESSION['success'] = 'Shipment received successfully. Goods are now in QC quarantine pending approval.';
+                $_SESSION['success'] = 'Shipment received and staged for QC inspection (Status: For Inspection).';
                 header('Location: ?controller=warehouse&action=receivingPo');
                 exit;
             } catch (\Exception $e) {
