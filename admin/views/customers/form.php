@@ -30,7 +30,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Terms (Days)</label>
-                    <select name="customer_terms" class="form-select">
+                    <select name="customer_terms" class="form-select filter-select">
                         <?php foreach ([15, 30, 60, 90, 120] as $term): ?>
                             <option value="<?= $term ?>" <?= ($customer['customer_terms'] ?? '') == $term ? 'selected' : '' ?>><?= $term ?> days</option>
                         <?php endforeach; ?>
@@ -41,7 +41,7 @@
                 <?php if (isset($customer)): ?>
                 <div class="col-md-4">
                     <label class="form-label">Status</label>
-                    <select name="status" class="form-select">
+                    <select name="status" class="form-select filter-select">
                         <option value="1" <?= ($customer['status'] ?? 1) == 1 ? 'selected' : '' ?>>Active</option>
                         <option value="0" <?= ($customer['status'] ?? 1) == 0 ? 'selected' : '' ?>>Inactive</option>
                     </select>

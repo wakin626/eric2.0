@@ -11,12 +11,12 @@
         <input type="hidden" name="controller" value="finance">
         <input type="hidden" name="action" value="priceList">
         <input type="text" name="search" id="searchItem" class="form-control" placeholder="Search items..." value="<?= htmlspecialchars($search ?? '') ?>" style="width:25%">
-        <select name="status" id="filterStatus" class="form-select" style="width:18%">
+        <select name="status" id="filterStatus" class="form-select filter-select" style="width:18%">
             <option value="">All Status</option>
             <option value="1" <?= ($filterStatus ?? '') === '1' ? 'selected' : '' ?>>Active</option>
             <option value="0" <?= ($filterStatus ?? '') === '0' ? 'selected' : '' ?>>Inactive</option>
         </select>
-        <select name="customer" id="filterCustomer" class="form-select" style="width:25%">
+        <select name="customer" id="filterCustomer" class="form-select filter-select" style="width:25%">
             <option value="">All Customers</option>
             <?php foreach ($customers as $cust): ?>
             <option value="<?= htmlspecialchars($cust['customer_name']) ?>" <?= ($filterCustomer ?? '') === $cust['customer_name'] ? 'selected' : '' ?>>
@@ -142,7 +142,7 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Customer *</label>
-                        <select id="add_customer_id" class="form-select" required>
+                        <select id="add_customer_id" class="form-select filter-select" required>
                             <option value="">-- Select a customer --</option>
                             <?php foreach ($customers as $cust): ?>
                             <option value="<?= $cust['customer_id'] ?>">
@@ -153,14 +153,9 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Select Product *</label>
-                        <select name="item_id" id="add_item_id" class="form-select d-none" required>
+                        <select name="item_id" id="add_item_id" class="form-select filter-select" required>
                             <option value="">-- Select a product --</option>
                         </select>
-                        <div class="searchable-wrap" id="addProductSearchable" style="display:none;">
-                            <input type="text" class="form-control searchable-input" placeholder="Type to search product..." autocomplete="off">
-                            <i class="bi bi-chevron-down searchable-arrow"></i>
-                            <ul class="searchable-list"></ul>
-                        </div>
                         <small class="text-muted d-none" id="addProductPlaceholder">Please select a customer first</small>
                     </div>
                     <div class="mb-3">
@@ -290,17 +285,12 @@ document.getElementById('filterCustomer').addEventListener('change', function() 
 document.getElementById('add_customer_id').addEventListener('change', function() {
     var customerId = this.value;
     var itemSelect = document.getElementById('add_item_id');
-    var searchableWrap = document.getElementById('addProductSearchable');
     var placeholder = document.getElementById('addProductPlaceholder');
-    var sInput = searchableWrap.querySelector('.searchable-input');
-    var sList = searchableWrap.querySelector('.searchable-list');
 
     itemSelect.innerHTML = '<option value="">-- Select a product --</option>';
-    sInput.value = '';
-    sList.innerHTML = '';
+    refreshSearchableDropdown(itemSelect);
 
     if (!customerId) {
-        searchableWrap.style.display = 'none';
         placeholder.classList.remove('d-none');
         return;
     }
@@ -317,75 +307,23 @@ document.getElementById('add_customer_id').addEventListener('change', function()
                 opt.textContent = it.item_code + ' - ' + it.item_description;
                 itemSelect.appendChild(opt);
             });
-            searchableWrap.style.display = '';
             placeholder.classList.add('d-none');
-            rebuildSearchableList();
+            refreshSearchableDropdown(itemSelect);
         });
 });
 
-function rebuildSearchableList() {
-    var select = document.getElementById('add_item_id');
-    var wrap = document.getElementById('addProductSearchable');
-    var input = wrap.querySelector('.searchable-input');
-    var list = wrap.querySelector('.searchable-list');
-
-    list.innerHTML = '';
-    Array.from(select.options).forEach(function(opt) {
-        var li = document.createElement('li');
-        li.textContent = opt.textContent;
-        li.dataset.value = opt.value;
-        if (!opt.value) li.style.display = 'none';
-        list.appendChild(li);
-    });
-
-    input.addEventListener('focus', function() {
-        rebuildSearchableList();
-        list.classList.add('show');
-    });
-
-    input.addEventListener('input', function() {
-        var term = this.value.toLowerCase();
-        var found = false;
-        list.querySelectorAll('li').forEach(function(li) {
-            if (!li.dataset.value) { li.style.display = 'none'; return; }
-            var match = li.textContent.toLowerCase().indexOf(term) > -1;
-            li.style.display = match ? '' : 'none';
-            if (match) found = true;
-        });
-        if (!found && term) {
-            list.innerHTML = '<li class="no-results">No products found</li>';
-            list.classList.add('show');
-        } else if (!term) {
-            rebuildSearchableList();
-            list.classList.add('show');
-        }
-    });
-
-    list.addEventListener('mousedown', function(e) {
-        var li = e.target.closest('li');
-        if (!li || li.classList.contains('no-results')) return;
-        select.value = li.dataset.value;
-        input.value = li.textContent;
-        list.classList.remove('show');
-        var selected = select.options[select.selectedIndex];
-        document.getElementById('add_product_name').value = selected.dataset.name || '';
-        document.getElementById('add_net_size').value = selected.dataset.size || '';
-    });
-
-    input.addEventListener('blur', function() {
-        setTimeout(function() { list.classList.remove('show'); }, 150);
-    });
-}
+document.getElementById('add_item_id').addEventListener('change', function() {
+    var selected = this.options[this.selectedIndex];
+    document.getElementById('add_product_name').value = selected && selected.dataset ? (selected.dataset.name || '') : '';
+    document.getElementById('add_net_size').value = selected && selected.dataset ? (selected.dataset.size || '') : '';
+});
 
 document.getElementById('addPriceModal').addEventListener('hidden.bs.modal', function() {
     document.getElementById('add_customer_id').value = '';
     document.getElementById('add_item_id').innerHTML = '<option value="">-- Select a product --</option>';
     document.getElementById('add_product_name').value = '';
     document.getElementById('add_net_size').value = '';
-    var wrap = document.getElementById('addProductSearchable');
-    wrap.style.display = 'none';
-    wrap.querySelector('.searchable-input').value = '';
-    wrap.querySelector('.searchable-list').innerHTML = '';
+    refreshSearchableDropdown(document.getElementById('add_item_id'));
     document.getElementById('addProductPlaceholder').classList.remove('d-none');
 });
 

@@ -15,11 +15,15 @@
         <form method="GET" class="d-flex gap-2 align-items-center">
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="purchasingPo">
-            <select name="status" class="form-select form-select-sm" style="width:150px">
-                <option value="">All Status</option>
+            <select name="status" class="form-select form-select-sm filter-select" style="width:170px">
+                <option value="">Active Orders</option>
+                <option value="all" <?= ($filters['status'] ?? '') === 'all' ? 'selected' : '' ?>>All Statuses</option>
                 <option value="requested" <?= ($filters['status'] ?? '') === 'requested' ? 'selected' : '' ?>>Requested</option>
                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
                 <option value="processed" <?= ($filters['status'] ?? '') === 'processed' ? 'selected' : '' ?>>Processed</option>
+                <option value="partially_received" <?= ($filters['status'] ?? '') === 'partially_received' ? 'selected' : '' ?>>Partially Received</option>
+                <option value="For Inspection" <?= ($filters['status'] ?? '') === 'For Inspection' ? 'selected' : '' ?>>For Inspection</option>
+                <option value="received" <?= ($filters['status'] ?? '') === 'received' ? 'selected' : '' ?>>Received</option>
                 <option value="cancelled" <?= ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
             </select>
             <input type="text" name="search" class="form-control form-control-sm" placeholder="Search supplier/item..." value="<?= htmlspecialchars($filters['search'] ?? '') ?>" style="width:220px">
@@ -87,10 +91,14 @@
                             <span class="badge bg-primary">Processed</span>
                         <?php elseif ($o['status'] === 'partially_received'): ?>
                             <span class="badge bg-info text-dark">Partially Received</span>
+                        <?php elseif ($o['status'] === 'For Inspection'): ?>
+                            <span class="badge bg-warning text-dark">For Inspection</span>
                         <?php elseif ($o['status'] === 'received'): ?>
                             <span class="badge bg-success">Received</span>
-                        <?php else: ?>
+                        <?php elseif ($o['status'] === 'cancelled'): ?>
                             <span class="badge bg-secondary">Cancelled</span>
+                        <?php else: ?>
+                            <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
                         <?php endif; ?>
                     </td>
                     <td class="text-end"><?= $o['received_qty'] > 0 ? number_format($o['received_qty'], 4) : '-' ?></td>
@@ -113,11 +121,15 @@
                                 <i class="bi bi-gear"></i> Process
                             </button>
                         <?php elseif ($o['status'] === 'pending'): ?>
-                            <a href="?controller=warehouse&action=cancelPurchasingPo&id=<?= $o['supplier_order_id'] ?>" class="btn btn-outline-warning btn-sm" title="Cancel" onclick="return confirm('Cancel this order?')">
+                            <a href="?controller=warehouse&action=cancelPurchasingPo&id=<?= $o['supplier_order_id'] ?>" class="btn btn-outline-warning btn-sm" title="Cancel" onclick="return confirm('Cancel this order? Any pending QC inspection entries will be cleared from the queue.')">
                                 <i class="bi bi-x-circle"></i>
                             </a>
                             <a href="?controller=warehouse&action=deletePurchasingPo&id=<?= $o['supplier_order_id'] ?>" class="btn btn-outline-danger btn-sm" title="Delete" onclick="return confirm('Delete this order?')">
                                 <i class="bi bi-trash"></i>
+                            </a>
+                        <?php elseif (in_array($o['status'], ['processed', 'partially_received', 'For Inspection'])): ?>
+                            <a href="?controller=warehouse&action=cancelPurchasingPo&id=<?= $o['supplier_order_id'] ?>" class="btn btn-outline-warning btn-sm" title="Cancel" onclick="return confirm('Cancel this order? Any pending QC inspection entries will be cleared from the queue.')">
+                                <i class="bi bi-x-circle"></i> Cancel
                             </a>
                         <?php else: ?>
                             <span class="text-muted">-</span>

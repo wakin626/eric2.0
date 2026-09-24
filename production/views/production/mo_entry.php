@@ -84,7 +84,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">MO Type</label>
-                    <select name="mo_type" class="form-select">
+                    <select name="mo_type" class="form-select filter-select">
                         <option value="Standard" selected>Standard</option>
                         <option value="Rework">Rework</option>
                         <option value="Trial">Trial</option>
@@ -92,7 +92,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">MO Site</label>
-                    <select name="mo_site" class="form-select">
+                    <select name="mo_site" class="form-select filter-select">
                         <option value="001 - Sterling Technopark" selected>001 - Sterling Technopark</option>
                     </select>
                 </div>
@@ -124,7 +124,7 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">MO Status</label>
-                    <select name="mo_status" class="form-select">
+                    <select name="mo_status" class="form-select filter-select">
                         <option value="Planned" selected>Planned</option>
                         <option value="Released">Released</option>
                         <option value="Completed">Completed</option>
@@ -133,7 +133,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Customer Code</label>
-                    <select name="customer_code" id="customerCode" class="form-select">
+                    <select name="customer_code" id="customerCode" class="form-select filter-select">
                         <option value="">Select customer</option>
                         <?php foreach ($customers ?? [] as $customer): ?>
                             <option value="<?= htmlspecialchars($customer['customer_id']) ?>" data-name="<?= htmlspecialchars($customer['customer_name'] ?? '') ?>" data-code="<?= htmlspecialchars($customer['customer_code'] ?? '') ?>">
@@ -152,7 +152,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">PO Number</label>
-                    <select name="po_number" id="poNumber" class="form-select">
+                    <select name="po_number" id="poNumber" class="form-select filter-select">
                         <option value="">Select open PO</option>
                     </select>
                 </div>
@@ -205,14 +205,14 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Type</label>
-                        <select id="lineType" class="form-select">
+                        <select id="lineType" class="form-select filter-select">
                             <option value="FG" selected>FG</option>
                             <option value="SFG">SFG</option>
                         </select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Item Number</label>
-                        <select id="lineItemSelect" class="form-select">
+                        <select id="lineItemSelect" class="form-select filter-select">
                             <option value="">Select item</option>
                             <?php foreach ($items ?? [] as $item): ?>
                                 <option value="<?= htmlspecialchars($item['item_id']) ?>" data-code="<?= htmlspecialchars($item['item_code'] ?? '') ?>" data-description="<?= htmlspecialchars($item['item_description'] ?? '') ?>" data-uom="<?= htmlspecialchars($item['item_uom'] ?? '') ?>" data-type="<?= htmlspecialchars($item['item_type'] ?? '') ?>">

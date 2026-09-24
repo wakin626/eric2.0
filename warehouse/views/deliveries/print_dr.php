@@ -23,7 +23,7 @@ if (function_exists('opcache_reset')) { opcache_reset(); }
 
         <div class="mb-4">
             <label class="form-label">Select Purchase Order</label>
-            <select id="printDRPoSelect" class="form-select" style="max-width: 500px;">
+            <select id="printDRPoSelect" class="form-select filter-select" style="max-width: 500px;">
                 <option value="">-- Select PO --</option>
                 <?php foreach ($purchase_orders as $po): ?>
                     <option value="<?= $po['po_id'] ?>" <?= ($selected_po_id == $po['po_id']) ? 'selected' : '' ?>>

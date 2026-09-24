@@ -128,7 +128,7 @@
 </li>
 <li class="nav-item">
 <a class="nav-link <?= in_array($currentAction, ['boms', 'bomCreate', 'bomEdit', 'bomUpdate', 'bomDelete', 'bomAddItem', 'bomUpdateItem', 'bomRemoveItem', 'bomImportPreview', 'bomImportConfirm']) ? 'active' : '' ?>" href="?controller=rnd&action=boms">
-<i class="bi bi-diagram-3 me-2"></i>BOM Recipes
+<i class="bi bi-diagram-3 me-2"></i>BOM Components
 </a>
 </li>
 </ul>
@@ -168,6 +168,7 @@
         </div>
     </div>
     <script src="public/js/bootstrap.bundle.min.js"></script>
+    <script src="public/js/app.js"></script>
     <script>
 document.addEventListener('DOMContentLoaded', function() {
     const sidebar = document.getElementById('sidebar');

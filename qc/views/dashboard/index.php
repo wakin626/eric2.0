@@ -336,7 +336,7 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label">Decision <span class="text-danger">*</span></label>
-                            <select name="decision" id="qcDecision" class="form-select" required>
+                            <select name="decision" id="qcDecision" class="form-select filter-select" required>
                                 <option value="">Select decision</option>
                                 <option value="PASSED">Passed</option>
                                 <option value="REJECTED">Rejected</option>
@@ -484,6 +484,9 @@ document.addEventListener('DOMContentLoaded', function() {
         form.addEventListener('submit', function(event) {
             event.preventDefault();
 
+            const submitBtn = form.querySelector('button[type=submit]');
+            if (submitBtn && submitBtn.disabled) return;
+
             const receivedQty = parseFloat(document.getElementById('qcReceivedQty').value || 0);
             const passedQty = parseFloat(document.getElementById('qcPassedQty').value || 0);
             const rejectedQty = parseFloat(document.getElementById('qcRejectedQty').value || 0);
@@ -506,6 +509,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            // Prevent accidental double-clicks from recording the inspection twice.
+            if (submitBtn) submitBtn.disabled = true;
+
             const payload = new FormData(form);
             fetch('?controller=qc&action=apiInspect', {
                 method: 'POST',
@@ -522,6 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('QC decision submitted successfully.');
                 window.location.reload();
             }).catch(function(error) {
+                if (submitBtn) submitBtn.disabled = false;
                 alert(error.message || 'Unable to submit QC decision.');
             });
         });

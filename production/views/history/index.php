@@ -175,7 +175,7 @@
                     <input type="hidden" name="history_id" id="reportHistoryId">
                     <div class="mb-3">
                         <label class="form-label">Report Type <span class="text-danger">*</span></label>
-                        <select name="report_type" id="reportType" class="form-select" required onchange="updateReportTitle()">
+                        <select name="report_type" id="reportType" class="form-select filter-select" required onchange="updateReportTitle()">
                             <option value="lot_number">Lot No.</option>
                             <option value="quantity">Quantity</option>
                         </select>

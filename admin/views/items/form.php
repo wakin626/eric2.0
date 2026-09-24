@@ -19,7 +19,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Customer <span class="text-danger">*</span></label>
-                    <select name="customer_id" class="form-select" required>
+                    <select name="customer_id" class="form-select filter-select" required>
                         <option value="">Select Customer</option>
                         <?php foreach ($customers as $c): ?>
                             <option value="<?= $c['customer_id'] ?>" <?= ($item['customer_id'] ?? '') == $c['customer_id'] ? 'selected' : '' ?>>
@@ -41,7 +41,7 @@
                 <?php if (isset($item)): ?>
                 <div class="col-md-4">
                     <label class="form-label">Status</label>
-                    <select name="status" class="form-select">
+                    <select name="status" class="form-select filter-select">
                         <option value="1" <?= ($item['status'] ?? 1) == 1 ? 'selected' : '' ?>>Active</option>
                         <option value="0" <?= ($item['status'] ?? 1) == 0 ? 'selected' : '' ?>>Inactive</option>
                     </select>

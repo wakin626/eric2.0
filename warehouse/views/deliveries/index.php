@@ -1,4 +1,4 @@
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+﻿<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeliveryModal">
             <i class="bi bi-plus-circle me-1"></i> Create Delivery Receipt
@@ -150,7 +150,7 @@
                         <?php if (!empty($casesSummary)): ?>
                             <small><?= $casesSummary ?></small>
                         <?php else: ?>
-                            <span class="text-muted">—</span>
+                            <span class="text-muted">â€”</span>
                         <?php endif; ?>
                     </td>
                     <td><span class="badge bg-secondary">Normal</span></td>
@@ -291,7 +291,7 @@
 </div>
 
 <div class="modal fade" id="createDeliveryModal">
-    <div class="modal-dialog" style="max-width: 95vw;">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-truck me-2"></i>Record Delivery</h5>
@@ -307,7 +307,7 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Purchase Order *</label>
-                                <select name="po_id" id="poSelect" class="form-select" required>
+                                <select name="po_id" id="poSelect" class="form-select filter-select" required>
                                     <option value="">Select PO</option>
                                 </select>
                             </div>
@@ -325,7 +325,7 @@
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Vehicle Type *</label>
-                                    <select name="vehicle_type" class="form-select" required>
+                                    <select name="vehicle_type" class="form-select filter-select" required>
                                         <option value="">Select Vehicle</option>
                                         <option value="4 Wheels">4 Wheels</option>
                                         <option value="6 Wheels">6 Wheels</option>
@@ -334,7 +334,7 @@
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label">Logistic Provider *</label>
-                                    <select name="logistic_provider" class="form-select" required>
+                                    <select name="logistic_provider" class="form-select filter-select" required>
                                         <option value="">Select Provider</option>
                                         <option value="FLJJ">FLJJ</option>
                                         <option value="RPI">RPI</option>
@@ -493,14 +493,14 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Type of Report <span class="text-danger">*</span></label>
-                        <select id="reportDeliveryType" class="form-select" required>
+                        <select id="reportDeliveryType" class="form-select filter-select" required>
                             <option value="dr_number">DR Number</option>
                             <option value="quantity">Quantity</option>
                         </select>
                     </div>
                     <div class="mb-3" id="reportLotPickerRow" style="display:none;">
                         <label class="form-label">Select Lot <span class="text-danger">*</span></label>
-                        <select id="reportLotPicker" class="form-select">
+                        <select id="reportLotPicker" class="form-select filter-select">
                             <option value="">-- Select Lot --</option>
                         </select>
                     </div>
@@ -558,7 +558,7 @@
 
 <!-- Backload Modal -->
 <div class="modal fade" id="backloadModal" tabindex="-1">
-    <div class="modal-dialog" style="max-width: 95vw;">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title"><i class="bi bi-arrow-counterclockwise me-2"></i>Backload / Return</h5>
@@ -603,7 +603,7 @@
 
 <!-- Backload Preview Modal -->
 <div class="modal fade" id="backloadPreviewModal" tabindex="-1">
-    <div class="modal-dialog" style="max-width: 95vw;">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
                 <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Confirm Backload</h5>
@@ -1276,11 +1276,11 @@ document.querySelectorAll('.viewDeliveryBtn').forEach(function(btn) {
                 '<td>' + (item.item_description || '-') + '</td>' +
                 '<td>' + (item.lot_number || '-') + '</td>' +
                 '<td class="text-end">' + (item.qty || 0) + '</td>' +
-                '<td class="text-end">' + (cases > 0 ? cases + ' CS' : '—') + '</td>';
+                '<td class="text-end">' + (cases > 0 ? cases + ' CS' : 'â€”') + '</td>';
             tbody.appendChild(tr);
         });
         document.getElementById('viewTotalQty').textContent = total;
-        document.getElementById('viewTotalCases').textContent = totalCases > 0 ? totalCases + ' CS' : '—';
+        document.getElementById('viewTotalCases').textContent = totalCases > 0 ? totalCases + ' CS' : 'â€”';
 
         var photoContainer = document.getElementById('viewDRPhotoContainer');
         photoContainer.innerHTML = '';

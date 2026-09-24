@@ -4,13 +4,18 @@
         <form method="GET" class="d-flex gap-2 align-items-center">
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="receivingPo">
-            <select name="status" class="form-select form-select-sm" style="width:180px">
-                <option value="">All Status</option>
+            <select name="status" class="form-select form-select-sm filter-select" style="width:180px">
+                <option value="">Active Orders</option>
+                <option value="all" <?= ($filters['status'] ?? '') === 'all' ? 'selected' : '' ?>>All Statuses</option>
+                <option value="requested" <?= ($filters['status'] ?? '') === 'requested' ? 'selected' : '' ?>>Requested</option>
+                <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
                 <option value="processed" <?= ($filters['status'] ?? '') === 'processed' ? 'selected' : '' ?>>Processed</option>
                 <option value="partially_received" <?= ($filters['status'] ?? '') === 'partially_received' ? 'selected' : '' ?>>Partially Received</option>
+                <option value="For Inspection" <?= ($filters['status'] ?? '') === 'For Inspection' ? 'selected' : '' ?>>For Inspection</option>
                 <option value="received" <?= ($filters['status'] ?? '') === 'received' ? 'selected' : '' ?>>Received</option>
+                <option value="rejected" <?= ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' ?>>Rejected</option>
             </select>
-            <select name="supplier" class="form-select form-select-sm" style="width:200px">
+            <select name="supplier" class="form-select form-select-sm filter-select" style="width:200px">
                 <option value="">All Suppliers</option>
                 <?php foreach ($suppliers as $s): ?>
                     <option value="<?= htmlspecialchars($s) ?>" <?= ($filters['supplier'] ?? '') === $s ? 'selected' : '' ?>><?= htmlspecialchars($s) ?></option>
@@ -57,14 +62,22 @@
                     <td class="text-end"><?= $o['received_qty'] > 0 ? number_format($o['received_qty'], 4) : '<span class="text-muted">-</span>' ?></td>
                     <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
                     <td>
-                        <?php if ($o['status'] === 'processed'): ?>
+                        <?php if ($o['status'] === 'requested'): ?>
+                            <span class="badge bg-info">Requested</span>
+                        <?php elseif ($o['status'] === 'pending'): ?>
+                            <span class="badge bg-warning text-dark">Pending</span>
+                        <?php elseif ($o['status'] === 'processed'): ?>
                             <span class="badge bg-primary">Processed</span>
                         <?php elseif ($o['status'] === 'partially_received'): ?>
                             <span class="badge bg-info text-dark">Partially Received</span>
+                        <?php elseif ($o['status'] === 'For Inspection'): ?>
+                            <span class="badge bg-warning text-dark">For Inspection</span>
                         <?php elseif ($o['status'] === 'received'): ?>
                             <span class="badge bg-success">Received</span>
+                        <?php elseif ($o['status'] === 'rejected'): ?>
+                            <span class="badge bg-danger">Rejected</span>
                         <?php else: ?>
-                            <span class="badge bg-secondary"><?= ucfirst($o['status']) ?></span>
+                            <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
                         <?php endif; ?>
                     </td>
                     <td><span class="badge bg-secondary-subtle text-secondary">Read-only</span></td>

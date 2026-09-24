@@ -6,7 +6,7 @@
         <input type="hidden" name="controller" value="rnd">
         <input type="hidden" name="action" value="items">
         <input type="text" name="search" class="form-control" placeholder="Search code, description..." value="<?= htmlspecialchars($search ?? '') ?>">
-        <select name="item_type" class="form-select" style="width:auto" onchange="this.form.submit()">
+        <select name="item_type" class="form-select filter-select" style="width:auto" onchange="this.form.submit()">
             <option value="">All Types</option>
             <option value="RM" <?= ($typeFilter ?? '') === 'RM' ? 'selected' : '' ?>>Raw Material</option>
             <option value="PM" <?= ($typeFilter ?? '') === 'PM' ? 'selected' : '' ?>>Packaging</option>

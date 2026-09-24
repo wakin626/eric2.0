@@ -12,7 +12,7 @@
         <form method="GET" class="d-flex gap-2 align-items-center">
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="supplierOrders">
-            <select name="status" class="form-select form-select-sm" style="width:150px">
+            <select name="status" class="form-select form-select-sm filter-select" style="width:150px">
                 <option value="">All Status</option>
                 <option value="requested" <?= ($filters['status'] ?? '') === 'requested' ? 'selected' : '' ?>>Requested</option>
                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>

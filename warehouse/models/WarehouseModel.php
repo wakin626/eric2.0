@@ -2907,6 +2907,70 @@ public function searchItems($query) {
         return $stmt->fetchAll();
     }
 
+    public function getActiveCustomersForMrp() {
+        $sql = "SELECT customer_id, customer_code, customer_name
+                FROM customers
+                WHERE `remove` = 0 AND status = 1
+                ORDER BY customer_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * FGs that have an active BOM, optionally filtered to a customer
+     * (items.customer_id or customer_finished_goods.item_code match).
+     */
+    public function getFgsWithBomByCustomer($customerId = null) {
+        $sql = "SELECT i.item_id, i.item_code, i.item_description, i.item_uom, i.customer_id,
+                       b.id AS bom_id, b.bom_code,
+                       b.batch_qty AS fill_volume, b.batch_uom AS uom,
+                       b.batch_unit_divisor, b.is_legacy_formula
+                FROM items i
+                INNER JOIN fg_boms b ON b.fg_item_id = i.item_id
+                WHERE i.`remove` = 0 AND i.status = 1
+                  AND i.item_type = 'FG'";
+        $params = [];
+        if (!empty($customerId)) {
+            $sql .= " AND (
+                        i.customer_id = :cid
+                        OR i.item_code IN (
+                            SELECT cfg.item_code
+                            FROM customer_finished_goods cfg
+                            WHERE cfg.customer_id = :cid2
+                              AND cfg.`remove` = 0 AND cfg.status = 1
+                        )
+                      )";
+            $params['cid'] = $customerId;
+            $params['cid2'] = $customerId;
+        }
+        $sql .= " ORDER BY i.item_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Active BOM header + FG identity for one finished good.
+     */
+    public function getBomForFg($fgItemId) {
+        $sql = "SELECT b.id AS bom_id, b.bom_code,
+                       b.batch_qty AS fill_volume, b.batch_uom AS uom,
+                       b.batch_unit_divisor, b.is_legacy_formula,
+                       i.item_id AS fg_item_id, i.item_code AS fg_code,
+                       i.item_description AS fg_name, i.item_uom,
+                       i.customer_id
+                FROM fg_boms b
+                INNER JOIN items i ON i.item_id = b.fg_item_id
+                WHERE b.fg_item_id = :fg_item_id
+                  AND i.`remove` = 0 AND i.status = 1
+                ORDER BY b.id DESC
+                LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['fg_item_id' => $fgItemId]);
+        return $stmt->fetch() ?: false;
+    }
+
     public function getOpenPOsByCustomer($customer_id) {
         $sql = "SELECT po.*, c.customer_name
                 FROM purchase_orders po
@@ -2923,7 +2987,9 @@ public function searchItems($query) {
     public function getPOItemsWithBOM($po_id) {
         $sql = "SELECT poi.poi_id, poi.quantity, poi.item_uom, poi.item_id,
                        i.item_code, i.item_description,
-                       b.id AS bom_id, b.bom_code, b.batch_qty, b.batch_uom
+                       b.id AS bom_id, b.bom_code, b.batch_qty, b.batch_uom,
+                       b.batch_qty AS fill_volume, b.batch_uom AS uom,
+                       b.batch_unit_divisor, b.is_legacy_formula
                 FROM purchase_order_items poi
                 JOIN items i ON poi.item_id = i.item_id AND i.`remove` = 0
                 LEFT JOIN fg_boms b ON b.fg_item_id = poi.item_id
@@ -2938,6 +3004,7 @@ public function searchItems($query) {
         if (empty($bom_ids)) return [];
         $placeholders = implode(',', array_fill(0, count($bom_ids), '?'));
         $sql = "SELECT bi.bom_id, bi.item_id AS component_item_id, bi.dosage_rate, bi.wastage_allowance_pct,
+                       bi.phase_code, i.item_type,
                        i.item_code, i.item_description, i.item_uom,
                        COALESCE(v.total_soh, 0) AS soh,
                        COALESCE(v.total_allocated, 0) AS allocated,
@@ -2946,7 +3013,7 @@ public function searchItems($query) {
                 JOIN items i ON bi.item_id = i.item_id AND i.`remove` = 0
                 LEFT JOIN view_inventory_status v ON v.item_id = bi.item_id
                 WHERE bi.bom_id IN ({$placeholders})
-                ORDER BY bi.bom_id, bi.id ASC";
+                ORDER BY bi.bom_id, bi.phase_code ASC, bi.id ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute($bom_ids);
         return $stmt->fetchAll();
@@ -2955,11 +3022,26 @@ public function searchItems($query) {
     public function getPendingAllocationsAcrossPOs($exclude_poi_ids, $ingredient_item_ids) {
         if (empty($ingredient_item_ids)) return [];
         $placeholders = implode(',', array_fill(0, count($ingredient_item_ids), '?'));
+        // Legacy BOMs: (qty / batch_qty) * dosage * wastage
+        // New BOMs:    RM → (qty * fill_volume / divisor) * dosage% ; others → qty * dosage ; both * wastage
         $sql = "SELECT bi.item_id AS component_item_id,
-                       SUM((poi.quantity / b.batch_qty) * bi.dosage_rate * (1 + bi.wastage_allowance_pct / 100)) AS total_pending
+                       SUM(
+                           CASE
+                               WHEN b.is_legacy_formula = 1 THEN
+                                   (poi.quantity / b.batch_qty) * bi.dosage_rate
+                               WHEN i.item_type = 'RM' THEN
+                                   (poi.quantity * b.batch_qty /
+                                       CASE WHEN b.batch_unit_divisor > 0 THEN b.batch_unit_divisor ELSE 1000 END
+                                   ) * (bi.dosage_rate / 100)
+                               ELSE
+                                   poi.quantity * bi.dosage_rate
+                           END
+                           * (1 + bi.wastage_allowance_pct / 100)
+                       ) AS total_pending
                 FROM purchase_order_items poi
                 JOIN fg_boms b ON b.fg_item_id = poi.item_id
                 JOIN fg_bom_items bi ON bi.bom_id = b.id
+                JOIN items i ON bi.item_id = i.item_id
                 JOIN purchase_orders po ON poi.po_id = po.po_id
                 WHERE po.delivered_quantity < po.total_quantity
                   AND po.`remove` = 0
@@ -2983,7 +3065,9 @@ public function searchItems($query) {
     // ─── BOM Lookup ──────────────────────────────────────────────────────────
 
     public function hasBOM($item_id) {
-        $sql = "SELECT id, bom_code, batch_qty, batch_uom
+        $sql = "SELECT id, bom_code, batch_qty, batch_uom,
+                       batch_qty AS fill_volume, batch_uom AS uom,
+                       batch_unit_divisor, is_legacy_formula
                 FROM fg_boms
                 WHERE fg_item_id = :item_id
                 LIMIT 1";
@@ -2994,6 +3078,8 @@ public function searchItems($query) {
 
     public function getBomByCode($bomCode) {
         $sql = "SELECT b.id, b.bom_code, b.batch_qty, b.batch_uom,
+                       b.batch_qty AS fill_volume, b.batch_uom AS uom,
+                       b.batch_unit_divisor, b.is_legacy_formula,
                        b.fg_item_id,
                        i.item_code AS fg_code, i.item_description AS fg_name
                 FROM fg_boms b
@@ -3789,13 +3875,23 @@ public function searchItems($query) {
         $batchMeta = [];
         foreach ($allPoItems as $poi) {
             if (empty($poi['bom_id'])) continue;
-            $batchQty = floatval($poi['batch_qty'] ?: 1);
+            $fillVolume = floatval($poi['fill_volume'] ?? $poi['batch_qty'] ?? 1) ?: 1;
+            $uom = $poi['uom'] ?? $poi['batch_uom'] ?? 'PCS';
+            $divisor = floatval($poi['batch_unit_divisor'] ?? 1000) ?: 1000;
+            $isLegacy = !empty($poi['is_legacy_formula']);
+            $targetQty = floatval($poi['quantity']);
             $batchMeta[$poi['item_id']] = [
                 'target_qty' => $poi['quantity'],
                 'item_uom' => $poi['item_uom'],
-                'batch_qty' => $batchQty,
-                'batch_uom' => $poi['batch_uom'],
-                'batches_needed' => floatval($poi['quantity']) / $batchQty,
+                'fill_volume' => $fillVolume,
+                'uom' => $uom,
+                'batch_unit_divisor' => $divisor,
+                'is_legacy_formula' => $isLegacy,
+                // Legacy display keys (lot-based)
+                'batch_qty' => $fillVolume,
+                'batch_uom' => $uom,
+                'batches_needed' => $isLegacy ? ($targetQty / $fillVolume) : 0,
+                'bulk_batch' => $isLegacy ? 0 : (($targetQty * $fillVolume) / $divisor),
                 'fg_code' => $poi['item_code'],
                 'fg_name' => $poi['item_description'],
             ];
@@ -3806,8 +3902,9 @@ public function searchItems($query) {
             $fgId = $item['fg_item_id'];
             if (!isset($sectionsGrouped[$fgId])) {
                 $meta = $batchMeta[$fgId] ?? [
-                    'target_qty' => 0, 'item_uom' => '', 'batch_qty' => 1,
-                    'batch_uom' => 'PCS', 'batches_needed' => 0,
+                    'target_qty' => 0, 'item_uom' => '', 'fill_volume' => 1, 'uom' => 'PCS',
+                    'batch_unit_divisor' => 1000, 'is_legacy_formula' => 0,
+                    'batch_qty' => 1, 'batch_uom' => 'PCS', 'batches_needed' => 0, 'bulk_batch' => 0,
                     'fg_code' => $item['fg_code'], 'fg_name' => $item['fg_name'],
                 ];
                 $sectionsGrouped[$fgId] = [
@@ -3816,9 +3913,14 @@ public function searchItems($query) {
                     'fg_name' => $meta['fg_name'],
                     'target_qty' => $meta['target_qty'],
                     'item_uom' => $meta['item_uom'],
+                    'fill_volume' => $meta['fill_volume'],
+                    'uom' => $meta['uom'],
+                    'batch_unit_divisor' => $meta['batch_unit_divisor'],
+                    'is_legacy_formula' => $meta['is_legacy_formula'],
                     'batch_qty' => $meta['batch_qty'],
                     'batch_uom' => $meta['batch_uom'],
                     'batches_needed' => $meta['batches_needed'],
+                    'bulk_batch' => $meta['bulk_batch'],
                     'components' => [],
                 ];
             }

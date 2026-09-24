@@ -558,6 +558,41 @@ th.sortable i {
 }
 
 /* --- Modals --- */
+/* Force all modals to occupy 90% of screen width */
+.modal-dialog {
+  max-width: 90vw !important;
+  width: 90vw !important;
+  margin: 1.75rem auto;
+}
+/* Neutralize Bootstrap size utilities (sm/md/lg/xl) and CSS var clamps */
+.modal {
+  --bs-modal-width: 90vw !important;
+}
+.modal-sm,
+.modal-md,
+.modal-lg,
+.modal-xl {
+  --bs-modal-width: 90vw !important;
+}
+.modal-content {
+  width: 100%;
+}
+@media (max-width: 576px) {
+  .modal-dialog {
+    max-width: 95vw !important;
+    width: 95vw !important;
+    margin: 0.5rem auto;
+  }
+  .modal {
+    --bs-modal-width: 95vw !important;
+  }
+  .modal-sm,
+  .modal-md,
+  .modal-lg,
+  .modal-xl {
+    --bs-modal-width: 95vw !important;
+  }
+}
 .modal-content {
   border: none;
   border-radius: var(--radius-md);
@@ -880,4 +915,39 @@ li.has-excess:hover {
 }
 .searchable-wrap .searchable-list li.no-results:hover {
   background: transparent;
+}
+
+/* ============================================================
+   SEARCHABLE DROPDOWN (app.js) — full-width form alignment
+   ============================================================ */
+.searchable-dropdown-wrapper {
+  display: block !important;
+  position: relative !important;
+}
+.searchable-dropdown-wrapper.is-full {
+  width: 100% !important;
+}
+.searchable-dropdown-wrapper .dropdown-toggle,
+.searchable-dropdown-wrapper .searchable-dropdown-toggle {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  text-align: left !important;
+  min-height: 38px; /* Standard Form Control Height */
+}
+.searchable-dropdown-wrapper .btn-sm.dropdown-toggle,
+.searchable-dropdown-wrapper .btn-sm.searchable-dropdown-toggle {
+  min-height: 31px; /* form-select-sm */
+}
+.searchable-dropdown-wrapper .dropdown-panel,
+.searchable-dropdown-wrapper .searchable-dropdown-menu {
+  width: 100%;
+  position: fixed;
+  z-index: 1070 !important;
+  max-height: 280px;
+}
+.searchable-dropdown-menu .options-list {
+  max-height: 220px;
+  overflow-y: auto !important;
 }

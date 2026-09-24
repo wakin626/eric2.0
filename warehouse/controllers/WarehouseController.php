@@ -107,17 +107,95 @@ class WarehouseController {
         header('Content-Type: application/json');
         $itemId = intval($_GET['item_id'] ?? 0);
         if ($itemId <= 0) {
-            echo json_encode(['bom_code' => '', 'batch_qty' => '', 'batch_uom' => '']);
+            echo json_encode(['bom_code' => '', 'batch_qty' => '', 'batch_uom' => '', 'fill_volume' => '', 'uom' => '', 'batch_unit_divisor' => 1000, 'is_legacy_formula' => 0]);
             exit;
         }
 
         $bom = $this->warehouseModel->hasBOM($itemId);
+        $fillVolume = $bom ? ($bom['fill_volume'] ?? $bom['batch_qty'] ?? '') : '';
+        $uom = $bom ? ($bom['uom'] ?? $bom['batch_uom'] ?? '') : '';
         echo json_encode([
             'bom_code' => $bom ? ($bom['bom_code'] ?? '') : '',
-            'batch_qty' => $bom ? ($bom['batch_qty'] ?? '') : '',
-            'batch_uom' => $bom ? ($bom['batch_uom'] ?? '') : '',
+            'batch_qty' => $fillVolume,
+            'batch_uom' => $uom,
+            'fill_volume' => $fillVolume,
+            'uom' => $uom,
+            'batch_unit_divisor' => $bom ? floatval($bom['batch_unit_divisor'] ?? 1000) : 1000,
+            'is_legacy_formula' => $bom ? !empty($bom['is_legacy_formula']) : false,
         ]);
         exit;
+    }
+
+    /**
+     * Legacy-aware required quantity for one MRP component row.
+     * Legacy: (orderQty / batch_qty) * dosage * wastage
+     * New:    RM → ((orderQty * fill_volume) / divisor) * dosage% * wastage
+     *         PM/SFG → orderQty * dosage * wastage  (direct unit rate, no /100)
+     */
+    private function computeMrpRequiredQty($orderQty, $poi, $comp) {
+        $dosage = floatval($comp['dosage_rate'] ?? 0);
+        $wastage = floatval($comp['wastage_allowance_pct'] ?? 0);
+        $type = strtoupper($comp['item_type'] ?? $comp['category'] ?? '');
+
+        if (!empty($poi['is_legacy_formula'])) {
+            $batchQty = floatval($poi['fill_volume'] ?? $poi['batch_qty'] ?? 1) ?: 1;
+            $base = ($orderQty / $batchQty) * $dosage;
+        } elseif ($type === 'RM') {
+            $fillVolume = floatval($poi['fill_volume'] ?? $poi['batch_qty'] ?? 0);
+            $divisor = floatval($poi['batch_unit_divisor'] ?? 1000) ?: 1000;
+            $base = (($orderQty * $fillVolume) / $divisor) * ($dosage / 100);
+        } else {
+            // PM/SFG: direct unit dosage per finished item
+            $base = $orderQty * $dosage;
+        }
+
+        return $base * (1 + $wastage / 100);
+    }
+
+    /**
+     * Display/meta keys for an MRP section (legacy + new keys side by side).
+     */
+    private function mrpBomMeta($poi) {
+        $fillVolume = floatval($poi['fill_volume'] ?? $poi['batch_qty'] ?? 1) ?: 1;
+        $uom = $poi['uom'] ?? $poi['batch_uom'] ?? 'PCS';
+        $divisor = floatval($poi['batch_unit_divisor'] ?? 1000) ?: 1000;
+        $isLegacy = !empty($poi['is_legacy_formula']);
+        $targetQty = floatval($poi['quantity']);
+
+        return [
+            'fill_volume' => $fillVolume,
+            'uom' => $uom,
+            'batch_unit_divisor' => $divisor,
+            'is_legacy_formula' => $isLegacy,
+            'batch_qty' => $fillVolume,
+            'batch_uom' => $uom,
+            'batches_needed' => $isLegacy ? ($targetQty / $fillVolume) : 0,
+            'bulk_batch' => $isLegacy ? 0 : (($targetQty * $fillVolume) / $divisor),
+        ];
+    }
+
+    /**
+     * Item-pool MRP required qty (new Customer+FG+Qty flow).
+     * RM:    (target * fill_volume / divisor) * (dosage/100) * (1 + wastage/100)
+     * PM/SFG: target * dosage * (1 + wastage/100)
+     *   — dosage is a direct unit rate per finished item (e.g. 1.0 pc/unit),
+     *   NOT a percentage and NOT scaled by fill volume / UOM divisor.
+     */
+    private function computeMrpPoolRequiredQty($targetQty, $bomMeta, $comp) {
+        $dosage = floatval($comp['dosage_rate'] ?? 0);
+        $wastage = floatval($comp['wastage_allowance_pct'] ?? 0);
+        $type = strtoupper($comp['item_type'] ?? $comp['category'] ?? '');
+
+        if ($type === 'RM') {
+            $fillVolume = floatval($bomMeta['fill_volume'] ?? 0);
+            $divisor = floatval($bomMeta['batch_unit_divisor'] ?? 1000) ?: 1000;
+            $base = (($targetQty * $fillVolume) / $divisor) * ($dosage / 100);
+        } else {
+            // PM / SFG / FG: direct unit dosage (e.g. 1 pc label per unit)
+            $base = $targetQty * $dosage;
+        }
+
+        return $base * (1 + $wastage / 100);
     }
 
     public function purchaseOrders() {
@@ -1790,138 +1868,102 @@ class WarehouseController {
     // ─── MRP Sheet ────────────────────────────────────────────────────────────
 
     public function mrp() {
-        $customers = $this->warehouseModel->getCustomersWithOpenPOs();
-        $openPOs = [];
-        $poHeader = null;
-        $poItems = [];
-        $mrpSections = [];
-        $consolidated = [];
-        $customerId = $_GET['customer_id'] ?? null;
-        $poId = $_GET['po_id'] ?? null;
+        $customers = $this->warehouseModel->getActiveCustomersForMrp();
+        $fgOptions = [];
+        $fgHeader = null;
+        $mrpSection = null;
+        $customerId = isset($_GET['customer_id']) && $_GET['customer_id'] !== '' ? intval($_GET['customer_id']) : null;
+        $fgItemId = isset($_GET['fg_item_id']) && $_GET['fg_item_id'] !== '' ? intval($_GET['fg_item_id']) : null;
+        $targetQty = isset($_GET['target_qty']) && $_GET['target_qty'] !== '' ? floatval($_GET['target_qty']) : null;
+        $calculate = !empty($_GET['calculate']);
+        $noFgsForCustomer = false;
 
-        if ($customerId) {
-            $openPOs = $this->warehouseModel->getOpenPOsByCustomer($customerId);
+        // FG dropdown: filtered by customer when selected; else all FGs with active BOMs
+        $fgOptions = $this->warehouseModel->getFgsWithBomByCustomer($customerId);
+        if (!empty($customerId) && empty($fgOptions)) {
+            $noFgsForCustomer = true;
         }
 
-        if ($poId) {
-            $poHeader = $this->warehouseModel->getPurchaseOrderById($poId);
-            $allPoItems = $this->warehouseModel->getPOItemsWithBOM($poId);
-
-            $bomIds = [];
-            $poiIds = [];
-            foreach ($allPoItems as $poi) {
-                if (!empty($poi['bom_id'])) {
-                    $bomIds[] = $poi['bom_id'];
-                }
-                $poiIds[] = $poi['poi_id'];
-            }
-
-            $allComponents = $this->warehouseModel->getBOMComponentsWithStock($bomIds);
-            $componentsByBom = [];
-            $allIngredientIds = [];
-            foreach ($allComponents as $comp) {
-                $componentsByBom[$comp['bom_id']][] = $comp;
-                $allIngredientIds[$comp['component_item_id']] = true;
-            }
-
-            $pendingAllocations = $this->warehouseModel->getPendingAllocationsAcrossPOs(
-                $poiIds,
-                array_keys($allIngredientIds)
-            );
-
-            $pendingSupplierOrders = $this->warehouseModel->getPendingSupplierOrdersForItems(array_keys($allIngredientIds), $poId);
-
-            foreach ($allPoItems as $poi) {
-                if (empty($poi['bom_id'])) continue;
-                $batchQty = floatval($poi['batch_qty'] ?: 1);
-                $batchesNeeded = floatval($poi['quantity']) / $batchQty;
-                $components = $componentsByBom[$poi['bom_id']] ?? [];
+        if ($calculate && $fgItemId && $targetQty !== null && $targetQty > 0) {
+            $bom = $this->warehouseModel->getBomForFg($fgItemId);
+            if ($bom) {
+                $components = $this->warehouseModel->getBOMComponentsWithStock([$bom['bom_id']]);
+                $meta = [
+                    'fill_volume' => floatval($bom['fill_volume'] ?? 0),
+                    'uom' => $bom['uom'] ?? '',
+                    'batch_unit_divisor' => floatval($bom['batch_unit_divisor'] ?? 1000) ?: 1000,
+                    'is_legacy_formula' => !empty($bom['is_legacy_formula']),
+                ];
                 $rows = [];
                 foreach ($components as $comp) {
-                    $dosage = floatval($comp['dosage_rate']);
-                    $wastage = floatval($comp['wastage_allowance_pct']);
-                    $totalReqt = $batchesNeeded * $dosage * (1 + $wastage / 100);
+                    $required = $this->computeMrpPoolRequiredQty($targetQty, $meta, $comp);
                     $soh = floatval($comp['soh']);
-                    $allocated = floatval($pendingAllocations[$comp['component_item_id']] ?? 0);
-                    $supplierPending = floatval($pendingSupplierOrders[$comp['component_item_id']] ?? 0);
+                    $allocated = floatval($comp['allocated']);
                     $available = $soh - $allocated;
-                    $excess = $available - $totalReqt + $supplierPending;
-
-                    if ($totalReqt == 0) {
-                        $remarks = 'NO NEED';
-                    } elseif ($available <= 0 && $supplierPending == 0) {
-                        $remarks = 'NO stock for next order mfg';
-                    } elseif ($excess < 0) {
-                        $remarks = 'LACKING';
-                    } elseif ($excess < ($available * 0.1)) {
-                        $remarks = 'LOW STOCK';
-                    } else {
-                        $remarks = 'OK';
+                    $lacking = $required - $available;
+                    if ($lacking <= 0) {
+                        $lacking = 0;
                     }
-
                     $rows[] = [
                         'component_item_id' => $comp['component_item_id'],
                         'item_code' => $comp['item_code'],
                         'item_description' => $comp['item_description'],
                         'item_uom' => $comp['item_uom'],
-                        'total_reqt' => $totalReqt,
+                        'item_type' => $comp['item_type'] ?? '',
+                        'category' => $comp['item_type'] ?? '-',
+                        'phase_code' => $comp['phase_code'] ?? '101',
+                        'required_qty' => $required,
                         'soh' => $soh,
                         'allocated' => $allocated,
-                        'pending' => $allocated + $supplierPending,
-                        'supplier_pending' => $supplierPending,
-                        'excess' => $excess,
-                        'remarks' => $remarks,
+                        'available' => $available,
+                        'lacking_qty' => $lacking,
+                        'dosage_rate' => floatval($comp['dosage_rate'] ?? 0),
+                        'wastage_allowance_pct' => floatval($comp['wastage_allowance_pct'] ?? 0),
                     ];
                 }
-                $mrpSections[] = [
-                    'fg_item_id' => $poi['item_id'],
-                    'fg_code' => $poi['item_code'],
-                    'fg_name' => $poi['item_description'],
-                    'target_qty' => $poi['quantity'],
-                    'item_uom' => $poi['item_uom'],
-                    'batch_qty' => $batchQty,
-                    'batch_uom' => $poi['batch_uom'],
-                    'batches_needed' => $batchesNeeded,
+                $fgHeader = [
+                    'fg_item_id' => $bom['fg_item_id'],
+                    'fg_code' => $bom['fg_code'],
+                    'fg_name' => $bom['fg_name'],
+                    'item_uom' => $bom['item_uom'],
+                    'bom_code' => $bom['bom_code'],
+                    'fill_volume' => $meta['fill_volume'],
+                    'uom' => $meta['uom'],
+                    'batch_unit_divisor' => $meta['batch_unit_divisor'],
+                    'is_legacy_formula' => $meta['is_legacy_formula'],
+                    'target_qty' => $targetQty,
+                ];
+                $mrpSection = [
+                    'fg_item_id' => $bom['fg_item_id'],
+                    'fg_code' => $bom['fg_code'],
+                    'fg_name' => $bom['fg_name'],
+                    'target_qty' => $targetQty,
+                    'item_uom' => $bom['item_uom'],
+                    'fill_volume' => $meta['fill_volume'],
+                    'uom' => $meta['uom'],
+                    'batch_unit_divisor' => $meta['batch_unit_divisor'],
+                    'is_legacy_formula' => $meta['is_legacy_formula'],
                     'components' => $rows,
                 ];
             }
-
-            $consolidatedMap = [];
-            foreach ($mrpSections as $section) {
-                foreach ($section['components'] as $row) {
-                    $key = $row['item_code'];
-                    if (!isset($consolidatedMap[$key])) {
-                        $consolidatedMap[$key] = $row;
-                    } else {
-                        $consolidatedMap[$key]['total_reqt'] += $row['total_reqt'];
-                        $consolidatedMap[$key]['soh'] = $row['soh'];
-                        $consolidatedMap[$key]['allocated'] += $row['allocated'];
-                        $consolidatedMap[$key]['pending'] += $row['pending'];
-                        $consolidatedMap[$key]['supplier_pending'] = ($consolidatedMap[$key]['supplier_pending'] ?? 0) + ($row['supplier_pending'] ?? 0);
-                        $consolidatedMap[$key]['excess'] = ($consolidatedMap[$key]['soh'] - $consolidatedMap[$key]['allocated']) - $consolidatedMap[$key]['total_reqt'] + ($consolidatedMap[$key]['supplier_pending'] ?? 0);
-                        if ($consolidatedMap[$key]['excess'] < 0) {
-                            $consolidatedMap[$key]['remarks'] = 'LACKING';
-                        }
-                    }
-                }
-            }
-            $consolidated = array_values($consolidatedMap);
-        }
-
-        $hasExistingSnapshot = false;
-        if ($poId) {
-            $hasExistingSnapshot = $this->warehouseModel->getExistingMrpRunForPO($poId) !== false;
         }
 
         $this->render('mrp/preview', [
             'customers' => $customers,
-            'openPOs' => $openPOs,
-            'poHeader' => $poHeader,
-            'mrpSections' => $mrpSections,
-            'consolidated' => $consolidated,
+            'fgOptions' => $fgOptions,
+            'fgHeader' => $fgHeader,
+            'mrpSection' => $mrpSection,
             'selectedCustomer' => $customerId,
-            'selectedPO' => $poId,
-            'hasExistingSnapshot' => $hasExistingSnapshot,
+            'selectedFg' => $fgItemId,
+            'targetQty' => $targetQty,
+            'didCalculate' => $calculate,
+            'noFgsForCustomer' => $noFgsForCustomer,
+            // legacy/PO keys kept for header actions that still reference them
+            'openPOs' => [],
+            'poHeader' => null,
+            'consolidated' => [],
+            'selectedPO' => null,
+            'hasExistingSnapshot' => false,
         ]);
     }
 
@@ -1961,14 +2003,11 @@ class WarehouseController {
         $mrpSections = [];
         foreach ($allPoItems as $poi) {
             if (empty($poi['bom_id'])) continue;
-            $batchQty = floatval($poi['batch_qty'] ?: 1);
-            $batchesNeeded = floatval($poi['quantity']) / $batchQty;
+            $meta = $this->mrpBomMeta($poi);
             $components = $componentsByBom[$poi['bom_id']] ?? [];
             $rows = [];
             foreach ($components as $comp) {
-                $dosage = floatval($comp['dosage_rate']);
-                $wastage = floatval($comp['wastage_allowance_pct']);
-                $totalReqt = $batchesNeeded * $dosage * (1 + $wastage / 100);
+                $totalReqt = $this->computeMrpRequiredQty(floatval($poi['quantity']), $poi, $comp);
                 $soh = floatval($comp['soh']);
                 $allocated = floatval($pendingAllocations[$comp['component_item_id']] ?? 0);
                 $supplierPending = floatval($pendingSupplierOrders[$comp['component_item_id']] ?? 0);
@@ -1985,6 +2024,7 @@ class WarehouseController {
                     'item_code' => $comp['item_code'],
                     'item_description' => $comp['item_description'],
                     'item_uom' => $comp['item_uom'],
+                    'phase_code' => $comp['phase_code'] ?? '101',
                     'total_reqt' => $totalReqt,
                     'soh' => $soh,
                     'allocated' => $allocated,
@@ -1999,9 +2039,14 @@ class WarehouseController {
                 'fg_name' => $poi['item_description'],
                 'target_qty' => $poi['quantity'],
                 'item_uom' => $poi['item_uom'],
-                'batch_qty' => $batchQty,
-                'batch_uom' => $poi['batch_uom'],
-                'batches_needed' => $batchesNeeded,
+                'batch_qty' => $meta['batch_qty'],
+                'batch_uom' => $meta['batch_uom'],
+                'batches_needed' => $meta['batches_needed'],
+                'fill_volume' => $meta['fill_volume'],
+                'uom' => $meta['uom'],
+                'batch_unit_divisor' => $meta['batch_unit_divisor'],
+                'is_legacy_formula' => $meta['is_legacy_formula'],
+                'bulk_batch' => $meta['bulk_batch'],
                 'components' => $rows,
             ];
         }
@@ -2364,14 +2409,10 @@ class WarehouseController {
             $sections = [];
             foreach ($allPoItems as $poi) {
                 if (empty($poi['bom_id'])) continue;
-                $batchQty = floatval($poi['batch_qty'] ?: 1);
-                $batchesNeeded = floatval($poi['quantity']) / $batchQty;
                 $components = $componentsByBom[$poi['bom_id']] ?? [];
                 $rows = [];
                 foreach ($components as $comp) {
-                    $dosage = floatval($comp['dosage_rate']);
-                    $wastage = floatval($comp['wastage_allowance_pct']);
-                    $totalReqt = $batchesNeeded * $dosage * (1 + $wastage / 100);
+                    $totalReqt = $this->computeMrpRequiredQty(floatval($poi['quantity']), $poi, $comp);
                     $soh = floatval($comp['soh']);
                     $allocated = floatval($pendingAllocations[$comp['component_item_id']] ?? 0);
                     $supplierPending = floatval($pendingSupplierOrders[$comp['component_item_id']] ?? 0);

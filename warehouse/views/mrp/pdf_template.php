@@ -64,8 +64,13 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
     <div class="fg-header">
         <?= htmlspecialchars($sec['fg_code'] . ' - ' . $sec['fg_name']) ?>
         &nbsp;&nbsp;|&nbsp;&nbsp; Prod. Qty: <?= number_format($sec['target_qty']) . ' ' . htmlspecialchars($sec['item_uom']) ?>
-        &nbsp;&nbsp;|&nbsp;&nbsp; Lot size: <?= number_format($sec['batch_qty'], 4) . ' ' . htmlspecialchars($sec['batch_uom']) ?>
-        &nbsp;&nbsp;|&nbsp;&nbsp; Batches: <?= number_format($sec['batches_needed'], 1) ?>
+        &nbsp;&nbsp;|&nbsp;&nbsp; Fill volume: <?= number_format($sec['fill_volume'] ?? $sec['batch_qty'], 4) . ' ' . htmlspecialchars($sec['uom'] ?? $sec['batch_uom']) ?>
+        <?php if (!empty($sec['is_legacy_formula'])): ?>
+            &nbsp;&nbsp;|&nbsp;&nbsp; Batches (legacy): <?= number_format($sec['batches_needed'], 1) ?>
+        <?php else: ?>
+            &nbsp;&nbsp;|&nbsp;&nbsp; UOM Divisor: <?= number_format($sec['batch_unit_divisor'] ?? 1000, 0) ?>
+            &nbsp;&nbsp;|&nbsp;&nbsp; Bulk batch: <?= number_format($sec['bulk_batch'], 3) ?>
+        <?php endif; ?>
     </div>
     <table>
         <thead>

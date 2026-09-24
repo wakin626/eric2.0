@@ -77,12 +77,12 @@ class RndController {
         $data['search'] = $search;
         $data['allItems'] = $this->itemModel->getAll(false);
         $conn = \App\Core\BaseModel::getConnection();
-        $stmt = $conn->prepare("SELECT item_id, item_code, item_description, item_uom
+        $stmt = $conn->prepare("SELECT item_id, item_code, item_description, item_uom, item_type
             FROM items WHERE item_type IN ('RM','PM','SFG') AND status = 1 AND `remove` = 0
             ORDER BY item_code ASC");
         $stmt->execute();
         $data['allIngredients'] = $stmt->fetchAll();
-        $data['page_title'] = 'BOM Recipes';
+        $data['page_title'] = 'BOM Components';
         $this->render('boms/index', $data);
     }
 
@@ -91,13 +91,20 @@ class RndController {
             try {
                 $fgItemId = $_POST['fg_item_id'] ?? null;
                 $bomCode = trim($_POST['bom_code'] ?? '');
-                $batchQty = floatval($_POST['batch_qty'] ?? 1.0);
-                $batchUom = trim($_POST['batch_uom'] ?? 'PCS');
+                $fillVolume = floatval($_POST['fill_volume'] ?? 0);
+                $uom = trim($_POST['uom'] ?? 'PCS');
+                $batchUnitDivisor = floatval($_POST['batch_unit_divisor'] ?? 1000);
                 if (!$fgItemId) {
                     throw new \Exception("Finished good item is required.");
                 }
-                if ($batchQty <= 0) {
-                    throw new \Exception("Batch quantity must be greater than 0.");
+                if ($bomCode === '') {
+                    throw new \Exception("BOM Code is required.");
+                }
+                if ($fillVolume <= 0) {
+                    throw new \Exception("Fill volume must be greater than 0.");
+                }
+                if ($batchUnitDivisor <= 0) {
+                    $batchUnitDivisor = 1000;
                 }
                 $existing = $this->bomModel->getBomForItem($fgItemId);
                 if ($existing) {
@@ -107,6 +114,7 @@ class RndController {
                 $componentItemIds = $_POST['component_item_id'] ?? [];
                 $componentDosages = $_POST['component_dosage'] ?? [];
                 $componentWastages = $_POST['component_wastage'] ?? [];
+                $componentPhases = $_POST['component_phase_code'] ?? [];
 
                 $items = [];
                 if (!empty($componentItemIds)) {
@@ -114,11 +122,16 @@ class RndController {
                         $itemId = intval($itemId);
                         $dosage = floatval($componentDosages[$idx] ?? 0);
                         $wastage = floatval($componentWastages[$idx] ?? 0);
+                        $phaseCode = trim($componentPhases[$idx] ?? '');
                         if ($itemId > 0 && $dosage > 0) {
+                            if ($phaseCode === '') {
+                                throw new \Exception("Phase / Comp Code is required for every component.");
+                            }
                             $items[] = [
                                 'item_id' => $itemId,
                                 'dosage_rate' => $dosage,
-                                'wastage_allowance_pct' => $wastage
+                                'wastage_allowance_pct' => $wastage,
+                                'phase_code' => $phaseCode
                             ];
                         }
                     }
@@ -128,12 +141,12 @@ class RndController {
                     throw new \Exception("Please add at least one component with a valid dosage.");
                 }
 
-                $bomId = $this->bomModel->create($fgItemId, $bomCode ?: null, $batchQty, $batchUom);
+                $bomId = $this->bomModel->create($fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, false);
                 $this->bomModel->replaceBomItems($bomId, $items);
 
                 AuditModel::log($_SESSION['user_id'], 'CREATE', 'rnd',
                     'Created BOM for item #' . $fgItemId . ' with ' . count($items) . ' components',
-                    null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'batch_qty' => $batchQty, 'batch_uom' => $batchUom, 'components' => count($items)],
+                    null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor, 'components' => count($items)],
                     'bom', $bomId);
 
                 $_SESSION['success'] = 'BOM created with ' . count($items) . ' components';
@@ -160,7 +173,7 @@ class RndController {
         $data['bomItems'] = $this->bomModel->getItemsByBomId($id);
         $data['allItems'] = $this->itemModel->getAll(false);
         $conn = \App\Core\BaseModel::getConnection();
-        $stmt = $conn->prepare("SELECT item_id, item_code, item_description, item_uom
+        $stmt = $conn->prepare("SELECT item_id, item_code, item_description, item_uom, item_type
             FROM items WHERE item_type IN ('RM','PM','SFG') AND status = 1 AND `remove` = 0
             ORDER BY item_code ASC");
         $stmt->execute();
@@ -175,16 +188,23 @@ class RndController {
                 $id = $_POST['bom_id'] ?? null;
                 $fgItemId = $_POST['fg_item_id'] ?? null;
                 $bomCode = trim($_POST['bom_code'] ?? '');
-                $batchQty = floatval($_POST['batch_qty'] ?? 1.0);
-                $batchUom = trim($_POST['batch_uom'] ?? 'PCS');
+                $fillVolume = floatval($_POST['fill_volume'] ?? 0);
+                $uom = trim($_POST['uom'] ?? 'PCS');
+                $batchUnitDivisor = floatval($_POST['batch_unit_divisor'] ?? 1000);
                 if (!$fgItemId) {
                     throw new \Exception("Finished good item is required.");
                 }
-                if ($batchQty <= 0) {
-                    throw new \Exception("Batch quantity must be greater than 0.");
+                if ($bomCode === '') {
+                    throw new \Exception("BOM Code is required.");
                 }
-                $this->bomModel->update($id, $fgItemId, $bomCode ?: null, $batchQty, $batchUom);
-                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'rnd', 'Updated BOM #' . $id, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'batch_qty' => $batchQty, 'batch_uom' => $batchUom], 'bom', $id);
+                if ($fillVolume <= 0) {
+                    throw new \Exception("Fill volume must be greater than 0.");
+                }
+                if ($batchUnitDivisor <= 0) {
+                    $batchUnitDivisor = 1000;
+                }
+                $this->bomModel->update($id, $fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, true);
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'rnd', 'Updated BOM #' . $id, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor], 'bom', $id);
                 $_SESSION['success'] = 'BOM updated';
             } catch (\Exception $e) {
                 $_SESSION['error'] = $e->getMessage();
@@ -220,15 +240,21 @@ class RndController {
             $itemId = $_POST['item_id'] ?? null;
             $dosageRate = $_POST['dosage_rate'] ?? 0;
             $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
+            $phaseCode = trim($_POST['phase_code'] ?? '');
 
             if (!$bomId || !$itemId) {
                 http_response_code(400);
                 echo json_encode(['error' => 'BOM ID and ingredient item are required']);
                 exit;
             }
+            if ($phaseCode === '') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Phase / Comp Code is required']);
+                exit;
+            }
 
-            $result = $this->bomModel->addItem($bomId, $itemId, $dosageRate, $wastagePct);
-            AuditModel::log($_SESSION['user_id'], 'CREATE', 'rnd', 'Added ingredient to BOM #' . $bomId, null, ['item_id' => $itemId, 'dosage_rate' => $dosageRate], 'bom_item', $result);
+            $result = $this->bomModel->addItem($bomId, $itemId, $dosageRate, $wastagePct, $phaseCode);
+            AuditModel::log($_SESSION['user_id'], 'CREATE', 'rnd', 'Added ingredient to BOM #' . $bomId, null, ['item_id' => $itemId, 'dosage_rate' => $dosageRate, 'phase_code' => $phaseCode], 'bom_item', $result);
             echo json_encode(['success' => true, 'id' => $result]);
         } catch (\Exception $e) {
             error_log('bomAddItem error: ' . $e->getMessage());
@@ -250,14 +276,20 @@ class RndController {
             $itemId = $_POST['item_id'] ?? null;
             $dosageRate = $_POST['dosage_rate'] ?? 0;
             $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
+            $phaseCode = trim($_POST['phase_code'] ?? '');
 
             if (!$bomItemId || !$itemId) {
                 http_response_code(400);
                 echo json_encode(['error' => 'BOM item ID and ingredient item are required']);
                 exit;
             }
+            if ($phaseCode === '') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Phase / Comp Code is required']);
+                exit;
+            }
 
-            $result = $this->bomModel->updateItem($bomItemId, $itemId, $dosageRate, $wastagePct);
+            $result = $this->bomModel->updateItem($bomItemId, $itemId, $dosageRate, $wastagePct, $phaseCode);
             echo json_encode(['success' => true]);
         } catch (\Exception $e) {
             error_log('bomUpdateItem error: ' . $e->getMessage());
@@ -303,7 +335,7 @@ class RndController {
         exit;
     }
 
-    // ─── Bulk Import: BOM Recipes ─────────────────────────────────────────────
+    // ─── Bulk Import: BOM Components ─────────────────────────────────────────────
 
     public function bomImportPreview() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['import_file'])) {
@@ -356,8 +388,11 @@ class RndController {
             $rmCode = trim($row['rm_code'] ?? '');
             $dosage = floatval($row['dosage_rate'] ?? 0);
             $wastage = floatval($row['wastage_pct'] ?? 0);
+            $phaseCode = trim($row['phase_code'] ?? '');
+            if ($phaseCode === '') $phaseCode = '101';
 
             if ($fgCode === '') $errors[] = 'FG_ITEM_CODE is required';
+            if ($bomCode === '') $errors[] = 'BOM_CODE is required';
             if ($rmCode === '') $errors[] = 'RM_CODE is required';
             if ($dosage <= 0) $errors[] = 'DOSAGE_RATE must be > 0';
 
@@ -393,6 +428,7 @@ class RndController {
                 'item_name' => $rmItem['item_description'] ?? '',
                 'dosage_rate' => $dosage,
                 'wastage_pct' => $wastage,
+                'phase_code' => $phaseCode,
                 'existing_bom_id' => $existingBom['id'] ?? null,
                 'status' => $existingBom ? 'update' : 'new',
                 'errors' => $errors,
@@ -409,7 +445,7 @@ class RndController {
         $data['fgCount'] = count($fgGroups);
         $data['lineCount'] = count($validRows);
         $data['errorCount'] = count(array_filter($preview, fn($r) => !empty($r['errors'])));
-        $data['page_title'] = 'Import BOM Recipes - Preview';
+        $data['page_title'] = 'Import BOM Components - Preview';
         $this->render('boms/import_preview', $data);
     }
 
@@ -438,10 +474,21 @@ class RndController {
             try {
                 $bomId = $first['existing_bom_id'];
                 if ($bomId) {
-                    $this->bomModel->update($bomId, $first['fg_item_id'], $first['bom_code'] ?: null);
+                    // Preserve existing header basis + legacy flag on import
+                    $existing = $this->bomModel->getById($bomId);
+                    $this->bomModel->update(
+                        $bomId,
+                        $first['fg_item_id'],
+                        $first['bom_code'] ?: ($existing['bom_code'] ?? ''),
+                        floatval($existing['fill_volume'] ?? 1.0),
+                        $existing['uom'] ?? 'PCS',
+                        floatval($existing['batch_unit_divisor'] ?? 1000),
+                        false
+                    );
                     $bomsUpdated++;
                 } else {
-                    $bomId = $this->bomModel->create($first['fg_item_id'], $first['bom_code'] ?: null);
+                    // Imported recipes are not fill-volume based → legacy formula
+                    $bomId = $this->bomModel->create($first['fg_item_id'], $first['bom_code'], 1.0, 'PCS', 1000, true);
                     $bomsCreated++;
                 }
 
@@ -451,7 +498,8 @@ class RndController {
                         $items[] = [
                             'item_id' => $r['item_id'],
                             'dosage_rate' => $r['dosage_rate'],
-                            'wastage_allowance_pct' => $r['wastage_pct']
+                            'wastage_allowance_pct' => $r['wastage_pct'],
+                            'phase_code' => $r['phase_code'] ?? '101'
                         ];
                         $lineCount++;
                     }

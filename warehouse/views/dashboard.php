@@ -204,14 +204,14 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Production Process</label>
-                            <select name="production_type" class="form-select" required>
+                            <select name="production_type" class="form-select filter-select" required>
                                 <option value="normal">Normal Production</option>
                             </select>
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Customer</label>
-                        <select id="dashCustomerSelect" name="customer_id" class="form-select" required>
+                        <select id="dashCustomerSelect" name="customer_id" class="form-select filter-select" required>
                             <option value="">Select Customer</option>
                             <?php foreach ($customers as $c): ?>
                                 <option value="<?= $c['customer_id'] ?>"
@@ -230,14 +230,9 @@
                         <div id="itemsContainer">
                             <div class="row g-2 mb-2 item-row">
                                 <div class="col-5">
-                                    <select name="item_id[]" class="form-select item-select d-none" required>
+                                    <select name="item_id[]" class="form-select item-select filter-select" required>
                                         <option value="">Select Customer first</option>
                                     </select>
-                                    <div class="searchable-wrap">
-                                        <input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">
-                                        <i class="bi bi-chevron-down searchable-arrow"></i>
-                                        <ul class="searchable-list"></ul>
-                                    </div>
                                 </div>
                                 <div class="col-3">
                                     <input type="number" name="quantity[]" class="form-control" placeholder="Quantity" required>
@@ -266,59 +261,15 @@
 
 <script>
 
-/* ---- Searchable Select ---- */
+/* ---- Searchable Select (backed by global app.js) ---- */
 function makeSearchable(row) {
-    const wrap = row.querySelector('.searchable-wrap');
-    if (!wrap) return;
-    const select = row.querySelector('.item-select');
-    const input = wrap.querySelector('.searchable-input');
-    const list = wrap.querySelector('.searchable-list');
-
-    function rebuildList() {
-        list.innerHTML = '';
-        Array.from(select.options).forEach(function(opt) {
-            var li = document.createElement('li');
-            li.textContent = opt.textContent;
-            li.dataset.value = opt.value;
-            if (opt.disabled) li.classList.add('disabled');
-            if (opt.value === select.value) li.classList.add('active');
-            if (!opt.value) li.style.display = 'none';
-            list.appendChild(li);
-        });
-    }
-
-    rebuildList();
-    input.value = select.options[select.selectedIndex] && select.value ? select.options[select.selectedIndex].textContent : '';
-
-    input.addEventListener('focus', function() { rebuildList(); list.classList.add('show'); });
-    input.addEventListener('input', function() {
-        var term = this.value.toLowerCase();
-        var found = false;
-        list.querySelectorAll('li').forEach(function(li) {
-            if (!li.dataset.value) { li.style.display = 'none'; return; }
-            var match = li.textContent.toLowerCase().indexOf(term) > -1;
-            li.style.display = match ? '' : 'none';
-            if (match) found = true;
-        });
-        if (!found && term) { list.innerHTML = '<li class="no-results">No items found</li>'; list.classList.add('show'); }
-        else if (!term) { rebuildList(); list.classList.add('show'); }
-    });
-    list.addEventListener('mousedown', function(e) {
-        var li = e.target.closest('li');
-        if (!li || li.classList.contains('no-results') || li.classList.contains('disabled')) return;
-        select.value = li.dataset.value;
-        input.value = li.textContent;
-        list.classList.remove('show');
-        select.dispatchEvent(new Event('change'));
-    });
-    input.addEventListener('blur', function() { setTimeout(function() { list.classList.remove('show'); }, 150); });
-    wrap._rebuild = rebuildList;
+    var select = row.querySelector('.item-select');
+    if (select && typeof initSearchableDropdown === 'function') initSearchableDropdown(select);
 }
 
 function refreshSearchables() {
-    document.querySelectorAll('.item-row').forEach(function(row) {
-        var wrap = row.querySelector('.searchable-wrap');
-        if (wrap && wrap._rebuild) wrap._rebuild();
+    document.querySelectorAll('.item-select').forEach(function(sel) {
+        if (typeof refreshSearchableDropdown === 'function') refreshSearchableDropdown(sel);
     });
 }
 
@@ -327,10 +278,6 @@ document.getElementById('addItemBtn').addEventListener('click', function() {
     const itemTemplate = container.querySelector('.item-row').cloneNode(true);
     itemTemplate.querySelectorAll('input').forEach(function(el) { el.value = ''; });
     itemTemplate.querySelector('.item-select').value = '';
-    var sInput = itemTemplate.querySelector('.searchable-input');
-    if (sInput) sInput.value = '';
-    var sList = itemTemplate.querySelector('.searchable-list');
-    if (sList) { sList.innerHTML = ''; sList.classList.remove('show'); }
     container.appendChild(itemTemplate);
     makeSearchable(itemTemplate);
 });
@@ -341,8 +288,7 @@ document.getElementById('dashCustomerSelect').addEventListener('change', functio
         document.querySelectorAll('.item-select').forEach(function(sel) {
             sel.innerHTML = '<option value="">Select Customer first</option>';
         });
-        document.querySelectorAll('.searchable-input').forEach(function(inp) { inp.value = ''; });
-        document.querySelectorAll('.searchable-list').forEach(function(lst) { lst.innerHTML = ''; lst.classList.remove('show'); });
+        refreshSearchables();
         return;
     }
     const option = this.options[this.selectedIndex];

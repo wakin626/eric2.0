@@ -7,7 +7,7 @@
         <input type="hidden" name="controller" value="admin">
         <input type="hidden" name="action" value="rawMaterials">
         <input type="text" name="search" id="searchRM" class="form-control" placeholder="Search code, name..." value="<?= htmlspecialchars($search ?? '') ?>">
-        <select name="category" id="filterCategory" class="form-select" style="width:auto">
+        <select name="category" id="filterCategory" class="form-select filter-select" style="width:auto">
             <option value="">All Categories</option>
             <option value="raw_material" <?= ($categoryFilter ?? '') === 'raw_material' ? 'selected' : '' ?>>Raw Material</option>
             <option value="packaging" <?= ($categoryFilter ?? '') === 'packaging' ? 'selected' : '' ?>>Packaging</option>
@@ -99,8 +99,8 @@
                     <div class="row g-3">
                         <div class="col-md-6"><label class="form-label">Item Code *</label><input type="text" name="item_code" class="form-control" required></div>
                         <div class="col-md-6"><label class="form-label">Trade Name *</label><input type="text" name="trade_name" class="form-control" required></div>
-                        <div class="col-md-6"><label class="form-label">Category *</label><select name="category" class="form-select"><option value="raw_material">Raw Material</option><option value="packaging">Packaging</option></select></div>
-                        <div class="col-md-6"><label class="form-label">UOM *</label><select name="uom" class="form-select"><option value="Kg">Kg</option><option value="g">Grams</option><option value="L">Liters</option><option value="mL">mL</option><option value="pcs">Pieces</option><option value="m">Meters</option><option value="roll">Rolls</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Category *</label><select name="category" class="form-select filter-select"><option value="raw_material">Raw Material</option><option value="packaging">Packaging</option></select></div>
+                        <div class="col-md-6"><label class="form-label">UOM *</label><select name="uom" class="form-select filter-select"><option value="Kg">Kg</option><option value="g">Grams</option><option value="L">Liters</option><option value="mL">mL</option><option value="pcs">Pieces</option><option value="m">Meters</option><option value="roll">Rolls</option></select></div>
                         <div class="col-md-4"><label class="form-label">Stock on Hand</label><input type="number" step="0.0001" name="stock_on_hand" class="form-control" value="0"></div>
                         <div class="col-md-4"><label class="form-label">Allocated Stock</label><input type="number" step="0.0001" name="allocated_stock" class="form-control" value="0"></div>
                         <div class="col-md-4"><label class="form-label">Reorder Level</label><input type="number" step="0.0001" name="reorder_level" class="form-control" value="0"></div>
@@ -126,12 +126,12 @@
                     <div class="row g-3">
                         <div class="col-md-6"><label class="form-label">Item Code *</label><input type="text" name="item_code" id="edit_rm_code" class="form-control" required></div>
                         <div class="col-md-6"><label class="form-label">Trade Name *</label><input type="text" name="trade_name" id="edit_rm_name" class="form-control" required></div>
-                        <div class="col-md-6"><label class="form-label">Category *</label><select name="category" id="edit_rm_category" class="form-select"><option value="raw_material">Raw Material</option><option value="packaging">Packaging</option></select></div>
-                        <div class="col-md-6"><label class="form-label">UOM *</label><select name="uom" id="edit_rm_uom" class="form-select"><option value="Kg">Kg</option><option value="g">Grams</option><option value="L">Liters</option><option value="mL">mL</option><option value="pcs">Pieces</option><option value="m">Meters</option><option value="roll">Rolls</option></select></div>
+                        <div class="col-md-6"><label class="form-label">Category *</label><select name="category" id="edit_rm_category" class="form-select filter-select"><option value="raw_material">Raw Material</option><option value="packaging">Packaging</option></select></div>
+                        <div class="col-md-6"><label class="form-label">UOM *</label><select name="uom" id="edit_rm_uom" class="form-select filter-select"><option value="Kg">Kg</option><option value="g">Grams</option><option value="L">Liters</option><option value="mL">mL</option><option value="pcs">Pieces</option><option value="m">Meters</option><option value="roll">Rolls</option></select></div>
                         <div class="col-md-4"><label class="form-label">Stock on Hand</label><input type="number" step="0.0001" name="stock_on_hand" id="edit_rm_stock" class="form-control"></div>
                         <div class="col-md-4"><label class="form-label">Allocated Stock</label><input type="number" step="0.0001" name="allocated_stock" id="edit_rm_allocated" class="form-control"></div>
                         <div class="col-md-4"><label class="form-label">Reorder Level</label><input type="number" step="0.0001" name="reorder_level" id="edit_rm_reorder" class="form-control"></div>
-                        <div class="col-md-4"><label class="form-label">Status</label><select name="is_active" id="edit_rm_active" class="form-select"><option value="1">Active</option><option value="0">Inactive</option></select></div>
+                        <div class="col-md-4"><label class="form-label">Status</label><select name="is_active" id="edit_rm_active" class="form-select filter-select"><option value="1">Active</option><option value="0">Inactive</option></select></div>
                     </div>
                 </div>
                 <div class="modal-footer">

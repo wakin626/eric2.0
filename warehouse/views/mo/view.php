@@ -174,12 +174,19 @@
                 <?php else: ?>
                     <div class="px-3 py-2 bg-light border-bottom small">
                         BOM: <strong><?= htmlspecialchars($item['bom_code']) ?></strong> &nbsp;|&nbsp;
-                        Batch Size: <strong><?= $item['batch_qty'] ?></strong> &nbsp;|&nbsp;
-                        Batches Needed: <strong><?= $item['batches_needed'] ?></strong>
+                        Fill Volume: <strong><?= $item['fill_volume'] ?? $item['batch_qty'] ?></strong> <?= htmlspecialchars($item['uom'] ?? $item['batch_uom'] ?? '') ?>
+                        <?php if (!empty($item['is_legacy_formula'])): ?>
+                            &nbsp;|&nbsp; <span class="badge bg-warning text-dark">Legacy formula</span>
+                            &nbsp;|&nbsp; Batches Needed: <strong><?= $item['batches_needed'] ?></strong>
+                        <?php else: ?>
+                            &nbsp;|&nbsp; UOM Divisor: <strong><?= number_format($item['batch_unit_divisor'] ?? 1000, 0) ?></strong>
+                            &nbsp;|&nbsp; Bulk Batch: <strong><?= number_format($item['bulk_batch'] ?? 0, 3) ?></strong>
+                        <?php endif; ?>
                     </div>
                     <table class="table table-sm mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th>Phase</th>
                                 <th>Item Code</th>
                                 <th>Description</th>
                                 <th>UOM</th>
@@ -195,10 +202,11 @@
                         <tbody>
                             <?php foreach ($item['components'] as $c): ?>
                             <tr>
+                                <td><code><?= htmlspecialchars($c['phase_code'] ?? '101') ?></code></td>
                                 <td><?= htmlspecialchars($c['item_code']) ?></td>
                                 <td><?= htmlspecialchars($c['item_description']) ?></td>
                                 <td><?= htmlspecialchars($c['item_uom'] ?? '-') ?></td>
-                                <td class="text-end"><?= number_format($c['dosage_rate'], 4) ?></td>
+                                <td class="text-end"><?= number_format($c['dosage_rate'], 4) ?><?= ($c['item_type'] ?? '') === 'RM' && empty($item['is_legacy_formula']) ? '%' : '' ?></td>
                                 <td class="text-end"><?= number_format($c['wastage_pct'], 2) ?>%</td>
                                 <td class="text-end"><?= number_format($c['required_qty'], 4) ?></td>
                                 <td class="text-end"><?= number_format($c['soh'], 4) ?></td>
@@ -283,7 +291,12 @@ document.querySelectorAll('.view-bom-btn').forEach(function(btn) {
                         html += '<div class="p-3 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>BOM "' + (item.bom_code || '') + '" not found in system.</div>';
                     } else {
                         html += '<div class="px-3 py-2 bg-light border-bottom small">';
-                        html += 'BOM: <strong>' + item.bom_code + '</strong> &nbsp;|&nbsp; Batch Size: <strong>' + item.batch_qty + '</strong> &nbsp;|&nbsp; Batches Needed: <strong>' + item.batches_needed + '</strong>';
+                        html += 'BOM: <strong>' + item.bom_code + '</strong> &nbsp;|&nbsp; Fill Volume: <strong>' + (item.fill_volume ?? item.batch_qty) + '</strong> ' + (item.uom ?? item.batch_uom ?? '');
+                        if (item.is_legacy_formula) {
+                            html += ' &nbsp;|&nbsp; <span class="badge bg-warning text-dark">Legacy formula</span> &nbsp;|&nbsp; Batches Needed: <strong>' + item.batches_needed + '</strong>';
+                        } else {
+                            html += ' &nbsp;|&nbsp; UOM Divisor: <strong>' + (item.batch_unit_divisor ?? 1000) + '</strong> &nbsp;|&nbsp; Bulk Batch: <strong>' + (item.bulk_batch ?? 0) + '</strong>';
+                        }
                         html += '</div>';
                         html += '<table class="table table-sm mb-0">';
                         html += '<thead class="table-light"><tr>';

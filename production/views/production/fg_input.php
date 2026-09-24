@@ -57,7 +57,7 @@
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Shift <span class="text-danger">*</span></label>
-                            <select name="shift[]" class="form-select" required>
+                            <select name="shift[]" class="form-select filter-select" required>
                                 <option value="">-- Select --</option>
                                 <option value="1st Shift">1st Shift</option>
                                 <option value="2nd Shift">2nd Shift</option>
@@ -66,7 +66,7 @@
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Status</label>
-                            <select name="reject_status[]" class="form-select">
+                            <select name="reject_status[]" class="form-select filter-select">
                                 <option value="Good">Good</option>
                             </select>
                         </div>
@@ -247,6 +247,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         container.appendChild(entry);
         initLotEntry(entry);
+        if (typeof initSearchableDropdowns === 'function') {
+            initSearchableDropdowns(entry);
+        }
         entry.scrollIntoView({ behavior: 'smooth', block: 'center' });
         var firstInput = entry.querySelector('.item-search-input');
         if (firstInput) firstInput.focus();

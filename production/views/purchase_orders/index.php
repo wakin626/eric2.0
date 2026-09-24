@@ -176,7 +176,7 @@
                 <div class="row mb-3 align-items-center">
                     <div class="col-md-4">
                         <label for="lotTrackerItem" class="form-label fw-bold">Select Item</label>
-                        <select id="lotTrackerItem" class="form-select form-select-sm">
+                        <select id="lotTrackerItem" class="form-select form-select-sm filter-select">
                             <option value="">-- Select Item --</option>
                         </select>
                     </div>

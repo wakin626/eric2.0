@@ -12,7 +12,7 @@
             </div>
             <div>
                 <label class="form-label small text-muted">Customer</label>
-                <select name="customer_id" class="form-select form-select-sm" style="width:200px">
+                <select name="customer_id" class="form-select form-select-sm filter-select" style="width:200px">
                     <option value="">All Customers</option>
                     <?php foreach ($customers as $c): ?>
                         <option value="<?= $c['customer_id'] ?>" <?= $filters['customer_id'] == $c['customer_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['customer_name']) ?></option>

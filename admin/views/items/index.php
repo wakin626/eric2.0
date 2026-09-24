@@ -93,7 +93,7 @@
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" class="form-control" required></div>
                     <div class="mb-3">
                         <label class="form-label">Customer <span class="text-danger">*</span></label>
-                        <select name="customer_id" class="form-select" required>
+                        <select name="customer_id" class="form-select filter-select" required>
                             <option value="">Select Customer</option>
                             <?php foreach ($allCustomers as $c): ?>
                                 <option value="<?= $c['customer_id'] ?>"><?= htmlspecialchars($c['customer_name']) ?></option>
@@ -125,7 +125,7 @@
                     <div class="mb-3"><label class="form-label">Description *</label><input type="text" name="item_description" id="edit_item_description" class="form-control" required></div>
                     <div class="mb-3">
                         <label class="form-label">Customer</label>
-                        <select name="customer_id" id="edit_customer_id" class="form-select">
+                        <select name="customer_id" id="edit_customer_id" class="form-select filter-select">
                             <option value="">All Customers</option>
                             <?php foreach ($allCustomers as $c): ?>
                                 <option value="<?= $c['customer_id'] ?>"><?= htmlspecialchars($c['customer_name']) ?></option>

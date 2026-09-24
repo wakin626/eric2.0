@@ -182,7 +182,12 @@ document.querySelectorAll('.view-bom-btn').forEach(function(btn) {
                         html += '<div class="p-3 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>BOM "' + (item.bom_code || '') + '" not found in system.</div>';
                     } else {
                         html += '<div class="px-3 py-2 bg-light border-bottom small">';
-                        html += 'BOM: <strong>' + item.bom_code + '</strong> &nbsp;|&nbsp; Batch Size: <strong>' + item.batch_qty + '</strong> &nbsp;|&nbsp; Batches Needed: <strong>' + item.batches_needed + '</strong>';
+                        html += 'BOM: <strong>' + item.bom_code + '</strong> &nbsp;|&nbsp; Fill Volume: <strong>' + (item.fill_volume ?? item.batch_qty) + '</strong> ' + (item.uom ?? item.batch_uom ?? '');
+                        if (item.is_legacy_formula) {
+                            html += ' &nbsp;|&nbsp; <span class="badge bg-warning text-dark">Legacy formula</span> &nbsp;|&nbsp; Batches Needed: <strong>' + item.batches_needed + '</strong>';
+                        } else {
+                            html += ' &nbsp;|&nbsp; UOM Divisor: <strong>' + (item.batch_unit_divisor ?? 1000) + '</strong> &nbsp;|&nbsp; Bulk Batch: <strong>' + (item.bulk_batch ?? 0) + '</strong>';
+                        }
                         html += '</div>';
                         html += '<table class="table table-sm mb-0">';
                         html += '<thead class="table-light"><tr>';

@@ -41,7 +41,7 @@
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Department</label>
-                        <select name="department" class="form-select" required>
+                        <select name="department" class="form-select filter-select" required>
                             <option value="">Select</option>
                             <option value="warehouse" <?= ($old['department'] ?? '') == 'warehouse' ? 'selected' : '' ?>>Warehouse</option>
                             <option value="production" <?= ($old['department'] ?? '') == 'production' ? 'selected' : '' ?>>Production</option>
@@ -83,5 +83,6 @@
         </div>
     </div>
     <script src="public/js/bootstrap.bundle.min.js"></script>
+    <script src="public/js/app.js"></script>
 </body>
 </html>

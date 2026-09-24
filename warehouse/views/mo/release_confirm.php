@@ -117,7 +117,16 @@
                                 <div class="card mb-2">
                                     <div class="card-header py-1 px-2 d-flex justify-content-between align-items-center small">
                                         <strong><?= htmlspecialchars($item['item_code']) ?> &mdash; <?= htmlspecialchars($item['item_description']) ?></strong>
-                                        <span>BOM: <?= htmlspecialchars($item['bom_code']) ?> | Batch: <?= $item['batch_qty'] ?> | Batches: <?= $item['batches_needed'] ?></span>
+                                        <span>
+                                            BOM: <?= htmlspecialchars($item['bom_code']) ?>
+                                            | Fill: <?= $item['fill_volume'] ?? $item['batch_qty'] ?> <?= htmlspecialchars($item['uom'] ?? $item['batch_uom'] ?? '') ?>
+                                            <?php if (!empty($item['is_legacy_formula'])): ?>
+                                                | Legacy batches: <?= $item['batches_needed'] ?>
+                                            <?php else: ?>
+                                                | UOM Div: <?= number_format($item['batch_unit_divisor'] ?? 1000, 0) ?>
+                                                | Bulk: <?= number_format($item['bulk_batch'] ?? 0, 3) ?>
+                                            <?php endif; ?>
+                                        </span>
                                     </div>
                                     <div class="card-body p-0">
                                         <table class="table table-sm mb-0">

@@ -36,6 +36,53 @@ class MoModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    /**
+     * Legacy-aware required quantity for one BOM component.
+     * Legacy: (orderQty / batch_qty) * dosage * wastage
+     * New:    RM → ((orderQty * fill_volume) / divisor) * dosage% * wastage
+     *         others → orderQty * dosage * wastage
+     */
+    private function computeRequiredQty($orderQty, $bom, $comp) {
+        $dosage = floatval($comp['dosage_rate'] ?? 0);
+        $wastage = floatval($comp['wastage_allowance_pct'] ?? 0);
+
+        if (!empty($bom['is_legacy_formula'])) {
+            $batchQty = floatval($bom['fill_volume'] ?? $bom['batch_qty'] ?? 1) ?: 1;
+            $base = ($orderQty / $batchQty) * $dosage;
+        } elseif (($comp['item_type'] ?? '') === 'RM') {
+            $fillVolume = floatval($bom['fill_volume'] ?? $bom['batch_qty'] ?? 0);
+            $divisor = floatval($bom['batch_unit_divisor'] ?? 1000) ?: 1000;
+            $base = (($orderQty * $fillVolume) / $divisor) * ($dosage / 100);
+        } else {
+            $base = $orderQty * $dosage;
+        }
+
+        return $base * (1 + $wastage / 100);
+    }
+
+    /**
+     * Display/meta keys for a BOM against an order quantity.
+     * Exposes both legacy keys (batch_qty/batches_needed) and new keys
+     * (fill_volume/uom/batch_unit_divisor/bulk_batch).
+     */
+    private function bomMeta($bom, $orderQty) {
+        $fillVolume = floatval($bom['fill_volume'] ?? $bom['batch_qty'] ?? 1) ?: 1;
+        $uom = $bom['uom'] ?? $bom['batch_uom'] ?? 'PCS';
+        $divisor = floatval($bom['batch_unit_divisor'] ?? 1000) ?: 1000;
+        $isLegacy = !empty($bom['is_legacy_formula']);
+
+        return [
+            'is_legacy_formula' => $isLegacy,
+            'fill_volume' => $fillVolume,
+            'uom' => $uom,
+            'batch_unit_divisor' => $divisor,
+            'batch_qty' => $fillVolume,
+            'batch_uom' => $uom,
+            'batches_needed' => $isLegacy ? ($orderQty / $fillVolume) : 0,
+            'bulk_batch' => $isLegacy ? 0 : (($orderQty * $fillVolume) / $divisor),
+        ];
+    }
+
     public function create($data, $items) {
         $pdo = self::getConnection();
         $pdo->beginTransaction();
@@ -196,13 +243,9 @@ class MoModel extends BaseModel {
             if (!$bom) continue;
 
             $components = $warehouseModel->getBOMComponentsWithStock([$bom['id']]);
-            $batchQty = floatval($bom['batch_qty'] ?: 1);
-            $batchesNeeded = $qtyOrdered / $batchQty;
 
             foreach ($components as $comp) {
-                $dosage = floatval($comp['dosage_rate']);
-                $wastage = floatval($comp['wastage_allowance_pct']);
-                $requiredQty = round($batchesNeeded * $dosage * (1 + $wastage / 100), 4);
+                $requiredQty = round($this->computeRequiredQty($qtyOrdered, $bom, $comp), 4);
 
                 if ($requiredQty <= 0) continue;
 
@@ -302,15 +345,14 @@ class MoModel extends BaseModel {
 
             $components = $warehouseModel->getBOMComponentsWithStock([$bom['id']]);
 
-            $batchQty = floatval($bom['batch_qty'] ?: 1);
-            $batchesNeeded = $qtyOrdered / $batchQty;
+            $meta = $this->bomMeta($bom, $qtyOrdered);
 
             $componentDetails = [];
             $hasShortage = false;
             foreach ($components as $comp) {
                 $dosage = floatval($comp['dosage_rate']);
                 $wastage = floatval($comp['wastage_allowance_pct']);
-                $requiredQty = $batchesNeeded * $dosage * (1 + $wastage / 100);
+                $requiredQty = $this->computeRequiredQty($qtyOrdered, $bom, $comp);
                 $soh = floatval($comp['soh']);
                 $allocated = floatval($comp['allocated']);
                 $availableStock = floatval($comp['available_stock']);
@@ -323,6 +365,8 @@ class MoModel extends BaseModel {
                     'item_code' => $comp['item_code'],
                     'item_description' => $comp['item_description'],
                     'item_uom' => $comp['item_uom'],
+                    'item_type' => $comp['item_type'] ?? '',
+                    'phase_code' => $comp['phase_code'] ?? '101',
                     'dosage_rate' => $dosage,
                     'wastage_pct' => $wastage,
                     'required_qty' => round($requiredQty, 4),
@@ -341,8 +385,13 @@ class MoModel extends BaseModel {
                 'qty_ordered' => $qtyOrdered,
                 'bom_code' => $bomCode,
                 'bom_status' => 'ok',
-                'batch_qty' => $batchQty,
-                'batches_needed' => round($batchesNeeded, 4),
+                'batch_qty' => $meta['batch_qty'],
+                'batches_needed' => round($meta['batches_needed'], 4),
+                'fill_volume' => $meta['fill_volume'],
+                'uom' => $meta['uom'],
+                'batch_unit_divisor' => $meta['batch_unit_divisor'],
+                'is_legacy_formula' => $meta['is_legacy_formula'],
+                'bulk_batch' => round($meta['bulk_batch'], 4),
                 'components' => $componentDetails,
                 'has_shortage' => $hasShortage,
             ];
@@ -401,6 +450,11 @@ class MoModel extends BaseModel {
                 'bom_code' => null,
                 'batch_qty' => 0,
                 'batches_needed' => 0,
+                'fill_volume' => 0,
+                'uom' => '',
+                'batch_unit_divisor' => 1000,
+                'is_legacy_formula' => 0,
+                'bulk_batch' => 0,
                 'components' => [],
                 'has_shortage' => false,
                 'no_bom' => true,
@@ -414,6 +468,11 @@ class MoModel extends BaseModel {
                 'bom_code' => $bom['bom_code'],
                 'batch_qty' => 0,
                 'batches_needed' => 0,
+                'fill_volume' => 0,
+                'uom' => '',
+                'batch_unit_divisor' => 1000,
+                'is_legacy_formula' => 0,
+                'bulk_batch' => 0,
                 'components' => [],
                 'has_shortage' => false,
                 'no_bom' => false,
@@ -422,15 +481,14 @@ class MoModel extends BaseModel {
         }
 
         $components = $warehouseModel->getBOMComponentsWithStock([$bomFull['id']]);
-        $batchQty = floatval($bomFull['batch_qty'] ?: 1);
-        $batchesNeeded = $qty / $batchQty;
+        $meta = $this->bomMeta($bomFull, $qty);
 
         $componentDetails = [];
         $hasShortage = false;
         foreach ($components as $comp) {
             $dosage = floatval($comp['dosage_rate']);
             $wastage = floatval($comp['wastage_allowance_pct']);
-            $requiredQty = $batchesNeeded * $dosage * (1 + $wastage / 100);
+            $requiredQty = $this->computeRequiredQty($qty, $bomFull, $comp);
             $soh = floatval($comp['soh']);
             $allocated = floatval($comp['allocated']);
             $availableStock = floatval($comp['available_stock']);
@@ -442,6 +500,8 @@ class MoModel extends BaseModel {
                 'item_code' => $comp['item_code'],
                 'item_description' => $comp['item_description'],
                 'item_uom' => $comp['item_uom'],
+                'item_type' => $comp['item_type'] ?? '',
+                'phase_code' => $comp['phase_code'] ?? '101',
                 'dosage_rate' => $dosage,
                 'wastage_pct' => $wastage,
                 'required_qty' => round($requiredQty, 4),
@@ -455,8 +515,13 @@ class MoModel extends BaseModel {
 
         return [
             'bom_code' => $bomFull['bom_code'],
-            'batch_qty' => $batchQty,
-            'batches_needed' => round($batchesNeeded, 4),
+            'batch_qty' => $meta['batch_qty'],
+            'batches_needed' => round($meta['batches_needed'], 4),
+            'fill_volume' => $meta['fill_volume'],
+            'uom' => $meta['uom'],
+            'batch_unit_divisor' => $meta['batch_unit_divisor'],
+            'is_legacy_formula' => $meta['is_legacy_formula'],
+            'bulk_batch' => round($meta['bulk_batch'], 4),
             'components' => $componentDetails,
             'has_shortage' => $hasShortage,
             'no_bom' => false,

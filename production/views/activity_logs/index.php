@@ -103,7 +103,7 @@ $formatValues = function($json) use ($humanize, $display) {
             <input type="hidden" name="controller" value="<?= htmlspecialchars($logController) ?>">
             <input type="hidden" name="action" value="activityLogs">
 
-            <select name="user_id" class="form-select form-select-sm" style="width:170px">
+            <select name="user_id" class="form-select form-select-sm filter-select" style="width:170px">
                 <option value="">All Users</option>
                 <?php foreach ($users as $u): ?>
                     <option value="<?= $u['user_id'] ?>" <?= ($filters['user_id'] ?? '') == $u['user_id'] ? 'selected' : '' ?>>
@@ -113,14 +113,14 @@ $formatValues = function($json) use ($humanize, $display) {
             </select>
 
             <?php if (!$departmentLocked): ?>
-            <select name="department" class="form-select form-select-sm" style="width:140px">
+            <select name="department" class="form-select form-select-sm filter-select" style="width:140px">
                 <option value="">All Depts</option>
                 <?php foreach (['admin', 'warehouse', 'production', 'finance', 'qc', 'qa', 'rnd'] as $d): ?>
                     <option value="<?= $d ?>" <?= ($filters['department'] ?? '') === $d ? 'selected' : '' ?>><?= ucfirst($d) ?></option>
                 <?php endforeach; ?>
             </select>
 
-            <select name="module" class="form-select form-select-sm" style="width:140px">
+            <select name="module" class="form-select form-select-sm filter-select" style="width:140px">
                 <option value="">All Modules</option>
                 <?php foreach (['auth', 'admin', 'warehouse', 'production', 'finance', 'qc', 'qa'] as $m): ?>
                     <option value="<?= $m ?>" <?= ($filters['module'] ?? '') === $m ? 'selected' : '' ?>><?= ucfirst($m) ?></option>
@@ -128,7 +128,7 @@ $formatValues = function($json) use ($humanize, $display) {
             </select>
             <?php endif; ?>
 
-            <select name="log_action" class="form-select form-select-sm" style="width:130px">
+            <select name="log_action" class="form-select form-select-sm filter-select" style="width:130px">
                 <option value="">All Actions</option>
                 <?php foreach (['LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE'] as $a): ?>
                     <option value="<?= $a ?>" <?= ($filters['log_action'] ?? '') === $a ? 'selected' : '' ?>><?= $a ?></option>

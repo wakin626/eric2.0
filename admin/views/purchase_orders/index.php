@@ -12,7 +12,7 @@
             <option value="">All Items</option>
         </select>
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by PO Date" value="<?= htmlspecialchars($filterDate ?? '') ?>">
-        <select class="form-select form-select-sm" style="width:180px" onchange="location.href='?controller=admin&action=purchaseOrders&delivery_status=' + encodeURIComponent(this.value)">
+        <select class="form-select form-select-sm filter-select" style="width:180px" onchange="location.href='?controller=admin&action=purchaseOrders&delivery_status=' + encodeURIComponent(this.value)">
             <option value="">All POs</option>
             <option value="open" <?= ($filterDeliveryStatus ?? '') === 'open' ? 'selected' : '' ?>>Open POs</option>
             <option value="closed" <?= ($filterDeliveryStatus ?? '') === 'closed' ? 'selected' : '' ?>>Closed POs</option>
@@ -173,7 +173,7 @@
                 <div class="row mb-3 align-items-center">
                     <div class="col-md-4">
                         <label for="lotTrackerItem" class="form-label fw-bold">Select Item</label>
-                        <select id="lotTrackerItem" class="form-select form-select-sm">
+                        <select id="lotTrackerItem" class="form-select form-select-sm filter-select">
                             <option value="">-- Select Item --</option>
                         </select>
                     </div>

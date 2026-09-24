@@ -137,7 +137,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">MO Type</label>
-                    <select name="mo_type" class="form-select">
+                    <select name="mo_type" class="form-select filter-select">
                         <option value="Standard" <?= ($mo['mo_type'] ?? 'Standard') === 'Standard' ? 'selected' : '' ?>>Standard</option>
                         <option value="Rework" <?= ($mo['mo_type'] ?? '') === 'Rework' ? 'selected' : '' ?>>Rework</option>
                         <option value="Trial" <?= ($mo['mo_type'] ?? '') === 'Trial' ? 'selected' : '' ?>>Trial</option>
@@ -145,7 +145,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">MO Site</label>
-                    <select name="mo_site" class="form-select">
+                    <select name="mo_site" class="form-select filter-select">
                         <option value="001 - Sterling Technopark" selected>001 - Sterling Technopark</option>
                     </select>
                 </div>
@@ -177,7 +177,7 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">MO Status</label>
-                    <select name="mo_status" class="form-select">
+                    <select name="mo_status" class="form-select filter-select">
                         <option value="Planned" <?= ($mo['mo_status'] ?? 'Planned') === 'Planned' ? 'selected' : '' ?>>Planned</option>
                         <option value="Released" <?= ($mo['mo_status'] ?? '') === 'Released' ? 'selected' : '' ?>>Released</option>
                         <option value="Completed" <?= ($mo['mo_status'] ?? '') === 'Completed' ? 'selected' : '' ?>>Completed</option>
@@ -186,7 +186,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Customer Code</label>
-                    <select name="customer_code" id="customerCode" class="form-select">
+                    <select name="customer_code" id="customerCode" class="form-select filter-select">
                         <option value="">Select customer</option>
                         <?php foreach ($customers ?? [] as $customer): ?>
                             <option value="<?= htmlspecialchars($customer['customer_id']) ?>" data-name="<?= htmlspecialchars($customer['customer_name'] ?? '') ?>" data-code="<?= htmlspecialchars($customer['customer_code'] ?? '') ?>" <?= (int) ($mo['customer_id'] ?? 0) === (int) $customer['customer_id'] ? 'selected' : '' ?>>
@@ -205,7 +205,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">PO Number <span class="text-danger">*</span></label>
-                    <select name="po_number" id="poNumber" class="form-select" data-selected-po="<?= htmlspecialchars($mo['po_number'] ?? '') ?>">
+                    <select name="po_number" id="poNumber" class="form-select filter-select" data-selected-po="<?= htmlspecialchars($mo['po_number'] ?? '') ?>">
                         <option value="">Select open PO</option>
                     </select>
                 </div>
@@ -238,8 +238,8 @@
             </thead>
             <tbody id="moLinesTableBody">
                 <tr class="empty-state-row">
-                    <td colspan="10" class="text-center text-muted py-4">
-                        No line items added yet. Use “Add Line Item” to begin the MO.
+                    <td colspan="10" class="text-center text-muted py-3">
+                        No line items added yet. Use "Add Line Item" to begin the MO.
                     </td>
                 </tr>
             </tbody>
@@ -258,16 +258,16 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Type</label>
-                        <select id="lineType" class="form-select">
+                        <select id="lineType" class="form-select filter-select">
                             <option value="FG" selected>FG</option>
                             <option value="SFG">SFG</option>
                         </select>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Item Number</label>
-                        <select id="lineItemSelect" class="form-select">
+                        <select id="lineItemSelect" class="form-select filter-select">
                             <option value="">Select item</option>
-                            <?php foreach ($items ?? [] as $item): ?>
+                            <?php foreach (($allItems ?? $items ?? []) as $item): ?>
                                 <option value="<?= htmlspecialchars($item['item_id']) ?>" data-code="<?= htmlspecialchars($item['item_code'] ?? '') ?>" data-description="<?= htmlspecialchars($item['item_description'] ?? '') ?>" data-uom="<?= htmlspecialchars($item['item_uom'] ?? '') ?>" data-type="<?= htmlspecialchars($item['item_type'] ?? '') ?>">
                                     <?= htmlspecialchars($item['item_code'] ?? '') ?> - <?= htmlspecialchars($item['item_description'] ?? '') ?>
                                 </option>
@@ -433,7 +433,7 @@ document.addEventListener('DOMContentLoaded', function () {
         bomShortageWarning.innerHTML = '';
 
         if (data.no_bom) {
-            bomStatusAlert.innerHTML = '<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i><strong>No active BOM recipe found</strong> for this item.</div>';
+            bomStatusAlert.innerHTML = '<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i><strong>No active BOM found</strong> for this item.</div>';
             lineBomCode.value = '';
             setSaveButtonState(false);
             return;
@@ -454,7 +454,14 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        var batchInfoText = 'Batch size: ' + data.batch_qty + ' | Batches needed: ' + data.batches_needed.toFixed(4);
+        var batchInfoText;
+        if (data.is_legacy_formula) {
+            batchInfoText = 'Batch size: ' + data.batch_qty + ' | Batches needed: ' + Number(data.batches_needed || 0).toFixed(4) + ' (legacy formula)';
+        } else {
+            batchInfoText = 'Fill volume: ' + (data.fill_volume ?? data.batch_qty) + ' ' + (data.uom ?? data.batch_uom ?? '') +
+                ' | UOM Divisor: ' + (data.batch_unit_divisor ?? 1000) +
+                ' | Bulk batch: ' + Number(data.bulk_batch || 0).toFixed(4);
+        }
         bomBatchInfo.textContent = batchInfoText;
 
         if (data.has_shortage) {
@@ -528,6 +535,32 @@ document.addEventListener('DOMContentLoaded', function () {
         lineItemType.value = itemType;
 
         fetchBomBreakdown(selectedOption.value, lineQtyOrdered.value || 0);
+    }
+
+    function filterItemOptionsByType() {
+        var selectedType = lineType.value || 'FG';
+        var selectedWasHidden = false;
+
+        Array.from(itemSelect.options).forEach(function (opt) {
+            if (!opt.value) {
+                return;
+            }
+            var optType = (opt.dataset.type || '').trim();
+            var visible = !optType || optType === selectedType;
+            if (!visible && opt.selected) {
+                selectedWasHidden = true;
+            }
+            opt.hidden = !visible;
+            opt.disabled = !visible;
+        });
+
+        if (selectedWasHidden) {
+            itemSelect.value = '';
+            lineDescription.value = '';
+            lineUom.value = '';
+            lineItemType.value = '';
+            resetBomPreview();
+        }
     }
 
     function syncLineItemsPayload() {
@@ -618,6 +651,7 @@ document.addEventListener('DOMContentLoaded', function () {
     customerSelect.addEventListener('change', populateCustomerName);
     itemSelect.addEventListener('change', updateLineDetails);
     lineType.addEventListener('change', function () {
+        filterItemOptionsByType();
         if (itemSelect.value) {
             updateLineDetails();
         }
@@ -630,6 +664,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('moItemModal').addEventListener('show.bs.modal', function () {
+        filterItemOptionsByType();
         if (itemSelect.value) {
             fetchBomBreakdown(itemSelect.value, lineQtyOrdered.value || 0);
         }
@@ -660,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!linesTable.querySelector('tr') && !document.querySelector('#moLinesTableBody .empty-state-row')) {
                 linesTable.innerHTML = `
                     <tr class="empty-state-row">
-                        <td colspan="10" class="text-center text-muted py-4">
+                        <td colspan="10" class="text-center text-muted py-3">
                             No line items added yet. Use "Add Line Item" to begin the MO.
                         </td>
                     </tr>
@@ -815,6 +850,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    lineItemsJson.value = '[]';
+    filterItemOptionsByType();
     populateCustomerName();
     syncLineItemsPayload();
 

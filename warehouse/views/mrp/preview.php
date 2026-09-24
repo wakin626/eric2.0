@@ -1,3 +1,9 @@
+<?php
+function formatQty($val, $maxDecimals = 4) {
+    $formatted = number_format((float)$val, $maxDecimals, '.', ',');
+    return str_contains($formatted, '.') ? rtrim(rtrim($formatted, '0'), '.') : $formatted;
+}
+?>
 <style>
 .mrp-section { page-break-inside: avoid; margin-bottom: 20px; }
 .mrp-fg-header { background: #e8ecef; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; font-size: 0.9rem; }
@@ -6,19 +12,15 @@
 .mrp-table th { background: #f0f0f0; font-size: 0.78rem; white-space: nowrap; }
 .mrp-table td { font-size: 0.8rem; }
 .mrp-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-.mrp-negative { color: #dc3545; font-weight: 700; }
-.mrp-positive { color: #198754; font-weight: 700; }
+.mrp-lacking { color: #dc3545; font-weight: 700; }
+.mrp-ok { color: #198754; font-weight: 600; }
 .mrp-shortage-row { background: #fff8e1 !important; }
-.mrp-remarks-lacking { color: #dc3545; font-weight: 700; }
-.mrp-remarks-ok { color: #198754; }
-.mrp-remarks-warn { color: #fd7e14; font-weight: 600; }
-.mrp-consolidated { border: 2px solid #0d6efd; }
-.mrp-consolidated .card-header { background: #0d6efd; color: #fff; }
 .mrp-empty { text-align: center; padding: 40px; color: #888; }
 .mrp-signature { margin-top: 30px; display: flex; justify-content: space-between; gap: 20px; }
 .mrp-signature .sig-block { flex: 1; }
 .mrp-signature .sig-line { border-top: 1px solid #333; margin-top: 35px; padding-top: 5px; font-size: 0.8rem; }
 .mrp-signature .sig-role { font-size: 0.7rem; color: #666; margin-top: 2px; }
+.mrp-cat-badge { font-size: 0.7rem; }
 @media print {
     .no-print { display: none !important; }
     .main-wrapper { margin: 0 !important; padding: 10px !important; }
@@ -29,7 +31,7 @@
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4 no-print">
-    <h4 class="mb-0"><i class="bi bi-calculator me-2"></i>MRP Sheet - Customer PO Requirements</h4>
+    <h4 class="mb-0"><i class="bi bi-calculator me-2"></i>MRP Sheet — Material Requirements</h4>
     <div class="d-flex gap-2">
         <?php if (!empty($poHeader)): ?>
         <?php if (!empty($hasExistingSnapshot)): ?>
@@ -53,7 +55,7 @@
         </script>
         <?php endif; ?>
         <?php endif; ?>
-        <a href="?controller=warehouse&action=mrpHistory<?= !empty($selectedPO) ? '&po_id=' . $selectedPO : '' ?>" class="btn btn-outline-secondary">
+        <a href="?controller=warehouse&action=mrpHistory" class="btn btn-outline-secondary">
             <i class="bi bi-clock-history me-1"></i>History
         </a>
         <?php if (!empty($poHeader)): ?>
@@ -64,15 +66,16 @@
     </div>
 </div>
 
-<!-- Filters -->
+<!-- Selection Bar: Customer + FG + Target Qty -->
 <div class="card data-card mb-4 no-print">
     <div class="card-body">
         <form method="GET" class="row g-3 align-items-end">
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="mrp">
-            <div class="col-md-4">
+
+            <div class="col-md-3">
                 <label class="form-label fw-bold">Select Customer</label>
-                <select name="customer_id" class="form-select" onchange="this.form.submit()">
+                <select name="customer_id" id="mrpCustomer" class="form-select filter-select">
                     <option value="">-- All Customers --</option>
                     <?php foreach ($customers as $c): ?>
                     <option value="<?= $c['customer_id'] ?>" <?= ($selectedCustomer == $c['customer_id']) ? 'selected' : '' ?>>
@@ -81,195 +84,137 @@
                     <?php endforeach; ?>
                 </select>
             </div>
+
             <div class="col-md-4">
-                <label class="form-label fw-bold">Select Open PO</label>
-                <select name="po_id" class="form-select" onchange="this.form.submit()" <?= empty($openPOs) ? 'disabled' : '' ?>>
-                    <option value="">-- Select PO --</option>
-                    <?php foreach ($openPOs as $po): ?>
-                    <option value="<?= $po['po_id'] ?>" <?= ($selectedPO == $po['po_id']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($po['customer_po_number'] . ' (' . date('Y-m-d', strtotime($po['customer_po_date'])) . ')') ?>
-                        — <?= number_format($po['total_quantity']) ?> pcs
+                <label class="form-label fw-bold">Select Finished Good</label>
+                <select name="fg_item_id" id="mrpFg" class="form-select filter-select" <?= empty($fgOptions) ? 'disabled' : '' ?>>
+                    <?php if (empty($fgOptions)): ?>
+                    <option value=""><?= !empty($noFgsForCustomer) ? 'No FGs with active BOM for this customer' : 'No FGs with active BOM' ?></option>
+                    <?php else: ?>
+                    <option value="">-- Select Finished Good --</option>
+                    <?php foreach ($fgOptions as $fg): ?>
+                    <option value="<?= $fg['item_id'] ?>" <?= ($selectedFg == $fg['item_id']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($fg['item_code'] . ' — ' . $fg['item_description']) ?>
                     </option>
                     <?php endforeach; ?>
+                    <?php endif; ?>
                 </select>
             </div>
-            <?php if (!empty($selectedCustomer) && !empty($selectedPO)): ?>
+
             <div class="col-md-2">
-                <a href="?controller=warehouse&action=mrp&customer_id=<?= $selectedCustomer ?>" class="btn btn-outline-secondary w-100">Clear PO</a>
+                <label class="form-label fw-bold">Target Quantity / To Produce</label>
+                <input type="number" name="target_qty" id="mrpTargetQty" class="form-control"
+                       min="0" step="any" placeholder="e.g. 10000"
+                       value="<?= $targetQty !== null && $targetQty !== '' ? htmlspecialchars($targetQty) : '' ?>">
             </div>
-            <?php endif; ?>
-            <?php if (!empty($selectedCustomer) && empty($selectedPO)): ?>
+
             <div class="col-md-2">
-                <a href="?controller=warehouse&action=mrp" class="btn btn-outline-secondary w-100">Clear All</a>
+                <button type="submit" name="calculate" value="1" class="btn btn-primary w-100"
+                        <?= empty($fgOptions) ? 'disabled' : '' ?>>
+                    <i class="bi bi-calculator me-1"></i>Calculate
+                </button>
+            </div>
+
+            <?php if (!empty($selectedCustomer) || !empty($selectedFg)): ?>
+            <div class="col-md-1">
+                <a href="?controller=warehouse&action=mrp" class="btn btn-outline-secondary w-100">Clear</a>
             </div>
             <?php endif; ?>
         </form>
     </div>
 </div>
 
-<?php if (empty($poHeader)): ?>
+<?php if (!empty($noFgsForCustomer)): ?>
+<div class="card data-card mb-4 no-print">
+    <div class="mrp-empty">
+        <i class="bi bi-box-seam" style="font-size: 3rem; opacity: 0.3;"></i>
+        <h5 class="mt-3">No FGs with active BOM for this customer</h5>
+        <p class="text-muted">Create or activate a BOM for this customer's finished goods, or choose another customer.</p>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if (empty($fgHeader) || empty($mrpSection)): ?>
+<?php if (empty($noFgsForCustomer)): ?>
 <div class="card data-card">
     <div class="mrp-empty">
         <i class="bi bi-calculator" style="font-size: 3rem; opacity: 0.3;"></i>
-        <h5 class="mt-3">Select a Customer and PO to generate MRP</h5>
-        <p class="text-muted">Choose a customer above, then select an open Purchase Order to view material requirements.</p>
+        <h5 class="mt-3">Select a Customer, Finished Good, and enter Target Quantity to calculate material requirements.</h5>
+        <p class="text-muted">Choose a customer, pick a finished good with an active BOM, enter the target production quantity, then click Calculate.</p>
     </div>
 </div>
+<?php endif; ?>
 
 <?php else: ?>
 
-<!-- PO Header Info -->
+<!-- FG / Target Header -->
 <div class="card data-card mb-4">
-    <div class="card-header"><i class="bi bi-info-circle me-2"></i>PO Details</div>
+    <div class="card-header"><i class="bi bi-info-circle me-2"></i>Calculation Basis</div>
     <div class="card-body">
         <div class="row">
-            <div class="col-md-3"><strong>Customer:</strong> <?= htmlspecialchars($poHeader['customer_name']) ?></div>
-            <div class="col-md-3"><strong>PO#:</strong> <?= htmlspecialchars($poHeader['customer_po_number']) ?></div>
-            <div class="col-md-3"><strong>Date:</strong> <?= $poHeader['customer_po_date'] ? date('Y-m-d', strtotime($poHeader['customer_po_date'])) : '-' ?></div>
-            <div class="col-md-3"><strong>Prod Type:</strong> <?= ucfirst($poHeader['production_type']) ?></div>
+            <div class="col-md-3"><strong>FG Code:</strong> <code><?= htmlspecialchars($fgHeader['fg_code']) ?></code></div>
+            <div class="col-md-4"><strong>Description:</strong> <?= htmlspecialchars($fgHeader['fg_name']) ?></div>
+            <div class="col-md-2"><strong>Target Qty:</strong> <?= number_format($fgHeader['target_qty'], 2) ?> <?= htmlspecialchars($fgHeader['item_uom']) ?></div>
+            <div class="col-md-3"><strong>BOM:</strong> <?= htmlspecialchars($fgHeader['bom_code']) ?></div>
         </div>
         <div class="row mt-2">
-            <div class="col-md-3"><strong>Total Qty:</strong> <?= number_format($poHeader['total_quantity']) ?></div>
-            <div class="col-md-3"><strong>Produced:</strong> <?= number_format($poHeader['produced_quantity']) ?></div>
-            <div class="col-md-3"><strong>Delivered:</strong> <?= number_format($poHeader['delivered_quantity']) ?></div>
-            <div class="col-md-3"><strong>Status:</strong> <span class="badge bg-info"><?= ucfirst($poHeader['status']) ?></span></div>
+            <div class="col-md-3"><strong>Fill Volume:</strong> <?= number_format($fgHeader['fill_volume'], 4) ?> <?= htmlspecialchars($fgHeader['uom']) ?></div>
+            <div class="col-md-3"><strong>UOM Divisor:</strong> <?= number_format($fgHeader['batch_unit_divisor'], 0) ?></div>
+            <?php if (!empty($fgHeader['is_legacy_formula'])): ?>
+            <div class="col-md-3"><span class="badge bg-warning text-dark">Legacy formula flag on BOM</span></div>
+            <?php endif; ?>
+        </div>
+        <div class="mrp-meta mt-2 text-muted">
+            RM: (Target &times; Fill Volume &divide; Divisor) &times; (Dosage&thinsp;/&thinsp;100) &times; (1 + Wastage&thinsp;/&thinsp;100)
+            &nbsp;|&nbsp;
+            PM/SFG: Target &times; Dosage &times; (1 + Wastage&thinsp;/&thinsp;100)
+            &nbsp;|&nbsp;
+            Lacking = max(0, Required &minus; (SOH &minus; Allocated))
         </div>
     </div>
 </div>
 
-<?php if (empty($mrpSections)): ?>
+<?php if (empty($mrpSection['components'])): ?>
 <div class="card data-card">
     <div class="mrp-empty">
-        <h5>No BOM found for items on this PO</h5>
-        <p class="text-muted">Ensure BOMs are created for the finished goods on this Purchase Order.</p>
+        <h5>No BOM components found</h5>
+        <p class="text-muted">Add components to this finished good's BOM.</p>
     </div>
 </div>
-
 <?php else: ?>
 
-<!-- FG Items Summary -->
-<div class="card data-card mb-4">
-    <div class="card-header"><i class="bi bi-box-seam me-2"></i>FG Items on this PO</div>
-    <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>FG Code</th>
-                    <th>Description</th>
-                    <th>Target Qty</th>
-                    <th>Batch Size</th>
-                    <th>Batches Needed</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php $i = 1; foreach ($mrpSections as $sec): ?>
-                <tr>
-                    <td><?= $i++ ?></td>
-                    <td><code><?= htmlspecialchars($sec['fg_code']) ?></code></td>
-                    <td><?= htmlspecialchars($sec['fg_name']) ?></td>
-                    <td class="num"><?= number_format($sec['target_qty']) ?> <?= htmlspecialchars($sec['item_uom']) ?></td>
-                    <td class="num"><?= number_format($sec['batch_qty'], 4) ?> <?= htmlspecialchars($sec['batch_uom']) ?></td>
-                    <td class="num"><strong><?= number_format($sec['batches_needed'], 1) ?></strong></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Per-FG MRP Sections -->
-<?php foreach ($mrpSections as $sec): ?>
+<!-- Components Table -->
 <div class="card data-card mb-4 mrp-section">
     <div class="card-header">
-        <i class="bi bi-calculator me-2"></i>
-        <strong><?= htmlspecialchars($sec['fg_code'] . ' - ' . $sec['fg_name']) ?></strong>
+        <i class="bi bi-list-check me-2"></i>
+        <strong>Material Requirements — <?= htmlspecialchars($mrpSection['fg_code'] . ' - ' . $mrpSection['fg_name']) ?></strong>
     </div>
-    <div class="card-body">
-        <div class="mrp-meta mb-3">
-            Prod. Qty: <strong><?= number_format($sec['target_qty']) ?> <?= htmlspecialchars($sec['item_uom']) ?></strong>
-            &nbsp;|&nbsp; Lot size: <strong><?= number_format($sec['batch_qty'], 4) ?> <?= htmlspecialchars($sec['batch_uom']) ?></strong>
-            &nbsp;|&nbsp; No. of Batches: <strong><?= number_format($sec['batches_needed'], 1) ?></strong>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-sm table-bordered mrp-table mb-0">
-                <thead>
-                    <tr>
-                        <th>Item Code</th>
-                        <th>Trade Name / Description</th>
-                        <th>UoM</th>
-                        <th class="num">Total Reqt</th>
-                        <th class="num">SOH</th>
-                        <th class="num">Allocated</th>
-                        <th class="num">Pending PO/RR</th>
-                        <th class="num">Supplier</th>
-                        <th class="num">EXCESS / (LACKING)</th>
-                        <th>Date</th>
-                        <th>Remarks</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($sec['components'] as $row): ?>
-                    <tr class="<?= $row['excess'] < 0 ? 'mrp-shortage-row' : '' ?>">
-                        <td><code><?= htmlspecialchars($row['item_code']) ?></code></td>
-                        <td><?= htmlspecialchars($row['item_description']) ?></td>
-                        <td><?= htmlspecialchars($row['item_uom']) ?></td>
-                        <td class="num"><?= number_format($row['total_reqt'], 2) ?></td>
-                        <td class="num"><?= number_format($row['soh'], 2) ?></td>
-                        <td class="num"><?= number_format($row['allocated'], 2) ?></td>
-                        <td class="num"><?= number_format($row['pending'], 2) ?></td>
-                        <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? '<span class="text-success">' . number_format($row['supplier_pending'], 2) . '</span>' : '0.00' ?></td>
-                        <td class="num <?= $row['excess'] < 0 ? 'mrp-negative' : 'mrp-positive' ?>">
-                            <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
-                        </td>
-                        <td><?= date('m/d/Y') ?></td>
-                        <td class="mrp-remarks-<?= strtolower(str_replace([' ', '/'], ['-', '-'], $row['remarks'])) ?>">
-                            <?= htmlspecialchars($row['remarks']) ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-<?php endforeach; ?>
-
-<!-- Consolidated Summary -->
-<div class="card data-card mb-4 mrp-consolidated">
-    <div class="card-header"><i class="bi bi-table me-2"></i>CONSOLIDATED SUMMARY (All Ingredients)</div>
     <div class="table-responsive">
-        <table class="table table-sm table-bordered mrp-table mb-0">
+        <table class="table table-sm table-bordered mb-0 mrp-table">
             <thead>
                 <tr>
-                    <th>Item Code</th>
-                    <th>Trade Name / Description</th>
-                    <th>UoM</th>
-                    <th class="num">Total Reqt</th>
+                    <th>Component Code</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th class="num">Required Qty</th>
                     <th class="num">SOH</th>
                     <th class="num">Allocated</th>
-                    <th class="num">Pending PO/RR</th>
-                    <th class="num">Supplier</th>
-                    <th class="num">EXCESS / (LACKING)</th>
-                    <th>Remarks</th>
+                    <th class="num">Available</th>
+                    <th class="num">Lacking Qty</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($consolidated as $row): ?>
-                <tr class="<?= $row['excess'] < 0 ? 'mrp-shortage-row' : '' ?>">
+                <?php foreach ($mrpSection['components'] as $row): ?>
+                <tr class="<?= $row['lacking_qty'] > 0 ? 'mrp-shortage-row' : '' ?>">
                     <td><code><?= htmlspecialchars($row['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($row['item_description']) ?></td>
-                    <td><?= htmlspecialchars($row['item_uom']) ?></td>
-                    <td class="num"><?= number_format($row['total_reqt'], 2) ?></td>
-                    <td class="num"><?= number_format($row['soh'], 2) ?></td>
-                    <td class="num"><?= number_format($row['allocated'], 2) ?></td>
-                    <td class="num"><?= number_format($row['pending'], 2) ?></td>
-                    <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? '<span class="text-success">' . number_format($row['supplier_pending'], 2) . '</span>' : '0.00' ?></td>
-                    <td class="num <?= $row['excess'] < 0 ? 'mrp-negative' : 'mrp-positive' ?>">
-                        <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
-                    </td>
-                    <td class="mrp-remarks-<?= strtolower(str_replace([' ', '/'], ['-', '-'], $row['remarks'])) ?>">
-                        <?= htmlspecialchars($row['remarks']) ?>
+                    <td><span class="badge bg-light text-dark border mrp-cat-badge"><?= htmlspecialchars($row['category']) ?></span></td>
+                    <td class="num"><?= formatQty($row['required_qty']) ?> <?= htmlspecialchars($row['item_uom']) ?></td>
+                    <td class="num"><?= formatQty($row['soh']) ?></td>
+                    <td class="num"><?= formatQty($row['allocated']) ?></td>
+                    <td class="num"><?= formatQty($row['available']) ?></td>
+                    <td class="num <?= $row['lacking_qty'] > 0 ? 'mrp-lacking' : 'mrp-ok' ?>">
+                        <?= formatQty($row['lacking_qty']) ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -300,3 +245,32 @@
 
 <?php endif; ?>
 <?php endif; ?>
+
+<script>
+(function () {
+    var customer = document.getElementById('mrpCustomer');
+    var fg = document.getElementById('mrpFg');
+    if (customer) {
+        customer.addEventListener('change', function () {
+            var params = new URLSearchParams(window.location.search);
+            params.set('controller', 'warehouse');
+            params.set('action', 'mrp');
+            if (this.value) {
+                params.set('customer_id', this.value);
+            } else {
+                params.delete('customer_id');
+            }
+            params.delete('fg_item_id');
+            params.delete('target_qty');
+            params.delete('calculate');
+            window.location.search = params.toString();
+        });
+    }
+    if (fg && typeof window.refreshSearchableDropdown === 'function') {
+        window.refreshSearchableDropdown(fg);
+    }
+    if (customer && typeof window.refreshSearchableDropdown === 'function') {
+        window.refreshSearchableDropdown(customer);
+    }
+})();
+</script>

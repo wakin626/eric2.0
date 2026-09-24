@@ -313,15 +313,21 @@ class ProductionController {
         header('Content-Type: application/json');
         $itemId = intval($_GET['item_id'] ?? 0);
         if ($itemId <= 0) {
-            echo json_encode(['bom_code' => '', 'batch_qty' => '', 'batch_uom' => '']);
+            echo json_encode(['bom_code' => '', 'batch_qty' => '', 'batch_uom' => '', 'fill_volume' => '', 'uom' => '', 'batch_unit_divisor' => 1000, 'is_legacy_formula' => 0]);
             exit;
         }
 
         $bom = $this->warehouseModel->hasBOM($itemId);
+        $fillVolume = $bom ? ($bom['fill_volume'] ?? $bom['batch_qty'] ?? '') : '';
+        $uom = $bom ? ($bom['uom'] ?? $bom['batch_uom'] ?? '') : '';
         echo json_encode([
             'bom_code' => $bom ? ($bom['bom_code'] ?? '') : '',
-            'batch_qty' => $bom ? ($bom['batch_qty'] ?? '') : '',
-            'batch_uom' => $bom ? ($bom['batch_uom'] ?? '') : '',
+            'batch_qty' => $fillVolume,
+            'batch_uom' => $uom,
+            'fill_volume' => $fillVolume,
+            'uom' => $uom,
+            'batch_unit_divisor' => $bom ? floatval($bom['batch_unit_divisor'] ?? 1000) : 1000,
+            'is_legacy_formula' => $bom ? !empty($bom['is_legacy_formula']) : false,
         ]);
         exit;
     }
@@ -352,11 +358,17 @@ class ProductionController {
             exit;
         }
         $bom = $this->warehouseModel->hasBOM($itemId);
+        $fillVolume = $bom ? floatval($bom['fill_volume'] ?? $bom['batch_qty'] ?? 0) : 0;
+        $uom = $bom ? ($bom['uom'] ?? $bom['batch_uom'] ?? null) : null;
         echo json_encode([
             'has_bom' => (bool) $bom,
             'bom_code' => $bom ? $bom['bom_code'] : null,
-            'batch_qty' => $bom ? floatval($bom['batch_qty']) : 0,
-            'batch_uom' => $bom ? $bom['batch_uom'] : null
+            'batch_qty' => $fillVolume,
+            'batch_uom' => $uom,
+            'fill_volume' => $fillVolume,
+            'uom' => $uom,
+            'batch_unit_divisor' => $bom ? floatval($bom['batch_unit_divisor'] ?? 1000) : 1000,
+            'is_legacy_formula' => $bom ? !empty($bom['is_legacy_formula']) : false,
         ]);
         exit;
     }

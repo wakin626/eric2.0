@@ -27,7 +27,12 @@
                 <?php foreach ($boms as $b): ?>
                 <tr>
                     <td><?= $b['id'] ?></td>
-                    <td><strong class="text-primary"><?= htmlspecialchars($b['bom_code'] ?? '-') ?></strong></td>
+                    <td>
+                        <strong class="text-primary"><?= htmlspecialchars($b['bom_code'] ?? '-') ?></strong>
+                        <?php if (!empty($b['is_legacy_formula'])): ?>
+                        <span class="badge bg-warning text-dark" title="This BOM uses legacy lot-based calculations. Edit and re-save to convert.">Legacy</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($b['fg_name']) ?></td>
                     <td><?= htmlspecialchars($b['fg_code']) ?></td>
                     <td><?= date('Y-m-d', strtotime($b['created_at'])) ?></td>
@@ -77,7 +82,7 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Finished Good Item *</label>
-                        <select name="fg_item_id" class="form-select" required>
+                        <select name="fg_item_id" class="form-select filter-select" required>
                             <option value="">-- Select Finished Good --</option>
                             <?php
                             $existingItemIds = array_column($boms, 'fg_item_id');
@@ -93,8 +98,30 @@
                         <small class="text-muted">Items with existing BOMs are disabled.</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">BOM Code (optional)</label>
-                        <input type="text" name="bom_code" class="form-control" placeholder="e.g. BOM-001">
+                        <label class="form-label">BOM Code *</label>
+                        <input type="text" name="bom_code" class="form-control" placeholder="e.g. BOM-001" required>
+                    </div>
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Fill Volume *</label>
+                            <input type="number" step="0.0001" min="0.0001" name="fill_volume" class="form-control" value="1.0000" required>
+                            <small class="text-muted">Net volume/weight per piece.</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">UOM *</label>
+                            <select name="uom" class="form-select filter-select" required>
+                                <?php
+                                $uoms = ['Kg','g','mg','L','mL','PCS','Set','Box','Pack','Roll','Meter','cm','mm','ft','inch','yd','Pairs','Pcs/Case','Pallet','Sheet','Bag','Drum','Barrel','Carton','Lot','Unit'];
+                                foreach ($uoms as $u): ?>
+                                    <option value="<?= $u ?>" <?= $u === 'mL' ? 'selected' : '' ?>><?= $u ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">UOM Divisor *</label>
+                            <input type="number" step="any" min="0.0001" name="batch_unit_divisor" class="form-control" value="1000" required>
+                            <small class="text-muted">(Order Qty &times; Fill Volume) / UOM Divisor.</small>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -110,7 +137,7 @@
 <div class="modal fade" id="importBomModal">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Import BOM Recipes</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-header"><h5 class="modal-title">Import BOM Components</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <form method="POST" action="?controller=admin&action=bomImportPreview" enctype="multipart/form-data">
                 <div class="modal-body">
                     <div class="mb-3">
@@ -119,7 +146,7 @@
                     </div>
                     <div class="alert alert-info py-2 mb-0">
                         <strong>Expected columns:</strong> FG_ITEM_CODE, BOM_CODE, RM_CODE, DOSAGE_RATE, WASTAGE_PCT<br>
-                        <small>Multiple rows with same FG_ITEM_CODE = one BOM with multiple components. Importing replaces the entire recipe.</small>
+                        <small>Multiple rows with same FG_ITEM_CODE = one BOM with multiple components. Importing replaces the entire BOM component list.</small>
                     </div>
                 </div>
                 <div class="modal-footer">

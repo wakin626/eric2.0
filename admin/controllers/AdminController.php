@@ -1337,7 +1337,7 @@ public function deleteProductionHistory() {
         $data['allItems'] = $this->itemModel->getAll(false);
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
-        $data['page_title'] = 'BOM Recipes';
+        $data['page_title'] = 'BOM Components';
         $this->render('boms/index', $data);
     }
 
@@ -1346,16 +1346,28 @@ public function deleteProductionHistory() {
             try {
                 $fgItemId = $_POST['fg_item_id'] ?? null;
                 $bomCode = trim($_POST['bom_code'] ?? '');
+                $fillVolume = floatval($_POST['fill_volume'] ?? 0);
+                $uom = trim($_POST['uom'] ?? 'PCS');
+                $batchUnitDivisor = floatval($_POST['batch_unit_divisor'] ?? 1000);
                 if (!$fgItemId) {
                     throw new \Exception("Finished good item is required.");
+                }
+                if ($bomCode === '') {
+                    throw new \Exception("BOM Code is required.");
+                }
+                if ($fillVolume <= 0) {
+                    throw new \Exception("Fill volume must be greater than 0.");
+                }
+                if ($batchUnitDivisor <= 0) {
+                    $batchUnitDivisor = 1000;
                 }
                 $existing = $this->bomModel->getBomForItem($fgItemId);
                 if ($existing) {
                     throw new \Exception("A BOM already exists for this finished good. Edit the existing one.");
                 }
-                $result = $this->bomModel->create($fgItemId, $bomCode ?: null);
+                $result = $this->bomModel->create($fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, false);
                 if ($result) {
-                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created BOM for item #' . $fgItemId, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode], 'bom', $result);
+                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created BOM for item #' . $fgItemId, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor], 'bom', $result);
                     $_SESSION['success'] = 'BOM created successfully';
                     header('Location: ?controller=admin&action=bomEdit&id=' . $result);
                     exit;
@@ -1398,11 +1410,27 @@ public function deleteProductionHistory() {
                 $id = $_POST['bom_id'] ?? null;
                 $fgItemId = $_POST['fg_item_id'] ?? null;
                 $bomCode = trim($_POST['bom_code'] ?? '');
+                $existing = $this->bomModel->getById($id);
+                if (!$existing) {
+                    throw new \Exception("BOM not found.");
+                }
+                $fillVolume = floatval($_POST['fill_volume'] ?? ($existing['fill_volume'] ?? 0));
+                $uom = trim($_POST['uom'] ?? ($existing['uom'] ?? 'PCS'));
+                $batchUnitDivisor = floatval($_POST['batch_unit_divisor'] ?? ($existing['batch_unit_divisor'] ?? 1000));
                 if (!$fgItemId) {
                     throw new \Exception("Finished good item is required.");
                 }
-                $this->bomModel->update($id, $fgItemId, $bomCode ?: null);
-                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated BOM #' . $id, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode], 'bom', $id);
+                if ($bomCode === '') {
+                    throw new \Exception("BOM Code is required.");
+                }
+                if ($fillVolume <= 0) {
+                    throw new \Exception("Fill volume must be greater than 0.");
+                }
+                if ($batchUnitDivisor <= 0) {
+                    $batchUnitDivisor = 1000;
+                }
+                $this->bomModel->update($id, $fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, true);
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated BOM #' . $id, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor], 'bom', $id);
                 $_SESSION['success'] = 'BOM updated';
             } catch (\Exception $e) {
                 $_SESSION['error'] = $e->getMessage();
@@ -1438,6 +1466,7 @@ public function deleteProductionHistory() {
             $itemId = $_POST['item_id'] ?? null;
             $dosageRate = $_POST['dosage_rate'] ?? 0;
             $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
+            $phaseCode = trim($_POST['phase_code'] ?? '') ?: '101';
 
             if (!$bomId || !$itemId) {
                 http_response_code(400);
@@ -1445,8 +1474,8 @@ public function deleteProductionHistory() {
                 exit;
             }
 
-            $result = $this->bomModel->addItem($bomId, $itemId, $dosageRate, $wastagePct);
-            AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Added ingredient to BOM #' . $bomId, null, ['item_id' => $itemId, 'dosage_rate' => $dosageRate], 'bom_item', $result);
+            $result = $this->bomModel->addItem($bomId, $itemId, $dosageRate, $wastagePct, $phaseCode);
+            AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Added ingredient to BOM #' . $bomId, null, ['item_id' => $itemId, 'dosage_rate' => $dosageRate, 'phase_code' => $phaseCode], 'bom_item', $result);
             echo json_encode(['success' => true, 'id' => $result]);
         } catch (\Exception $e) {
             error_log('bomAddItem error: ' . $e->getMessage());
@@ -1468,6 +1497,7 @@ public function deleteProductionHistory() {
             $itemId = $_POST['item_id'] ?? null;
             $dosageRate = $_POST['dosage_rate'] ?? 0;
             $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
+            $phaseCode = trim($_POST['phase_code'] ?? '') ?: '101';
 
             if (!$bomItemId || !$itemId) {
                 http_response_code(400);
@@ -1475,7 +1505,7 @@ public function deleteProductionHistory() {
                 exit;
             }
 
-            $result = $this->bomModel->updateItem($bomItemId, $itemId, $dosageRate, $wastagePct);
+            $result = $this->bomModel->updateItem($bomItemId, $itemId, $dosageRate, $wastagePct, $phaseCode);
             echo json_encode(['success' => true]);
         } catch (\Exception $e) {
             error_log('bomUpdateItem error: ' . $e->getMessage());
@@ -1643,7 +1673,7 @@ public function deleteProductionHistory() {
         exit;
     }
 
-    // ─── Bulk Import: BOM Recipes ─────────────────────────────────────────────
+    // ─── Bulk Import: BOM Components ─────────────────────────────────────────────
 
     public function bomImportPreview() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['import_file'])) {
@@ -1684,8 +1714,11 @@ public function deleteProductionHistory() {
             $rmCode = trim($row['RM_CODE'] ?? '');
             $dosage = floatval($row['DOSAGE_RATE'] ?? 0);
             $wastage = floatval($row['WASTAGE_PCT'] ?? 0);
+            $phaseCode = trim($row['PHASE_CODE'] ?? '');
+            if ($phaseCode === '') $phaseCode = '101';
 
             if ($fgCode === '') $errors[] = 'FG_ITEM_CODE is required';
+            if ($bomCode === '') $errors[] = 'BOM_CODE is required';
             if ($rmCode === '') $errors[] = 'RM_CODE is required';
             if ($dosage <= 0) $errors[] = 'DOSAGE_RATE must be > 0';
 
@@ -1698,9 +1731,18 @@ public function deleteProductionHistory() {
             }
 
             $rmItem = null;
+            $ingredientItemId = null;
             if ($rmCode !== '') {
                 $rmItem = $this->rawMaterialModel->getByCode($rmCode);
                 if (!$rmItem) $errors[] = 'Raw material not found: ' . htmlspecialchars($rmCode);
+                $stmt = $conn->prepare("SELECT item_id FROM items WHERE item_code = :code AND `remove` = 0");
+                $stmt->execute(['code' => $rmCode]);
+                $itemRow = $stmt->fetch();
+                if ($itemRow) {
+                    $ingredientItemId = $itemRow['item_id'];
+                } else {
+                    $errors[] = 'Ingredient not found in Items master: ' . htmlspecialchars($rmCode);
+                }
             }
 
             $existingBom = null;
@@ -1716,9 +1758,11 @@ public function deleteProductionHistory() {
                 'bom_code' => $bomCode,
                 'rm_code' => $rmCode,
                 'rm_id' => $rmItem['id'] ?? null,
+                'item_id' => $ingredientItemId,
                 'rm_name' => $rmItem['trade_name'] ?? '',
                 'dosage_rate' => $dosage,
                 'wastage_pct' => $wastage,
+                'phase_code' => $phaseCode,
                 'existing_bom_id' => $existingBom['id'] ?? null,
                 'status' => $existingBom ? 'update' : 'new',
                 'errors' => $errors,
@@ -1737,7 +1781,7 @@ public function deleteProductionHistory() {
         $data['errorCount'] = count(array_filter($preview, fn($r) => !empty($r['errors'])));
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
-        $data['page_title'] = 'Import BOM Recipes - Preview';
+        $data['page_title'] = 'Import BOM Components - Preview';
         $this->render('boms/import_preview', $data);
     }
 
@@ -1766,10 +1810,21 @@ public function deleteProductionHistory() {
             try {
                 $bomId = $first['existing_bom_id'];
                 if ($bomId) {
-                    $this->bomModel->update($bomId, $first['fg_item_id'], $first['bom_code'] ?: null);
+                    // Preserve existing header basis + legacy flag on import
+                    $existing = $this->bomModel->getById($bomId);
+                    $this->bomModel->update(
+                        $bomId,
+                        $first['fg_item_id'],
+                        $first['bom_code'] ?: ($existing['bom_code'] ?? ''),
+                        floatval($existing['fill_volume'] ?? 1.0),
+                        $existing['uom'] ?? 'PCS',
+                        floatval($existing['batch_unit_divisor'] ?? 1000),
+                        false
+                    );
                     $bomsUpdated++;
                 } else {
-                    $bomId = $this->bomModel->create($first['fg_item_id'], $first['bom_code'] ?: null);
+                    // Imported recipes are not fill-volume based → legacy formula
+                    $bomId = $this->bomModel->create($first['fg_item_id'], $first['bom_code'], 1.0, 'PCS', 1000, true);
                     $bomsCreated++;
                 }
 
@@ -1779,7 +1834,8 @@ public function deleteProductionHistory() {
                         $items[] = [
                             'item_id' => $r['item_id'],
                             'dosage_rate' => $r['dosage_rate'],
-                            'wastage_allowance_pct' => $r['wastage_pct']
+                            'wastage_allowance_pct' => $r['wastage_pct'],
+                            'phase_code' => $r['phase_code'] ?? '101'
                         ];
                         $lineCount++;
                     }

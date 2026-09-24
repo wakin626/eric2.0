@@ -1,4 +1,4 @@
-<h4><i class="bi bi-box-seam me-2"></i>FG Inventory</h4>
+﻿<h4><i class="bi bi-box-seam me-2"></i>FG Inventory</h4>
 <p class="text-muted mb-3">Item-centric view of all produced finished goods and available stock.</p>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -51,7 +51,7 @@
                         <?php endif; ?>
                     </td>
                     <td class="text-end"><?= $totalLots ?></td>
-                    <td class="text-end"><?= $cases !== null ? number_format($cases) . ' cs' : '—' ?></td>
+                    <td class="text-end"><?= $cases !== null ? number_format($cases) . ' cs' : 'â€”' ?></td>
                     <td class="text-center action-col">
                         <button type="button" class="btn btn-sm btn-outline-primary view-lots-btn" data-item-id="<?= $item['item_id'] ?>" data-item-name="<?= htmlspecialchars($item['item_code'] . ' - ' . $item['item_description']) ?>" title="View Lots">
                             <i class="bi bi-eye"></i>
@@ -92,10 +92,10 @@
 
 <!-- View Lots Modal -->
 <div class="modal fade" id="viewLotsModal" tabindex="-1">
-    <div class="modal-dialog modal-lg" style="max-width: 95%;">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Lots — <span id="lotItemName"></span></h5>
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Lots â€” <span id="lotItemName"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -164,12 +164,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (date.length > 10) date = date.substring(0, 10);
                         tbody.innerHTML += '<tr>' +
                             '<td><strong>' + (lot.lot_number || '-') + '</strong></td>' +
-                            '<td class="text-center">' + (lot.pcs_per_case || '—') + '</td>' +
+                            '<td class="text-center">' + (lot.pcs_per_case || 'â€”') + '</td>' +
                             '<td class="text-end">' + produced.toLocaleString() + '</td>' +
                             '<td class="text-end">' + delivered.toLocaleString() + '</td>' +
                             '<td class="text-end">' + available.toLocaleString() + '</td>' +
                             '<td>' + date + '</td>' +
-                            '<td>' + (lot.created_by_name || '—') + '</td>' +
+                            '<td>' + (lot.created_by_name || 'â€”') + '</td>' +
                             '</tr>';
                     });
                     document.getElementById('lotTotalProduced').textContent = totalProduced.toLocaleString();

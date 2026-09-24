@@ -45,7 +45,8 @@ class MoController {
         $data = [
             'page_title' => 'Create MO',
             'customers' => $this->catalogModel->getCustomers(),
-            'items' => $this->catalogModel->getItems(),
+            'items' => [],
+            'allItems' => $this->catalogModel->getItems(),
         ];
 
         $this->render('mo_entry', $data);
@@ -460,9 +461,13 @@ class MoController {
             'page_title' => 'LMR Print',
             'mo' => $order,
             'items' => $this->moModel->getItemsByMoId($id),
+            'breakdown' => $this->moModel->getMoBomBreakdown($id),
+            'documentId' => 'LMR-' . $order['mo_number'],
         ];
 
-        $this->render('mo/print_lmr', $data);
+        extract($data);
+        include __DIR__ . "/../views/lmr_print.php";
+        exit;
     }
 
     public function getBomBreakdown() {
@@ -508,6 +513,11 @@ class MoController {
                     'bom_code' => null,
                     'batch_qty' => 0,
                     'batches_needed' => 0,
+                    'fill_volume' => 0,
+                    'uom' => '',
+                    'batch_unit_divisor' => 1000,
+                    'is_legacy_formula' => 0,
+                    'bulk_batch' => 0,
                     'components' => [],
                     'has_shortage' => false,
                     'no_bom' => false,

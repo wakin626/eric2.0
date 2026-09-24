@@ -7,7 +7,7 @@
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="reports">
             <input type="hidden" name="week_offset" value="<?= $weekOffset ?? 0 ?>">
-            <select name="customer_id" class="form-select form-select-sm" style="width:220px" onchange="this.form.submit()">
+            <select name="customer_id" class="form-select form-select-sm filter-select" style="width:220px" onchange="this.form.submit()">
                 <option value="">All Customers</option>
                 <?php foreach (($customers ?? []) as $c): ?>
                     <option value="<?= $c['customer_id'] ?>" <?= ($selectedCustomer ?? '') == $c['customer_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['customer_name']) ?></option>
@@ -209,29 +209,19 @@ if (!empty($_GET['lot_item_id'])) $baseUrl .= '&lot_item_id=' . urlencode($_GET[
             <?php endif; ?>
             <?php if (!empty($_GET['lot_item_id'])): ?><input type="hidden" name="lot_item_id" value="<?= htmlspecialchars($_GET['lot_item_id']) ?>"><?php endif; ?>
             <input type="text" name="search" class="form-control form-control-sm" placeholder="Search customer, PO, item..." value="<?= htmlspecialchars($filterSearch) ?>" style="width: 220px;">
-            <select name="po_filter" class="form-select form-select-sm d-none" id="poFilterSelect">
+            <select name="po_filter" class="form-select form-select-sm filter-select" id="poFilterSelect" style="width:200px;">
                 <option value="">All PO Numbers</option>
                 <?php foreach ($poNumbers as $po): ?>
                     <option value="<?= htmlspecialchars(strtolower($po)) ?>" <?= $filterPo === strtolower($po) ? 'selected' : '' ?>><?= htmlspecialchars($po) ?></option>
                 <?php endforeach; ?>
             </select>
-            <div class="searchable-wrap" style="width:200px;">
-                <input type="text" class="form-control form-control-sm searchable-input" placeholder="Search PO number..." autocomplete="off" id="poFilterInput">
-                <i class="bi bi-chevron-down searchable-arrow"></i>
-                <ul class="searchable-list" id="poFilterList"></ul>
-            </div>
-            <select name="item_filter" class="form-select form-select-sm d-none" id="itemFilterSelect">
+            <select name="item_filter" class="form-select form-select-sm filter-select" id="itemFilterSelect" style="width:200px;">
                 <option value="">All Items</option>
                 <?php foreach ($itemNames as $itemName): ?>
                     <option value="<?= htmlspecialchars(strtolower($itemName)) ?>" <?= $filterItem === strtolower($itemName) ? 'selected' : '' ?>><?= htmlspecialchars($itemName) ?></option>
                 <?php endforeach; ?>
             </select>
-            <div class="searchable-wrap" style="width:200px;">
-                <input type="text" class="form-control form-control-sm searchable-input" placeholder="Search item..." autocomplete="off" id="itemFilterInput">
-                <i class="bi bi-chevron-down searchable-arrow"></i>
-                <ul class="searchable-list" id="itemFilterList"></ul>
-            </div>
-            <select name="status_filter" class="form-select form-select-sm" style="width: 160px;" onchange="document.getElementById('poFilterForm').submit()">
+            <select name="status_filter" class="form-select form-select-sm filter-select" style="width: 160px;" onchange="document.getElementById('poFilterForm').submit()">
                 <option value="">All Status</option>
                 <option value="completed" <?= $filterStatus === 'completed' ? 'selected' : '' ?>>Completed</option>
                 <option value="in-progress" <?= $filterStatus === 'in-progress' ? 'selected' : '' ?>>In Progress</option>
@@ -382,17 +372,12 @@ $pageLotData = array_slice($lotData, $lotOffset, $lotPageSize);
             <?php if (!empty($_GET['item_filter'])): ?><input type="hidden" name="item_filter" value="<?= htmlspecialchars($_GET['item_filter']) ?>"><?php endif; ?>
             <?php if (!empty($_GET['status_filter'])): ?><input type="hidden" name="status_filter" value="<?= htmlspecialchars($_GET['status_filter']) ?>"><?php endif; ?>
             <label class="text-muted small mb-0">Select Item:</label>
-            <select name="lot_item_id" class="form-select form-select-sm d-none" id="lotItemSelect">
+            <select name="lot_item_id" class="form-select form-select-sm filter-select" id="lotItemSelect" style="width:350px;">
                 <option value="">-- Choose an item --</option>
                 <?php foreach ($lotItems as $li): ?>
                     <option value="<?= $li['item_id'] ?>" <?= ($selectedLotItem ?? '') == $li['item_id'] ? 'selected' : '' ?>><?= htmlspecialchars($li['item_description']) ?></option>
                 <?php endforeach; ?>
             </select>
-            <div class="searchable-wrap" style="width:350px;">
-                <input type="text" class="form-control form-control-sm searchable-input" placeholder="Type to search item..." autocomplete="off" id="lotItemInput">
-                <i class="bi bi-chevron-down searchable-arrow"></i>
-                <ul class="searchable-list" id="lotItemList"></ul>
-            </div>
         </form>
     </div>
     <div class="card-body">
@@ -459,91 +444,24 @@ $pageLotData = array_slice($lotData, $lotOffset, $lotPageSize);
 
 <script src="public/js/chart.min.js"></script>
 <script>
-function initSearchable(inputId, listId, selectId, formSubmit, allLabel) {
-    var input = document.getElementById(inputId);
-    var list = document.getElementById(listId);
-    var select = document.getElementById(selectId);
-    if (!input || !list || !select) return;
-
-    function rebuildList() {
-        list.innerHTML = '';
-        if (allLabel) {
-            var allLi = document.createElement('li');
-            allLi.textContent = allLabel;
-            allLi.dataset.value = '';
-            if (!select.value) allLi.classList.add('active');
-            list.appendChild(allLi);
-        }
-        Array.from(select.options).forEach(function(opt) {
-            if (!opt.value) return;
-            var li = document.createElement('li');
-            li.textContent = opt.textContent;
-            li.dataset.value = opt.value;
-            if (opt.value === select.value) li.classList.add('active');
-            list.appendChild(li);
-        });
-    }
-
-    rebuildList();
-
-    input.value = select.options[select.selectedIndex] && select.value ? select.options[select.selectedIndex].textContent : (allLabel || '');
-
-    input.addEventListener('focus', function() {
-        this.value = '';
-        rebuildList();
-        list.classList.add('show');
-    });
-
-    input.addEventListener('input', function() {
-        var term = this.value.toLowerCase();
-        var found = false;
-        list.querySelectorAll('li').forEach(function(li) {
-            var match = li.textContent.toLowerCase().indexOf(term) > -1;
-            li.style.display = match ? '' : 'none';
-            if (match) found = true;
-        });
-        if (!found && term) {
-            list.innerHTML = '<li class="no-results">No results found</li>';
-            list.classList.add('show');
-        } else if (!term) {
-            rebuildList();
-            list.classList.add('show');
-        }
-    });
-
-    list.addEventListener('mousedown', function(e) {
-        var li = e.target.closest('li');
-        if (!li || li.classList.contains('no-results')) return;
-        select.value = li.dataset.value;
-        input.value = li.textContent;
-        list.classList.remove('show');
-        if (formSubmit) formSubmit();
-    });
-
-    input.addEventListener('blur', function() {
-        setTimeout(function() {
-            list.classList.remove('show');
-            if (!select.value) input.value = allLabel || '';
-        }, 150);
-    });
-}
-
 document.addEventListener('DOMContentLoaded', function() {
-    initSearchable('poFilterInput', 'poFilterList', 'poFilterSelect', function() {
+    var poSel = document.getElementById('poFilterSelect');
+    var itemSel = document.getElementById('itemFilterSelect');
+    var lotSel = document.getElementById('lotItemSelect');
+    if (poSel) poSel.addEventListener('change', function() {
         document.getElementById('poFilterForm').submit();
-    }, 'All PO Numbers');
-    initSearchable('itemFilterInput', 'itemFilterList', 'itemFilterSelect', function() {
+    });
+    if (itemSel) itemSel.addEventListener('change', function() {
         document.getElementById('poFilterForm').submit();
-    }, 'All Items');
-    initSearchable('lotItemInput', 'lotItemList', 'lotItemSelect', function() {
+    });
+    if (lotSel) lotSel.addEventListener('change', function() {
         var f = document.getElementById('lotFilterForm');
-        var lotSel = document.getElementById('lotItemSelect');
         var p = new URLSearchParams(new FormData(f));
         p.set('controller', 'admin');
         p.set('action', 'reports');
         p.set('lot_item_id', lotSel.value);
         window.location = '?' + p.toString() + '#stock-on-hand';
-    }, 'All Items');
+    });
     var rawStats = <?= json_encode(array_values($weeklyStats ?? [])) ?>;
     var weeklyDetails = <?= json_encode($weeklyDetails ?? []) ?>;
 

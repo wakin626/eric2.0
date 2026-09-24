@@ -15,7 +15,7 @@
             <option value="">All Items</option>
         </select>
         <input type="date" id="filterDate" class="form-control form-control-sm" style="width:160px" title="Filter by Date Created" value="<?= htmlspecialchars($filterDate ?? '') ?>">
-        <select class="form-select form-select-sm" style="width:180px" onchange="location.href='?controller=warehouse&action=purchaseOrders&delivery_status=' + encodeURIComponent(this.value)">
+        <select class="form-select form-select-sm filter-select" style="width:180px" onchange="location.href='?controller=warehouse&action=purchaseOrders&delivery_status=' + encodeURIComponent(this.value)">
             <option value="">All POs</option>
             <option value="open" <?= ($filterDeliveryStatus ?? '') === 'open' ? 'selected' : '' ?>>Open POs</option>
             <option value="closed" <?= ($filterDeliveryStatus ?? '') === 'closed' ? 'selected' : '' ?>>Closed POs</option>
@@ -163,7 +163,7 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Customer</label>
-                        <select id="customerSelect" name="customer_id" class="form-select" required>
+                        <select id="customerSelect" name="customer_id" class="form-select filter-select" required>
                             <option value="">Select Customer</option>
                             <?php 
                             $customers = (new \App\Models\WarehouseModel())->getCustomers();
@@ -218,7 +218,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Production Process</label>
-                            <select name="production_type" id="productionType" class="form-select" required>
+                            <select name="production_type" id="productionType" class="form-select filter-select" required>
                                 <option value="normal">Normal Production</option>
                             </select>
                         </div>
@@ -230,14 +230,9 @@
                             <div class="row g-2 mb-2 item-row align-items-end">
                                 <div class="col-md-3">
                                     <label class="form-label">Item</label>
-                                    <select name="item_id[]" class="form-select item-select d-none" required>
+                                    <select name="item_id[]" class="form-select item-select filter-select" required>
                                         <option value="">Select Customer first</option>
                                     </select>
-                                    <div class="searchable-wrap">
-                                        <input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">
-                                        <i class="bi bi-chevron-down searchable-arrow"></i>
-                                        <ul class="searchable-list"></ul>
-                                    </div>
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label">Code</label>
@@ -353,7 +348,7 @@
                 <div class="row mb-3 align-items-center">
                     <div class="col-md-4">
                         <label for="lotTrackerItem" class="form-label fw-bold">Select Item</label>
-                        <select id="lotTrackerItem" class="form-select form-select-sm">
+                        <select id="lotTrackerItem" class="form-select form-select-sm filter-select">
                             <option value="">-- Select Item --</option>
                         </select>
                     </div>
@@ -417,7 +412,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Production Process</label>
-                            <select name="production_type" id="editProductionType" class="form-select" required>
+                            <select name="production_type" id="editProductionType" class="form-select filter-select" required>
                                 <option value="normal">Normal Production</option>
                             </select>
                         </div>
@@ -478,74 +473,15 @@
 
 <script>
 
-/* ---- Searchable Select ---- */
+/* ---- Searchable Select (backed by global app.js) ---- */
 function makeSearchable(row) {
-    const wrap = row.querySelector('.searchable-wrap');
-    if (!wrap) return;
-    const select = row.querySelector('.item-select');
-    const input = wrap.querySelector('.searchable-input');
-    const list = wrap.querySelector('.searchable-list');
-
-    function rebuildList() {
-        list.innerHTML = '';
-        Array.from(select.options).forEach(function(opt) {
-            var li = document.createElement('li');
-            li.textContent = opt.textContent;
-            li.dataset.value = opt.value;
-            if (opt.disabled) li.classList.add('disabled');
-            if (opt.value === select.value) li.classList.add('active');
-            if (!opt.value) li.style.display = 'none';
-            list.appendChild(li);
-        });
-    }
-
-    rebuildList();
-
-    input.value = select.options[select.selectedIndex] && select.value ? select.options[select.selectedIndex].textContent : '';
-
-    input.addEventListener('focus', function() {
-        rebuildList();
-        list.classList.add('show');
-    });
-
-    input.addEventListener('input', function() {
-        var term = this.value.toLowerCase();
-        var found = false;
-        list.querySelectorAll('li').forEach(function(li) {
-            if (!li.dataset.value) { li.style.display = 'none'; return; }
-            var match = li.textContent.toLowerCase().indexOf(term) > -1;
-            li.style.display = match ? '' : 'none';
-            if (match) found = true;
-        });
-        if (!found && term) {
-            list.innerHTML = '<li class="no-results">No items found</li>';
-            list.classList.add('show');
-        } else if (!term) {
-            rebuildList();
-            list.classList.add('show');
-        }
-    });
-
-    list.addEventListener('mousedown', function(e) {
-        var li = e.target.closest('li');
-        if (!li || li.classList.contains('no-results') || li.classList.contains('disabled')) return;
-        select.value = li.dataset.value;
-        input.value = li.textContent;
-        list.classList.remove('show');
-        select.dispatchEvent(new Event('change'));
-    });
-
-    input.addEventListener('blur', function() {
-        setTimeout(function() { list.classList.remove('show'); }, 150);
-    });
-
-    wrap._rebuild = rebuildList;
+    var select = row.querySelector('.item-select');
+    if (select && typeof initSearchableDropdown === 'function') initSearchableDropdown(select);
 }
 
 function refreshSearchables() {
-    document.querySelectorAll('.item-row').forEach(function(row) {
-        var wrap = row.querySelector('.searchable-wrap');
-        if (wrap && wrap._rebuild) wrap._rebuild();
+    document.querySelectorAll('.item-select').forEach(function(sel) {
+        if (typeof refreshSearchableDropdown === 'function') refreshSearchableDropdown(sel);
     });
 }
 
@@ -575,10 +511,6 @@ document.getElementById('createPOModal').addEventListener('hidden.bs.modal', fun
     const newFirstRow = itemsContainer.querySelector('.item-row');
     newFirstRow.querySelectorAll('input').forEach(function(el) { el.value = ''; });
     newFirstRow.querySelector('.item-select').value = '';
-    var sInput = newFirstRow.querySelector('.searchable-input');
-    if (sInput) sInput.value = '';
-    var sList = newFirstRow.querySelector('.searchable-list');
-    if (sList) { sList.innerHTML = ''; sList.classList.remove('show'); }
     var uomInput = newFirstRow.querySelector('.item-uom');
     if (uomInput) uomInput.value = 'PCS';
     setupItemRow(newFirstRow);
@@ -656,9 +588,8 @@ customerSelect.addEventListener('change', function() {
         customerTerms.value = '';
         document.querySelectorAll('.item-select').forEach(function(sel) {
             sel.innerHTML = '<option value="">Select Customer first</option>';
+            if (typeof refreshSearchableDropdown === 'function') refreshSearchableDropdown(sel);
         });
-        document.querySelectorAll('.searchable-input').forEach(function(inp) { inp.value = ''; });
-        document.querySelectorAll('.searchable-list').forEach(function(lst) { lst.innerHTML = ''; lst.classList.remove('show'); });
         document.querySelectorAll('.item-row').forEach(function(row, idx) {
             if (idx > 0) row.remove();
         });
@@ -677,10 +608,7 @@ customerSelect.addEventListener('change', function() {
     var freshRow = firstRow.cloneNode(true);
     freshRow.querySelectorAll('input').forEach(function(el) { el.value = ''; });
     freshRow.querySelector('.item-select').value = '';
-    var fInput = freshRow.querySelector('.searchable-input');
-    if (fInput) fInput.value = '';
-    var fList = freshRow.querySelector('.searchable-list');
-    if (fList) { fList.innerHTML = ''; fList.classList.remove('show'); }
+    if (typeof refreshSearchableDropdown === 'function') refreshSearchableDropdown(freshRow.querySelector('.item-select'));
     var fUom = freshRow.querySelector('.item-uom');
     if (fUom) fUom.value = 'PCS';
     itemsContainer.innerHTML = '';
@@ -778,10 +706,6 @@ document.getElementById('addItemBtn').addEventListener('click', function() {
     const itemTemplate = container.querySelector('.item-row').cloneNode(true);
     itemTemplate.querySelectorAll('input').forEach(function(el) { el.value = ''; });
     itemTemplate.querySelector('.item-select').value = '';
-    var sInput = itemTemplate.querySelector('.searchable-input');
-    if (sInput) sInput.value = '';
-    var sList = itemTemplate.querySelector('.searchable-list');
-    if (sList) { sList.innerHTML = ''; sList.classList.remove('show'); }
     var uom = itemTemplate.querySelector('.item-uom');
     if (uom) uom.value = 'PCS';
     setupItemRow(itemTemplate);
@@ -1028,7 +952,7 @@ function buildEditItemRow(poiId, itemId, itemCode, itemDesc, itemUom, qty, unitP
     var isExisting = !!poiId;
     usedIds = usedIds || [];
 
-    var selectHtml = '<select name="item_id[]" class="form-select item-select d-none" required>';
+    var selectHtml = '<select name="item_id[]" class="form-select item-select filter-select" required>';
     selectHtml += '<option value="">Select Item</option>';
     if (allItems) {
         allItems.forEach(function(it) {
@@ -1041,12 +965,7 @@ function buildEditItemRow(poiId, itemId, itemCode, itemDesc, itemUom, qty, unitP
 
     var itemFieldHtml =
         '<label class="form-label">Item</label>' +
-        selectHtml +
-        '<div class="searchable-wrap">' +
-            '<input type="text" class="form-control searchable-input" placeholder="Type to search item..." autocomplete="off">' +
-            '<i class="bi bi-chevron-down searchable-arrow"></i>' +
-            '<ul class="searchable-list"></ul>' +
-        '</div>';
+        selectHtml;
 
     row.innerHTML =
         '<input type="hidden" name="poi_id[]" class="edit-poi-id" value="' + (poiId || '') + '">' +

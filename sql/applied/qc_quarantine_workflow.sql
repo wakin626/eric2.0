@@ -1,31 +1,6 @@
-CREATE TABLE IF NOT EXISTS receiving_items (
-    receiving_item_id INT AUTO_INCREMENT PRIMARY KEY,
-    po_id INT NULL,
-    source_type VARCHAR(50) NOT NULL DEFAULT 'purchase_order',
-    source_id INT NULL,
-    supplier_name VARCHAR(255) NULL,
-    item_id INT NULL,
-    item_code VARCHAR(100) NULL,
-    item_description VARCHAR(255) NULL,
-    lot_number VARCHAR(100) NULL,
-    received_qty DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
-    received_date DATE NOT NULL,
-    status ENUM('QUARANTINE','PASSED','REJECTED') NOT NULL DEFAULT 'QUARANTINE',
-    qc_status ENUM('QUARANTINE','PASSED','REJECTED') NULL,
-    passed_qty DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
-    rejected_qty DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
-    qc_inspected_by VARCHAR(255) NULL,
-    qc_inspected_at DATETIME NULL,
-    qc_remarks TEXT NULL,
-    remarks TEXT NULL,
-    created_by INT NULL,
-    warehouse_user_id INT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    KEY idx_status_received (status, received_date),
-    KEY idx_po_item (po_id, item_id),
-    KEY idx_lot_number (lot_number)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- QC quarantine/inspection workflow tables.
+-- NOTE: receiving_items already exists in the live schema (PK `id`).
+-- This migration creates only the missing audit + stock tables.
 
 CREATE TABLE IF NOT EXISTS qc_inspections (
     inspection_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -37,7 +12,7 @@ CREATE TABLE IF NOT EXISTS qc_inspections (
     remarks TEXT NULL,
     inspected_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_receiving_item_id (receiving_item_id),
-    CONSTRAINT fk_qc_receiving_item FOREIGN KEY (receiving_item_id) REFERENCES receiving_items(receiving_item_id) ON DELETE CASCADE
+    CONSTRAINT fk_qc_receiving_item FOREIGN KEY (receiving_item_id) REFERENCES receiving_items(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS inventory_stock (

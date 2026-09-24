@@ -6,7 +6,7 @@
         <form method="GET" class="d-flex gap-2 align-items-center">
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="receivingPo">
-            <select name="status" class="form-select form-select-sm" style="width:180px">
+            <select name="status" class="form-select form-select-sm filter-select" style="width:180px">
                 <option value="">Active Orders</option>
                 <option value="all" <?= ($filters['status'] ?? '') === 'all' ? 'selected' : '' ?>>All Statuses</option>
                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
@@ -16,7 +16,7 @@
                 <option value="received" <?= ($filters['status'] ?? '') === 'received' ? 'selected' : '' ?>>Received</option>
                 <option value="rejected" <?= ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' ?>>Rejected</option>
             </select>
-            <select name="supplier" class="form-select form-select-sm" style="width:200px">
+            <select name="supplier" class="form-select form-select-sm filter-select" style="width:200px">
                 <option value="">All Suppliers</option>
                 <?php foreach ($suppliers as $s): ?>
                     <option value="<?= htmlspecialchars($s) ?>" <?= ($filters['supplier'] ?? '') === $s ? 'selected' : '' ?>><?= htmlspecialchars($s) ?></option>
