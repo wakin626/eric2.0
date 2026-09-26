@@ -207,7 +207,7 @@
                         <label class="form-label fw-semibold">Type</label>
                         <select id="lineType" class="form-select filter-select">
                             <option value="FG" selected>FG</option>
-                            <option value="SFG">SFG</option>
+                            <option value="SFG">SFG - Semi-Finished Goods (Bulk)</option>
                         </select>
                     </div>
                     <div class="col-md-6">

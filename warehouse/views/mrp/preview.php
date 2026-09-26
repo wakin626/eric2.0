@@ -3,6 +3,19 @@ function formatQty($val, $maxDecimals = 4) {
     $formatted = number_format((float)$val, $maxDecimals, '.', ',');
     return str_contains($formatted, '.') ? rtrim(rtrim($formatted, '0'), '.') : $formatted;
 }
+
+$mrpLackingRows = [];
+if (!empty($mrpSection['components'])) {
+    foreach ($mrpSection['components'] as $mrpRow) {
+        if (floatval($mrpRow['lacking_qty']) > 0) {
+            $mrpLackingRows[] = [
+                'component_item_id' => (int)$mrpRow['component_item_id'],
+                'lacking_qty' => $mrpRow['lacking_qty'],
+            ];
+        }
+    }
+}
+$showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSection['components']);
 ?>
 <style>
 .mrp-section { page-break-inside: avoid; margin-bottom: 20px; }
@@ -85,7 +98,7 @@ function formatQty($val, $maxDecimals = 4) {
                 </select>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label fw-bold">Select Finished Good</label>
                 <select name="fg_item_id" id="mrpFg" class="form-select filter-select" <?= empty($fgOptions) ? 'disabled' : '' ?>>
                     <?php if (empty($fgOptions)): ?>
@@ -108,18 +121,24 @@ function formatQty($val, $maxDecimals = 4) {
                        value="<?= $targetQty !== null && $targetQty !== '' ? htmlspecialchars($targetQty) : '' ?>">
             </div>
 
-            <div class="col-md-2">
-                <button type="submit" name="calculate" value="1" class="btn btn-primary w-100"
-                        <?= empty($fgOptions) ? 'disabled' : '' ?>>
-                    <i class="bi bi-calculator me-1"></i>Calculate
-                </button>
+            <div class="col-md-4">
+                <div class="d-flex gap-2 align-items-stretch">
+                    <button type="submit" name="calculate" value="1" class="btn btn-primary flex-grow-1"
+                            <?= empty($fgOptions) ? 'disabled' : '' ?>>
+                        <i class="bi bi-calculator me-1"></i>Calculate
+                    </button>
+                    <?php if ($showSaveBtn): ?>
+                    <button type="button" id="saveMrpCalculationBtn" class="btn btn-success flex-grow-1"
+                            data-lacking="<?= htmlspecialchars(json_encode($mrpLackingRows), ENT_QUOTES) ?>"
+                            <?= empty($mrpLackingRows) ? 'disabled title="Nothing lacking — no purchase requests needed"' : '' ?>>
+                        <i class="bi bi-cart-plus me-1"></i>Save &amp; Transfer Lacking to Purchasing PO
+                    </button>
+                    <?php endif; ?>
+                    <?php if (!empty($selectedCustomer) || !empty($selectedFg)): ?>
+                    <a href="?controller=warehouse&action=mrp" class="btn btn-outline-secondary">Clear</a>
+                    <?php endif; ?>
+                </div>
             </div>
-
-            <?php if (!empty($selectedCustomer) || !empty($selectedFg)): ?>
-            <div class="col-md-1">
-                <a href="?controller=warehouse&action=mrp" class="btn btn-outline-secondary w-100">Clear</a>
-            </div>
-            <?php endif; ?>
         </form>
     </div>
 </div>
@@ -212,8 +231,8 @@ function formatQty($val, $maxDecimals = 4) {
                     <td class="num"><?= formatQty($row['required_qty']) ?> <?= htmlspecialchars($row['item_uom']) ?></td>
                     <td class="num"><?= formatQty($row['soh']) ?></td>
                     <td class="num"><?= formatQty($row['allocated']) ?></td>
-                    <td class="num"><?= formatQty($row['available']) ?></td>
-                    <td class="num <?= $row['lacking_qty'] > 0 ? 'mrp-lacking' : 'mrp-ok' ?>">
+                    <td class="num <?= $row['available'] >= $row['required_qty'] ? 'text-success' : 'text-danger' ?> fw-bold"><?= formatQty($row['available']) ?></td>
+                    <td class="num <?= $row['lacking_qty'] > 0 ? 'text-danger fw-bold' : 'text-success' ?>">
                         <?= formatQty($row['lacking_qty']) ?>
                     </td>
                 </tr>
@@ -271,6 +290,39 @@ function formatQty($val, $maxDecimals = 4) {
     }
     if (customer && typeof window.refreshSearchableDropdown === 'function') {
         window.refreshSearchableDropdown(customer);
+    }
+
+    // Save & Transfer Lacking → build a POST form (cannot nest inside the GET form)
+    var saveBtn = document.getElementById('saveMrpCalculationBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+            var rows = [];
+            try { rows = JSON.parse(saveBtn.getAttribute('data-lacking') || '[]'); } catch (e) {}
+            if (!rows.length) return;
+            if (!confirm('Queue ' + rows.length + ' lacking material(s) as Purchase Requests for Procurement?')) return;
+
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '?controller=warehouse&action=saveMrpCalculation';
+            var fields = {
+                customer_id: <?= (int)($selectedCustomer ?? 0) ?>,
+                fg_item_id: <?= (int)($selectedFg ?? 0) ?>,
+                target_qty: <?= json_encode((string)($targetQty ?? '')) ?>,
+                calculate: '1',
+                lacking_json: JSON.stringify(rows)
+            };
+            Object.keys(fields).forEach(function (name) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = fields[name];
+                form.appendChild(input);
+            });
+            document.body.appendChild(form);
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transferring...';
+            form.submit();
+        });
     }
 })();
 </script>

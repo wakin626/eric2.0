@@ -864,8 +864,20 @@ public function deleteProductionHistory() {
     try {
         $deleted = $this->warehouseModel->deleteProductionHistory($historyId);
         if ($deleted) {
-            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin', 'Deleted production history #' . $historyId, null, ['history_id' => $historyId], 'production_history', $historyId);
-            $_SESSION['success'] = 'Production history deleted and quantities were rolled back.';
+            $stsRef = $deleted['sts_ref'] ?? null;
+            AuditModel::log($_SESSION['user_id'], 'DELETE', 'admin',
+                'Deleted production history #' . $historyId . ($stsRef ? ' (' . $stsRef . ')' : ''),
+                null,
+                [
+                    'history_id' => $historyId,
+                    'sts_ref' => $stsRef,
+                    'item_id' => $deleted['item_id'] ?? null,
+                    'lot_number' => $deleted['lot_number'] ?? null,
+                    'added_quantity' => $deleted['added_quantity'] ?? null,
+                ],
+                'production_history', $historyId);
+            $_SESSION['success'] = 'Production history deleted, lot quantity rolled back'
+                . ($stsRef ? ' and STS ' . $stsRef . ' released' : '') . '.';
         } else {
             $_SESSION['error'] = 'Production history not found';
         }

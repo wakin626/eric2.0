@@ -9,7 +9,7 @@ class ItemModel extends BaseModel {
     public function getAll($activeOnly = true) {
         $sql = "SELECT i.*, c.customer_name FROM {$this->table} i
                 LEFT JOIN customers c ON i.customer_id = c.customer_id AND c.`remove` = 0
-                WHERE i.`remove` = 0 AND i.item_type = 'FG'";
+                WHERE i.`remove` = 0 AND i.item_type IN ('FG','SFG')";
         if ($activeOnly) {
             $sql .= " AND i.status = 1";
         }
@@ -143,7 +143,7 @@ class ItemModel extends BaseModel {
     public function getAllFiltered($filters = [], $activeOnly = false) {
         $sql = "SELECT i.*, c.customer_name FROM {$this->table} i
                 LEFT JOIN customers c ON i.customer_id = c.customer_id AND c.`remove` = 0
-                WHERE i.`remove` = 0 AND i.item_type = 'FG'";
+                WHERE i.`remove` = 0 AND i.item_type IN ('FG','SFG')";
         $params = [];
 
         if ($activeOnly) {

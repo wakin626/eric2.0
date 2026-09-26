@@ -21,7 +21,7 @@ class WarehouseController {
         }
         $action = $_GET['action'] ?? '';
         $dept = $_SESSION['department'] ?? '';
-        $mrpAllowed = in_array($action, ['mrp', 'mrpPDF']) && in_array($dept, ['warehouse', 'rnd', 'admin']);
+        $mrpAllowed = in_array($action, ['mrp', 'mrpPDF', 'saveMrpCalculation']) && in_array($dept, ['warehouse', 'rnd', 'admin']);
         $apiActions = ['getPODetails', 'getItemsByCustomer', 'backloadDelivery', 'getDeliveryLotsForBackload',
             'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
             'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery', 'searchItems',
@@ -1965,6 +1965,106 @@ class WarehouseController {
             'selectedPO' => null,
             'hasExistingSnapshot' => false,
         ]);
+    }
+
+    /**
+     * Queue lacking materials from an MRP calculation as Purchase Requests
+     * (supplier_orders.status = 'requested') so Procurement can process them
+     * directly from the Purchasing PO screen.
+     */
+    public function saveMrpCalculation() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?controller=warehouse&action=mrp');
+            exit;
+        }
+
+        $customerId = intval($_POST['customer_id'] ?? 0);
+        $fgItemId = intval($_POST['fg_item_id'] ?? 0);
+        $targetQty = floatval($_POST['target_qty'] ?? 0);
+        $postedLacking = json_decode($_POST['lacking_json'] ?? '[]', true);
+
+        try {
+            if ($fgItemId <= 0 || $targetQty <= 0) {
+                throw new \RuntimeException('Select a finished good and enter a target quantity first.');
+            }
+            if (!is_array($postedLacking) || empty($postedLacking)) {
+                throw new \RuntimeException('No lacking items to transfer.');
+            }
+
+            $bom = $this->warehouseModel->getBomForFg($fgItemId);
+            if (!$bom) {
+                throw new \RuntimeException('No active BOM found for this finished good.');
+            }
+
+            $components = $this->warehouseModel->getBOMComponentsWithStock([$bom['bom_id']]);
+            $meta = [
+                'fill_volume' => floatval($bom['fill_volume'] ?? 0),
+                'uom' => $bom['uom'] ?? '',
+                'batch_unit_divisor' => floatval($bom['batch_unit_divisor'] ?? 1000) ?: 1000,
+                'is_legacy_formula' => !empty($bom['is_legacy_formula']),
+            ];
+
+            // Recompute server-side: the posted payload only marks intent,
+            // quantities are authoritative from here (same math as Calculate).
+            $recomputed = [];
+            foreach ($components as $comp) {
+                $required = $this->computeMrpPoolRequiredQty($targetQty, $meta, $comp);
+                $available = floatval($comp['soh']) - floatval($comp['allocated']);
+                $lacking = $required - $available;
+                if ($lacking > 0) {
+                    $recomputed[intval($comp['component_item_id'])] = $lacking;
+                }
+            }
+
+            $postedIds = [];
+            foreach ($postedLacking as $row) {
+                $id = intval($row['component_item_id'] ?? 0);
+                if ($id > 0) {
+                    $postedIds[$id] = true;
+                }
+            }
+            $targets = array_intersect_key($recomputed, $postedIds);
+            if (empty($targets)) {
+                throw new \RuntimeException('Nothing lacking for this calculation.');
+            }
+
+            $existing = $this->warehouseModel->getExistingRequestedOrders(array_keys($targets));
+            $queued = 0;
+            $skipped = 0;
+            foreach ($targets as $itemId => $qty) {
+                if (isset($existing[$itemId])) {
+                    $skipped++;
+                    continue;
+                }
+                $this->warehouseModel->createSupplierOrder([
+                    'supplier_name' => 'Pending Selection',
+                    'item_id' => $itemId,
+                    'quantity' => $qty,
+                    'unit_cost' => 0,
+                    'order_date' => date('Y-m-d'),
+                    'expected_date' => null,
+                    'remarks' => 'Auto-generated from MRP calculation (' . ($bom['fg_code'] ?? '')
+                        . ', target ' . $targetQty . ')',
+                    'created_by' => $_SESSION['user_id'],
+                    'status' => 'requested',
+                    'po_id' => null,
+                ]);
+                $queued++;
+            }
+
+            $_SESSION['success'] = "{$queued} purchase request(s) queued for Procurement"
+                . ($skipped ? " ({$skipped} skipped: already requested)" : '') . '.';
+        } catch (\Exception $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+
+        $params = ['controller=warehouse', 'action=mrp'];
+        if ($customerId > 0) $params[] = 'customer_id=' . $customerId;
+        if ($fgItemId > 0) $params[] = 'fg_item_id=' . $fgItemId;
+        if ($targetQty > 0) $params[] = 'target_qty=' . rawurlencode($targetQty);
+        $params[] = 'calculate=1';
+        header('Location: ?' . implode('&', $params));
+        exit;
     }
 
     public function mrpPDF() {

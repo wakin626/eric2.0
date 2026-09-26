@@ -81,9 +81,9 @@
             <form method="POST" action="?controller=admin&action=bomCreate">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Finished Good Item *</label>
+                        <label class="form-label">Finished Good / SFG Item *</label>
                         <select name="fg_item_id" class="form-select filter-select" required>
-                            <option value="">-- Select Finished Good --</option>
+                            <option value="">-- Select Finished Good / SFG --</option>
                             <?php
                             $existingItemIds = array_column($boms, 'fg_item_id');
                             foreach ($allItems as $item):
@@ -104,7 +104,7 @@
                     <div class="row g-3 mb-2">
                         <div class="col-md-4">
                             <label class="form-label">Fill Volume *</label>
-                            <input type="number" step="0.0001" min="0.0001" name="fill_volume" class="form-control" value="1.0000" required>
+                            <input type="number" step="0.0001" min="0.0001" name="fill_volume" class="form-control" value="0" required>
                             <small class="text-muted">Net volume/weight per piece.</small>
                         </div>
                         <div class="col-md-4">

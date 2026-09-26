@@ -340,36 +340,13 @@ class ProductionController {
                 echo json_encode([]);
                 exit;
             }
-            $items = $this->catalogModel->searchItems($query);
+            $items = $this->catalogModel->searchFgItems($query);
             echo json_encode($items);
         } catch (\Exception $e) {
             error_log('searchItems error: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode(['error' => 'Failed to search items']);
         }
-        exit;
-    }
-
-    public function checkItemBom() {
-        header('Content-Type: application/json');
-        $itemId = intval($_GET['item_id'] ?? 0);
-        if ($itemId <= 0) {
-            echo json_encode(['has_bom' => false]);
-            exit;
-        }
-        $bom = $this->warehouseModel->hasBOM($itemId);
-        $fillVolume = $bom ? floatval($bom['fill_volume'] ?? $bom['batch_qty'] ?? 0) : 0;
-        $uom = $bom ? ($bom['uom'] ?? $bom['batch_uom'] ?? null) : null;
-        echo json_encode([
-            'has_bom' => (bool) $bom,
-            'bom_code' => $bom ? $bom['bom_code'] : null,
-            'batch_qty' => $fillVolume,
-            'batch_uom' => $uom,
-            'fill_volume' => $fillVolume,
-            'uom' => $uom,
-            'batch_unit_divisor' => $bom ? floatval($bom['batch_unit_divisor'] ?? 1000) : 1000,
-            'is_legacy_formula' => $bom ? !empty($bom['is_legacy_formula']) : false,
-        ]);
         exit;
     }
 
@@ -440,17 +417,12 @@ class ProductionController {
                     }
 
                     if (!isset($itemCache[$item_id])) {
-                        $itemStmt = $conn->prepare("SELECT item_id, item_code, item_description, uom_conversion FROM items WHERE item_id = :item_id AND `remove` = 0");
+                        $itemStmt = $conn->prepare("SELECT item_id, item_code, item_description, uom_conversion FROM items WHERE item_id = :item_id AND `remove` = 0 AND status = 1 AND item_type = 'FG'");
                         $itemStmt->execute(['item_id' => $item_id]);
                         $itemCache[$item_id] = $itemStmt->fetch();
                     }
                     $item = $itemCache[$item_id];
                     if (!$item) continue;
-
-                    $bom = $this->warehouseModel->hasBOM($item_id);
-                    if (!$bom) {
-                        throw new \RuntimeException('Row ' . ($i + 1) . ': Item "' . $item['item_code'] . '" has no BOM defined. Create a BOM before producing this item.');
-                    }
 
                     $savedItemDescriptions[] = $item['item_description'];
 

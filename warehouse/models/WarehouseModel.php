@@ -430,28 +430,74 @@ class WarehouseModel extends BaseModel {
 
     public function deleteProductionHistory($historyId) {
         $conn = self::getConnection();
-        $stmt = $conn->prepare("SELECT poi_id, po_id, added_quantity, lot_number FROM production_history WHERE history_id = :history_id");
-        $stmt->execute(['history_id' => $historyId]);
-        $history = $stmt->fetch();
-        if (!$history) return false;
-
         $conn->beginTransaction();
         try {
-            if (!empty($history['poi_id']) && !empty($history['lot_number'])) {
-                $conn->prepare("UPDATE production_lots SET quantity_produced = GREATEST(0, quantity_produced - :removed_qty)
-                    WHERE poi_id = :poi_id AND lot_number = :lot_number AND `is_removed` = 0")
-                    ->execute([
-                        'removed_qty' => $history['added_quantity'],
-                        'poi_id' => $history['poi_id'],
-                        'lot_number' => $history['lot_number']
-                    ]);
+            $stmt = $conn->prepare("SELECT history_id, po_id, poi_id, item_id, lot_number,
+                                           added_quantity, sts_ref, pcs_per_case
+                                    FROM production_history
+                                    WHERE history_id = :history_id FOR UPDATE");
+            $stmt->execute(['history_id' => $historyId]);
+            $history = $stmt->fetch();
+            if (!$history) {
+                $conn->rollBack();
+                return false;
+            }
 
-                $conn->prepare("UPDATE production_lots SET `is_removed` = 1
-                    WHERE poi_id = :poi_id AND lot_number = :lot_number AND quantity_produced <= 0 AND `is_removed` = 0")
-                    ->execute([
-                        'poi_id' => $history['poi_id'],
-                        'lot_number' => $history['lot_number']
-                    ]);
+            if (!empty($history['item_id']) && $history['lot_number'] !== null && $history['lot_number'] !== '') {
+                $lotStmt = $conn->prepare("SELECT lot_id, quantity_produced, pcs_per_case
+                                            FROM production_lots
+                                            WHERE item_id = :item_id AND lot_number = :lot_number AND `is_removed` = 0
+                                            FOR UPDATE");
+                $lotStmt->execute([
+                    'item_id' => $history['item_id'],
+                    'lot_number' => $history['lot_number'],
+                ]);
+                $lots = $lotStmt->fetchAll();
+
+                $toRemove = max(0, intval($history['added_quantity']));
+                $poolTotal = 0;
+                foreach ($lots as $l) {
+                    $poolTotal += max(0, intval($l['quantity_produced']));
+                }
+                if ($toRemove > 0 && $poolTotal < $toRemove) {
+                    throw new \RuntimeException('Lot "' . $history['lot_number'] . '" pool quantity (' . $poolTotal
+                        . ') is smaller than this entry (' . $toRemove . '). Reconcile lot quantities before deleting.');
+                }
+
+                // Absorb the deduction across the lot's rows: prefer the row sharing this
+                // entry's pcs_per_case, then the largest row. Never lets any row go negative
+                // and never deducts more than once per group (item_id + lot_number).
+                $pcs = $history['pcs_per_case'] !== null ? intval($history['pcs_per_case']) : null;
+                usort($lots, function ($a, $b) use ($pcs) {
+                    $aMatch = ($pcs !== null && $a['pcs_per_case'] !== null && intval($a['pcs_per_case']) === $pcs) ? 1 : 0;
+                    $bMatch = ($pcs !== null && $b['pcs_per_case'] !== null && intval($b['pcs_per_case']) === $pcs) ? 1 : 0;
+                    if ($aMatch !== $bMatch) return $bMatch - $aMatch;
+                    return max(0, intval($b['quantity_produced'])) - max(0, intval($a['quantity_produced']));
+                });
+
+                $remaining = $toRemove;
+                $updStmt = $conn->prepare("UPDATE production_lots SET quantity_produced = quantity_produced - :take
+                                            WHERE lot_id = :lot_id");
+                foreach ($lots as $l) {
+                    if ($remaining <= 0) break;
+                    $take = min(max(0, intval($l['quantity_produced'])), $remaining);
+                    if ($take > 0) {
+                        $updStmt->execute(['take' => $take, 'lot_id' => $l['lot_id']]);
+                        $remaining -= $take;
+                    }
+                }
+
+                // Remove lot rows that are now empty (Lot Tracker / FG inventory stop showing them)
+                $emptyStmt = $conn->prepare("SELECT lot_id FROM production_lots
+                                             WHERE item_id = :item_id AND lot_number = :lot_number
+                                               AND quantity_produced <= 0 AND `is_removed` = 0");
+                $emptyStmt->execute([
+                    'item_id' => $history['item_id'],
+                    'lot_number' => $history['lot_number'],
+                ]);
+                foreach ($emptyStmt->fetchAll() as $empty) {
+                    $this->removeLotRow(intval($empty['lot_id']), $conn);
+                }
             }
 
             if (!empty($history['poi_id'])) {
@@ -465,10 +511,42 @@ class WarehouseModel extends BaseModel {
                 ->execute(['history_id' => $historyId]);
 
             $conn->commit();
-            return true;
+            return $history;
         } catch (\Exception $e) {
             $conn->rollBack();
             throw $e;
+        }
+    }
+
+    /**
+     * Remove an emptied production_lots row. Hard-deletes the row when nothing
+     * references it; otherwise falls back to a soft delete so the RESTRICT foreign
+     * keys on deliveries/backloads and the deliveries.lot_items JSON stay intact.
+     * In both cases the lot disappears from Lot Tracker / FG inventory views
+     * (they only read is_removed = 0 rows).
+     */
+    private function removeLotRow($lotId, $conn) {
+        $refStmt = $conn->prepare("SELECT (
+                                        EXISTS(SELECT 1 FROM deliveries WHERE lot_id = :l1)
+                                      + EXISTS(SELECT 1 FROM backloads WHERE lot_id = :l2)
+                                      + EXISTS(SELECT 1 FROM delivery_reports WHERE lot_id = :l3)
+                                      + EXISTS(SELECT 1 FROM deliveries WHERE lot_items LIKE :l4)
+                                    ) AS ref_count");
+        $pattern = '%' . '"lot_id":' . $lotId . '%';
+        $refStmt->execute([
+            'l1' => $lotId,
+            'l2' => $lotId,
+            'l3' => $lotId,
+            'l4' => $pattern,
+        ]);
+        $refCount = intval($refStmt->fetchColumn());
+
+        if ($refCount > 0) {
+            $conn->prepare("UPDATE production_lots SET `is_removed` = 1 WHERE lot_id = :lot_id")
+                ->execute(['lot_id' => $lotId]);
+        } else {
+            $conn->prepare("DELETE FROM production_lots WHERE lot_id = :lot_id")
+                ->execute(['lot_id' => $lotId]);
         }
     }
 
@@ -2548,6 +2626,22 @@ class WarehouseModel extends BaseModel {
                     ]);
             }
 
+            // Purge lot rows emptied by this undo so they don't linger at 0 stock.
+            // removeLotRow hard-deletes unreferenced rows and soft-deletes rows still
+            // referenced by deliveries/backloads FKs or the deliveries.lot_items JSON.
+            $emptyStmt = $conn->prepare("SELECT lot_id FROM production_lots
+                    WHERE item_id = :item_id AND lot_number = :lot_number
+                      AND quantity_produced <= 0 AND `is_removed` = 0");
+            foreach ($lotDeductions as $deduction) {
+                $emptyStmt->execute([
+                    'item_id' => $deduction['item_id'],
+                    'lot_number' => $deduction['lot_number'],
+                ]);
+                foreach ($emptyStmt->fetchAll() as $empty) {
+                    $this->removeLotRow(intval($empty['lot_id']), $conn);
+                }
+            }
+
             $conn->commit();
             return true;
         } catch (\Exception $e) {
@@ -2606,8 +2700,10 @@ class WarehouseModel extends BaseModel {
             ? '1'
             : '(EXISTS (
                     SELECT 1 FROM purchase_order_items selected_poi
+                    JOIN items sip ON sip.item_id = selected_poi.item_id
                     WHERE selected_poi.po_id = ?
-                    AND selected_poi.item_id = COALESCE(i2.item_id, i.item_id)
+                    AND (selected_poi.item_id = COALESCE(i2.item_id, i.item_id)
+                         OR sip.item_code = COALESCE(i2.item_code, i.item_code))
                 ))';
         $sql = "SELECT COALESCE(i2.item_id, i.item_id) as item_id,
                 COALESCE(i2.item_code, i.item_code) as item_code,
@@ -2663,10 +2759,11 @@ class WarehouseModel extends BaseModel {
             $available = max(0, $lot['quantity_produced'] - ($jsonDelivered[$lid] ?? 0) + ($jsonBackloaded[$lid] ?? 0));
             if ($available <= 0) continue;
 
-            $iid = $lot['item_id'];
+            $iid = intval($lot['item_id']);
             $ln = $lot['lot_number'];
-            if (!isset($grouped[$iid])) {
-                $grouped[$iid] = [
+            $gkey = ($lot['item_code'] ?? '') !== '' ? strval($lot['item_code']) : strval($iid);
+            if (!isset($grouped[$gkey])) {
+                $grouped[$gkey] = [
                     'item_id' => $iid,
                     'item_code' => $lot['item_code'],
                     'item_description' => $lot['item_description'],
@@ -2674,11 +2771,13 @@ class WarehouseModel extends BaseModel {
                     'uom_conversion' => $lot['uom_conversion'] ?? null,
                     'lots' => [],
                 ];
+            } elseif ($iid < intval($grouped[$gkey]['item_id'])) {
+                $grouped[$gkey]['item_id'] = $iid;
             }
 
-            $key = $iid . '_' . $ln;
-            if (!isset($grouped[$iid]['lots'][$key])) {
-                $grouped[$iid]['lots'][$key] = [
+            $key = $gkey . '_' . $ln;
+            if (!isset($grouped[$gkey]['lots'][$key])) {
+                $grouped[$gkey]['lots'][$key] = [
                     'lot_id' => $lid,
                     'lot_ids' => [$lid],
                     'lot_number' => $ln,
@@ -2693,10 +2792,10 @@ class WarehouseModel extends BaseModel {
                     'sub_lots' => [['lot_id' => $lid, 'available' => $available]],
                 ];
             } else {
-                $gl = &$grouped[$iid]['lots'][$key];
+                $gl = &$grouped[$gkey]['lots'][$key];
                 $gl['lot_ids'][] = $lid;
                 $gl['available_quantity'] += $available;
-                $gl['in_selected_po'] = (int)($gl['in_selected_po'] ?? 1) && (int)($lot['in_selected_po'] ?? 1);
+                $gl['in_selected_po'] = (int)((int)($gl['in_selected_po'] ?? 1) && (int)($lot['in_selected_po'] ?? 1));
                 $gl['sub_lots'][] = ['lot_id' => $lid, 'available' => $available];
             }
         }
@@ -2711,25 +2810,37 @@ class WarehouseModel extends BaseModel {
         unset($item);
 
         if ($selectedPoId !== null) {
-            $poiStmt = $conn->prepare("SELECT poi.item_id, poi.quantity, poi.delivered_quantity, i.uom_conversion
+            $poiStmt = $conn->prepare("SELECT poi.item_id, poi.quantity, poi.delivered_quantity, i.uom_conversion, i.item_code
                     FROM purchase_order_items poi
                     JOIN items i ON poi.item_id = i.item_id
                     WHERE poi.po_id = ?");
             $poiStmt->execute([$selectedPoId]);
             $poiFulfillment = [];
+            $poiFulfillmentByCode = [];
             while ($row = $poiStmt->fetch()) {
-                $poiFulfillment[intval($row['item_id'])] = [
+                $info = [
                     'quantity' => intval($row['quantity']),
                     'delivered_quantity' => intval($row['delivered_quantity']),
                     'uom_conversion' => $row['uom_conversion'] ? intval($row['uom_conversion']) : null,
                 ];
+                $poiFulfillment[intval($row['item_id'])] = $info;
+                $code = strval($row['item_code'] ?? '');
+                if ($code !== '') {
+                    if (!isset($poiFulfillmentByCode[$code])) {
+                        $poiFulfillmentByCode[$code] = $info;
+                    } else {
+                        $poiFulfillmentByCode[$code]['quantity'] += $info['quantity'];
+                        $poiFulfillmentByCode[$code]['delivered_quantity'] += $info['delivered_quantity'];
+                    }
+                }
             }
             foreach ($result as &$item) {
                 $iid = intval($item['item_id']);
-                if (isset($poiFulfillment[$iid])) {
-                    $item['po_quantity'] = $poiFulfillment[$iid]['quantity'];
-                    $item['po_delivered'] = $poiFulfillment[$iid]['delivered_quantity'];
-                    $item['po_uom_conversion'] = $poiFulfillment[$iid]['uom_conversion'];
+                $match = $poiFulfillmentByCode[strval($item['item_code'] ?? '')] ?? $poiFulfillment[$iid] ?? null;
+                if ($match !== null) {
+                    $item['po_quantity'] = $match['quantity'];
+                    $item['po_delivered'] = $match['delivered_quantity'];
+                    $item['po_uom_conversion'] = $match['uom_conversion'];
                 }
             }
             unset($item);
@@ -2908,10 +3019,28 @@ public function searchItems($query) {
     }
 
     public function getActiveCustomersForMrp() {
-        $sql = "SELECT customer_id, customer_code, customer_name
-                FROM customers
-                WHERE `remove` = 0 AND status = 1
-                ORDER BY customer_code ASC";
+        $sql = "SELECT c.customer_id, c.customer_code, c.customer_name
+                FROM customers c
+                WHERE c.`remove` = 0 AND c.status = 1
+                  AND (
+                        EXISTS (
+                            SELECT 1 FROM items i
+                            INNER JOIN fg_boms b ON b.fg_item_id = i.item_id
+                            WHERE i.customer_id = c.customer_id
+                              AND i.item_type = 'FG'
+                              AND i.`remove` = 0 AND i.status = 1
+                        )
+                     OR EXISTS (
+                            SELECT 1 FROM customer_finished_goods cfg
+                            INNER JOIN items i2 ON i2.item_code = cfg.item_code
+                            INNER JOIN fg_boms b2 ON b2.fg_item_id = i2.item_id
+                            WHERE cfg.customer_id = c.customer_id
+                              AND cfg.`remove` = 0 AND cfg.status = 1
+                              AND i2.item_type = 'FG'
+                              AND i2.`remove` = 0 AND i2.status = 1
+                        )
+                      )
+                ORDER BY c.customer_code ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();

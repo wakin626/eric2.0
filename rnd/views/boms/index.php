@@ -88,9 +88,9 @@
                 <div class="modal-body">
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
-                            <label class="form-label">Finished Good Item *</label>
+                            <label class="form-label">Finished Good / SFG Item *</label>
                             <select name="fg_item_id" class="form-select filter-select" required>
-                                <option value="">-- Select Finished Good --</option>
+                                <option value="">-- Select Finished Good / SFG --</option>
                                 <?php
                                 $existingItemIds = array_column($boms, 'fg_item_id');
                                 foreach ($allItems as $item):
@@ -110,7 +110,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Fill Volume *</label>
-                            <input type="number" step="0.0001" min="0.0001" name="fill_volume" class="form-control" value="1.0000" required>
+                            <input type="number" step="0.0001" min="0.0001" name="fill_volume" class="form-control" value="0" required>
                             <small class="text-muted">Net volume/weight per piece (e.g. 300 for a 300mL bottle).</small>
                         </div>
                         <div class="col-md-4">

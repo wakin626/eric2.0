@@ -11,7 +11,7 @@
             <option value="RM" <?= ($typeFilter ?? '') === 'RM' ? 'selected' : '' ?>>Raw Material</option>
             <option value="PM" <?= ($typeFilter ?? '') === 'PM' ? 'selected' : '' ?>>Packaging</option>
             <option value="FG" <?= ($typeFilter ?? '') === 'FG' ? 'selected' : '' ?>>Finished Good</option>
-            <option value="SFG" <?= ($typeFilter ?? '') === 'SFG' ? 'selected' : '' ?>>Semi-Finished</option>
+            <option value="SFG" <?= ($typeFilter ?? '') === 'SFG' ? 'selected' : '' ?>>SFG - Semi-Finished Goods (Bulk)</option>
             <option value="SUPPLIES" <?= ($typeFilter ?? '') === 'SUPPLIES' ? 'selected' : '' ?>>Supplies</option>
         </select>
     </form>

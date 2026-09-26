@@ -70,4 +70,20 @@ class CatalogModel extends BaseModel {
         $stmt->execute(['q1' => "%{$query}%", 'q2' => "%{$query}%", 'q3' => "%{$query}%", 'q4' => "%{$query}%"]);
         return $stmt->fetchAll();
     }
+
+    public function searchFgItems($query) {
+        $sql = "SELECT MIN(item_id) AS item_id, item_code,
+                       MAX(item_description) AS item_description,
+                       MAX(item_uom) AS item_uom,
+                       MAX(uom_conversion) AS uom_conversion
+                FROM items
+                WHERE `remove` = 0 AND status = 1 AND item_type = 'FG'
+                AND (item_code LIKE :q1 OR item_description LIKE :q2)
+                GROUP BY item_code
+                ORDER BY item_code ASC
+                LIMIT 20";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['q1' => "%{$query}%", 'q2' => "%{$query}%"]);
+        return $stmt->fetchAll();
+    }
 }

@@ -30,7 +30,7 @@ if (!function_exists('formatBomValue')) {
                 <form method="POST" action="?controller=rnd&action=bomUpdate">
                     <input type="hidden" name="bom_id" value="<?= $bom['id'] ?>">
                     <div class="mb-3">
-                        <label class="form-label">Finished Good</label>
+                        <label class="form-label">Finished Good / SFG</label>
                         <select name="fg_item_id" class="form-select filter-select" required>
                             <?php foreach ($allItems as $item): ?>
                             <option value="<?= $item['item_id'] ?>" <?= $item['item_id'] == $bom['fg_item_id'] ? 'selected' : '' ?>>
@@ -46,7 +46,7 @@ if (!function_exists('formatBomValue')) {
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Fill Volume *</label>
-                            <input type="number" step="0.0001" min="0.0001" name="fill_volume" class="form-control" value="<?= formatBomValue($bom['fill_volume'] ?? $bom['batch_qty'] ?? 1) ?>" required>
+                            <input type="number" step="0.0001" min="0.0001" name="fill_volume" class="form-control" value="<?= formatBomValue($bom['fill_volume'] ?? $bom['batch_qty'] ?? 0) ?>" required>
                             <small class="text-muted">Net volume/weight per piece.</small>
                         </div>
                         <div class="col-md-4">
