@@ -1989,6 +1989,7 @@ class WarehouseController {
         $fgItemId = intval($_POST['fg_item_id'] ?? 0);
         $targetQty = floatval($_POST['target_qty'] ?? 0);
         $postedLacking = json_decode($_POST['lacking_json'] ?? '[]', true);
+        $customRef = trim($_POST['custom_mrp_ref'] ?? '');
 
         try {
             if ($fgItemId <= 0 || $targetQty <= 0) {
@@ -1996,6 +1997,13 @@ class WarehouseController {
             }
             if (!is_array($postedLacking) || empty($postedLacking)) {
                 throw new \RuntimeException('No lacking items to transfer.');
+            }
+            // Mirrors the prompt modal: a run is only saved with a reference.
+            if ($customRef === '') {
+                throw new \RuntimeException('A custom MRP reference number is required to save this run.');
+            }
+            if (mb_strlen($customRef) > 30) {
+                throw new \RuntimeException('The MRP reference may be at most 30 characters.');
             }
 
             $bom = $this->warehouseModel->getBomForFg($fgItemId);
@@ -2013,13 +2021,26 @@ class WarehouseController {
 
             // Recompute server-side: the posted payload only marks intent,
             // quantities are authoritative from here (same math as Calculate).
+            // Every component is kept for the snapshot/history row; only the
+            // lackings drive purchase requests.
+            $rows = [];
             $recomputed = [];
             foreach ($components as $comp) {
                 $required = $this->computeMrpPoolRequiredQty($targetQty, $meta, $comp);
-                $available = floatval($comp['soh']) - floatval($comp['allocated']);
+                $soh = floatval($comp['soh']);
+                $allocated = floatval($comp['allocated']);
+                $available = $soh - $allocated;
                 $lacking = $required - $available;
+                $itemId = intval($comp['component_item_id']);
+                $rows[] = [
+                    'component_item_id' => $itemId,
+                    'required' => $required,
+                    'soh' => $soh,
+                    'allocated' => $allocated,
+                    'uom' => $comp['display_uom'] ?? $comp['item_uom'],
+                ];
                 if ($lacking > 0) {
-                    $recomputed[intval($comp['component_item_id'])] = [
+                    $recomputed[$itemId] = [
                         'quantity' => $lacking,
                         'uom' => $comp['display_uom'] ?? $comp['item_uom'],
                     ];
@@ -2038,33 +2059,21 @@ class WarehouseController {
                 throw new \RuntimeException('Nothing lacking for this calculation.');
             }
 
-            $existing = $this->warehouseModel->getExistingRequestedOrders(array_keys($targets));
-            $queued = 0;
-            $skipped = 0;
-            foreach ($targets as $itemId => $target) {
-                if (isset($existing[$itemId])) {
-                    $skipped++;
-                    continue;
-                }
-                $this->warehouseModel->createSupplierOrder([
-                    'supplier_name' => 'Pending Selection',
-                    'item_id' => $itemId,
-                    'quantity' => $target['quantity'],
-                    'uom' => $target['uom'] ?? null,
-                    'unit_cost' => 0,
-                    'order_date' => date('Y-m-d'),
-                    'expected_date' => null,
-                    'remarks' => 'Auto-generated from MRP calculation (' . ($bom['fg_code'] ?? '')
-                        . ', target ' . $targetQty . ')',
-                    'created_by' => $_SESSION['user_id'],
-                    'status' => 'requested',
-                    'po_id' => null,
-                ]);
-                $queued++;
-            }
+            // Logs the run to MRP Snapshot History, commits stock to
+            // inventory_balances.qty_allocated and queues the purchase requests.
+            $result = $this->warehouseModel->saveMrpCalculationRun(
+                $customerId,
+                $fgItemId,
+                $targetQty,
+                $_SESSION['user_id'],
+                $rows,
+                $targets,
+                $customRef
+            );
 
-            $_SESSION['success'] = "{$queued} purchase request(s) queued for Procurement"
-                . ($skipped ? " ({$skipped} skipped: already requested)" : '') . '.';
+            $_SESSION['success'] = "MRP Run #{$result['run_id']} saved — stock committed for {$result['committed']} component(s); "
+                . "{$result['queued']} purchase request(s) queued for Procurement"
+                . ($result['skipped'] ? " ({$result['skipped']} skipped: already requested)" : '') . '.';
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
         }
@@ -2210,6 +2219,7 @@ class WarehouseController {
 
     public function purchasingPo() {
         $filters = [
+            'tab' => $_GET['tab'] ?? '',
             'status' => $_GET['status'] ?? '',
             'search' => $_GET['search'] ?? '',
         ];
@@ -2217,6 +2227,7 @@ class WarehouseController {
         $data['page_title'] = 'Purchasing PO';
         $data['orders'] = $orders;
         $data['filters'] = $filters;
+        $data['tabCounts'] = $this->warehouseModel->getPurchasingTabCounts();
         $data['readOnly'] = (($_SESSION['department'] ?? '') !== 'warehouse');
         $this->render('purchasingPo/index', $data);
     }
@@ -2360,6 +2371,7 @@ class WarehouseController {
 
     public function receivingPo() {
         $filters = [
+            'tab' => $_GET['tab'] ?? '',
             'status' => $_GET['status'] ?? '',
             'supplier' => $_GET['supplier'] ?? '',
             'search' => $_GET['search'] ?? '',
@@ -2371,6 +2383,7 @@ class WarehouseController {
         $data['orders'] = $orders;
         $data['filters'] = $filters;
         $data['suppliers'] = $suppliers;
+        $data['tabCounts'] = $this->warehouseModel->getReceivingTabCounts();
         $data['readOnly'] = (($_SESSION['department'] ?? '') !== 'warehouse');
         $this->render('receivingPo/index', $data);
     }
@@ -2396,14 +2409,41 @@ class WarehouseController {
             exit;
         }
 
-        if (in_array($orderStatus, ['cancelled', 'received', 'rejected', 'for inspection'])) {
+        // Receiving is allowed whenever a balance remains on the line — including
+        // orders sitting in 'For Inspection' or 'partially_received' (multi-batch
+        // partial receiving). Only deliberately-locked statuses and a fully
+        // ordered balance block the receipt.
+        $remainingBefore = floatval($order['quantity'] ?? 0) - floatval($order['received_qty'] ?? 0);
+
+        if (in_array($orderStatus, ['cancelled', 'rejected'])) {
             $_SESSION['error'] = 'Cannot receive a purchasing PO with status "' . ucfirst($order['status'] ?? 'Unknown') . '".';
             header('Location: ?controller=warehouse&action=receivingPo');
             exit;
         }
 
+        if ($remainingBefore <= 0.0001 || $orderStatus === 'received') {
+            $_SESSION['error'] = 'This purchasing PO has already been fully received.';
+            header('Location: ?controller=warehouse&action=receivingPo');
+            exit;
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // One-shot receipt token (regenerated each time the modal opens):
+            // a re-POST of an already-recorded receipt (double-click, back
+            // button + resubmit) is dropped here instead of being applied twice.
+            // A fresh modal open mints a new token, so a genuine second batch
+            // while the first is still in QC proceeds normally.
+            $receiptToken = trim($_POST['receipt_token'] ?? '');
+            if ($receiptToken !== '' && isset($_SESSION['used_receipt_tokens'][$receiptToken])) {
+                $_SESSION['success'] = 'This receipt was already recorded. No quantities were applied again.';
+                header('Location: ?controller=warehouse&action=receivingPo');
+                exit;
+            }
+
             try {
+                if ($receiptToken === '') {
+                    throw new \RuntimeException('Missing receipt token — please close and reopen the Receive Shipment dialog.');
+                }
                 $receivedQty = floatval($_POST['received_qty'] ?? 0);
                 if ($receivedQty <= 0) {
                     throw new \RuntimeException('Received quantity must be greater than zero.');
@@ -2411,19 +2451,31 @@ class WarehouseController {
 
                 $lotNumber = trim($_POST['lot_number'] ?? '') ?: null;
                 $expiryDate = $_POST['expiry_date'] ?: null;
-                $deliveryReceiptNo = trim($_POST['delivery_receipt_no'] ?? '') ?: null;
                 $receivedDate = $_POST['received_date'] ?: date('Y-m-d');
                 $remarks = trim($_POST['remarks'] ?? '') ?: null;
+
+                // Lot / Batch Number is required for RM, FG and SFG receipts;
+                // PM / Supplies receive without a lot or expiry.
+                $itemType = strtoupper(trim((string) ($order['item_type'] ?? '')));
+                if (in_array($itemType, ['RM', 'FG', 'SFG'], true) && $lotNumber === null) {
+                    throw new \RuntimeException('Lot / Batch Number is required for ' . $itemType . ' receipts.');
+                }
 
                 $result = $this->warehouseModel->receivePurchasingPo($id, [
                     'received_qty' => $receivedQty,
                     'lot_number' => $lotNumber,
                     'expiry_date' => $expiryDate,
-                    'delivery_receipt_no' => $deliveryReceiptNo,
                     'received_date' => $receivedDate,
                     'remarks' => $remarks,
                     'received_by' => $_SESSION['user_id']
                 ]);
+
+                // Consume the token only once the receipt is actually recorded,
+                // so a failed submission can be corrected and re-sent.
+                $_SESSION['used_receipt_tokens'][$receiptToken] = time();
+                if (count($_SESSION['used_receipt_tokens']) > 50) {
+                    $_SESSION['used_receipt_tokens'] = array_slice($_SESSION['used_receipt_tokens'], -50, null, true);
+                }
 
                 $this->notifyProcurementOfReceipt($order, $receivedQty, $result['po_ref'] ?? null);
                 try {
@@ -2433,7 +2485,10 @@ class WarehouseController {
                     error_log('qcInspectionNeeded error: ' . $e->getMessage());
                 }
 
-                $_SESSION['success'] = 'Shipment received and staged for QC inspection (Status: For Inspection).';
+                $newStatus = $result['status'] ?? 'For Inspection';
+                $_SESSION['success'] = $newStatus === 'For Inspection'
+                    ? 'Shipment received and staged for QC inspection (Status: For Inspection).'
+                    : 'Shipment received (Status: Partially Received). Remaining balance is still open for another batch; staged for QC inspection.';
                 header('Location: ?controller=warehouse&action=receivingPo');
                 exit;
             } catch (\Exception $e) {
@@ -2588,7 +2643,9 @@ class WarehouseController {
                         'remarks' => 'Auto-generated from MRP Run #' . $runId,
                         'created_by' => $_SESSION['user_id'],
                         'status' => 'requested',
-                        'po_id' => $poId
+                        'po_id' => $poId,
+                        'mrp_run_id' => $runId,
+                        'mrp_ref' => 'MRP-#' . $runId,
                     ]);
                 }
             }
@@ -2656,7 +2713,18 @@ class WarehouseController {
             header('Location: ?controller=warehouse&action=mrp');
             exit;
         }
+        // Values come straight from the frozen mrp_run_items columns (never live
+        // inventory); formatQty() is applied here so the modal renders clean
+        // quantities while the PDF/delete callers keep the raw numbers.
         $items = $this->warehouseModel->getMrpRunItems($runId);
+        foreach ($items as &$item) {
+            $item['total_reqt'] = formatQty($item['total_reqt'] ?? 0);
+            $item['soh']        = formatQty($item['soh'] ?? 0);
+            $item['allocated']  = formatQty($item['allocated'] ?? 0);
+            $item['pending']    = formatQty($item['pending'] ?? 0);
+            $item['excess']     = formatQty($item['excess'] ?? 0);
+        }
+        unset($item);
         header('Content-Type: application/json');
         echo json_encode($items);
         exit;
@@ -2668,12 +2736,13 @@ class WarehouseController {
         if ($runId > 0) {
             $result = $this->warehouseModel->deleteMrpRun($runId);
             if ($result['success']) {
-                $_SESSION['success'] = 'MRP snapshot deleted.';
+                $_SESSION['success'] = $result['message'] ?? 'MRP snapshot deleted.';
             } else {
                 $_SESSION['error'] = $result['message'];
             }
         }
-        header("Location: ?controller=warehouse&action=mrpHistory&po_id={$poId}");
+        $redirect = "Location: ?controller=warehouse&action=mrpHistory" . ($poId > 0 ? "&po_id={$poId}" : '');
+        header($redirect);
         exit;
     }
 

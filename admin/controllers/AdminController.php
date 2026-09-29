@@ -1890,6 +1890,7 @@ public function deleteProductionHistory() {
 
     public function purchasingPo() {
         $filters = [
+            'tab' => $_GET['tab'] ?? '',
             'status' => $_GET['status'] ?? '',
             'search' => $_GET['search'] ?? '',
         ];
@@ -1897,12 +1898,14 @@ public function deleteProductionHistory() {
         $data['page_title'] = 'Purchasing PO (View Only)';
         $data['orders'] = $orders;
         $data['filters'] = $filters;
+        $data['tabCounts'] = $this->warehouseModel->getPurchasingTabCounts();
         $data['readOnly'] = true;
         $this->render('purchasingPo/index', $data);
     }
 
     public function receivingPo() {
         $filters = [
+            'tab' => $_GET['tab'] ?? '',
             'status' => $_GET['status'] ?? '',
             'supplier' => $_GET['supplier'] ?? '',
             'search' => $_GET['search'] ?? '',
@@ -1914,6 +1917,7 @@ public function deleteProductionHistory() {
         $data['orders'] = $orders;
         $data['filters'] = $filters;
         $data['suppliers'] = $suppliers;
+        $data['tabCounts'] = $this->warehouseModel->getReceivingTabCounts();
         $data['readOnly'] = true;
         $this->render('receivingPo/index', $data);
     }

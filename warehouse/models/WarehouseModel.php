@@ -3234,7 +3234,7 @@ public function searchItems($query) {
         // PO Ref is the explicit po_ref entered by procurement (New/Process
         // modal); '-' until one is provided. Never customer_po_number, never
         // auto-generated internal ids.
-        $sql = "SELECT so.*, i.item_code, i.item_description,
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_type,
                        COALESCE(so.uom,
                                 (SELECT bi.uom FROM fg_bom_items bi
                                  JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
@@ -3258,7 +3258,7 @@ public function searchItems($query) {
     }
 
     public function getSupplierOrderById($id) {
-        $sql = "SELECT so.*, i.item_code, i.item_description,
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_type,
                        COALESCE(so.uom,
                                 (SELECT bi.uom FROM fg_bom_items bi
                                  JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
@@ -3278,13 +3278,15 @@ public function searchItems($query) {
         $status = $data['status'] ?? 'pending';
         $poId = $data['po_id'] ?? null;
         $uom = $data['uom'] ?? null;
+        $mrpRunId = isset($data['mrp_run_id']) ? intval($data['mrp_run_id']) : null;
+        $mrpRef = $data['mrp_ref'] ?? null;
         if ($uom === null || $uom === '') {
             $uomStmt = self::getConnection()->prepare("SELECT item_uom FROM items WHERE item_id = ?");
             $uomStmt->execute([$data['item_id']]);
             $uom = $uomStmt->fetchColumn() ?: null;
         }
-        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, uom, unit_cost, order_date, expected_date, remarks, created_by, status, po_id)
-                VALUES (:supplier_name, :item_id, :quantity, :uom, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id)";
+        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, uom, unit_cost, order_date, expected_date, remarks, created_by, status, po_id, mrp_run_id, mrp_ref)
+                VALUES (:supplier_name, :item_id, :quantity, :uom, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id, :mrp_run_id, :mrp_ref)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'supplier_name' => $data['supplier_name'],
@@ -3297,7 +3299,9 @@ public function searchItems($query) {
             'remarks' => $data['remarks'],
             'created_by' => $data['created_by'],
             'status' => $status,
-            'po_id' => $poId
+            'po_id' => $poId,
+            'mrp_run_id' => $mrpRunId,
+            'mrp_ref' => $mrpRef,
         ]);
         return self::getConnection()->lastInsertId();
     }
@@ -3460,19 +3464,68 @@ public function searchItems($query) {
 
     // ─── Purchasing PO (renamed from Procurement PO) ────────────────────────────
 
+    /**
+     * Status sets behind the Purchasing PO filter tabs.
+     * Returns null = no status restriction (All Orders).
+     * A concrete $filters['status'] always wins over the tab.
+     */
+    private function purchasingStatusTabSet($tab) {
+        switch ((string) $tab) {
+            case 'requested':
+                return ['requested'];
+            case 'active':
+                return ['pending', 'processed', 'partially_received', 'For Inspection'];
+            case 'history':
+                return ['received', 'cancelled', 'rejected', 'completed'];
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Per-tab row counts for the Purchasing PO status tabs.
+     */
+    public function getPurchasingTabCounts() {
+        $sql = "SELECT status, COUNT(*) AS c FROM supplier_orders WHERE `remove` = 0 GROUP BY status";
+        $byStatus = [];
+        $all = 0;
+        foreach (self::getConnection()->query($sql)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $byStatus[$row['status']] = (int) $row['c'];
+            $all += (int) $row['c'];
+        }
+        $sumOf = function (array $set) use ($byStatus) {
+            $total = 0;
+            foreach ($set as $status) {
+                $total += $byStatus[$status] ?? 0;
+            }
+            return $total;
+        };
+        return [
+            'all' => $all,
+            'requested' => $sumOf($this->purchasingStatusTabSet('requested')),
+            'active' => $sumOf($this->purchasingStatusTabSet('active')),
+            'history' => $sumOf($this->purchasingStatusTabSet('history')),
+        ];
+    }
+
     public function getPurchasingPoFiltered($filters = []) {
         $where = ["so.`remove` = 0"];
         $params = [];
 
+        // Exact status (dropdown) overrides the tab group.
         if (!empty($filters['status']) && $filters['status'] !== 'all') {
-            $where[] = "so.status = :status";
-            $params['status'] = $filters['status'];
-        } elseif (empty($filters['status'])) {
-            // Keep the full lifecycle visible so rows remain available as they move through
-            // requested -> pending -> for inspection -> approved/rejected without being hidden.
-            $where[] = "so.status IN ('requested', 'pending', 'processed', 'partially_received', 'For Inspection', 'received', 'rejected', 'cancelled')";
+            $statuses = [$filters['status']];
+        } else {
+            $statuses = $this->purchasingStatusTabSet($filters['tab'] ?? '');
         }
-        // status === 'all' → no status clause (full history for audit/traceability)
+        if ($statuses !== null) {
+            $placeholders = [];
+            foreach ($statuses as $i => $status) {
+                $placeholders[] = ":st{$i}";
+                $params["st{$i}"] = $status;
+            }
+            $where[] = 'so.status IN (' . implode(', ', $placeholders) . ')';
+        }
         if (!empty($filters['supplier_name'])) {
             $where[] = "so.supplier_name LIKE :supplier_name";
             $params['supplier_name'] = '%' . $filters['supplier_name'] . '%';
@@ -3488,7 +3541,7 @@ public function searchItems($query) {
 
         $whereSql = implode(' AND ', $where);
         // PO Ref is the explicit po_ref entered by procurement; '-' when empty.
-        $sql = "SELECT so.*, i.item_code, i.item_description,
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_type,
                        COALESCE(so.uom,
                                 (SELECT bi.uom FROM fg_bom_items bi
                                  JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
@@ -3512,7 +3565,7 @@ public function searchItems($query) {
     }
 
     public function getPurchasingPoById($id) {
-        $sql = "SELECT so.*, i.item_code, i.item_description,
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_type,
                        COALESCE(so.uom,
                                 (SELECT bi.uom FROM fg_bom_items bi
                                  JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
@@ -3696,19 +3749,76 @@ public function searchItems($query) {
 
     // ─── Receiving Purchasing PO ────────────────────────────────────────────────
 
+    /**
+     * Status sets behind the Receiving PO filter tabs.
+     * Returns null = no status restriction (All Shipments).
+     * A concrete $filters['status'] (dropdown) always wins over the tab.
+     */
+    private function receivingStatusTabSet($tab) {
+        switch ((string) $tab) {
+            case 'pending':      // In-Transit: ordered/underway, awaiting receipt
+            case '':             // default — Receiving has no "All Shipments" view
+                return ['pending', 'processed', 'partially_received'];
+            case 'inspection':   // received into quarantine, awaiting QC decision
+                return ['For Inspection'];
+            case 'completed':    // terminal outcomes: approved + rejected + cancelled
+                return ['received', 'rejected', 'cancelled'];
+            case 'all':          // legacy bookmarked URL only
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Per-tab row counts for the receiving status tabs.
+     * "requested" lines are excluded — they never appear on Receiving.
+     */
+    public function getReceivingTabCounts() {
+        $sql = "SELECT status, COUNT(*) AS c FROM supplier_orders
+                WHERE `remove` = 0 AND status <> 'requested'
+                GROUP BY status";
+        $byStatus = [];
+        $all = 0;
+        foreach (self::getConnection()->query($sql)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $byStatus[$row['status']] = (int) $row['c'];
+            $all += (int) $row['c'];
+        }
+        $sumOf = function (array $set) use ($byStatus) {
+            $total = 0;
+            foreach ($set as $status) {
+                $total += $byStatus[$status] ?? 0;
+            }
+            return $total;
+        };
+        return [
+            'all' => $all,
+            'pending' => $sumOf($this->receivingStatusTabSet('pending')),
+            'inspection' => $sumOf($this->receivingStatusTabSet('inspection')),
+            'completed' => $sumOf($this->receivingStatusTabSet('completed')),
+        ];
+    }
+
     public function getReceivingPoFiltered($filters = []) {
-        $where = ["so.`remove` = 0"];
+        // Receiving never lists requisitions: procurement owns those until they
+        // are processed into supplier orders. Excluded for every tab and for the
+        // status dropdown alike.
+        $where = ["so.`remove` = 0", "so.status <> 'requested'"];
         $params = [];
 
+        // Exact status (dropdown) overrides the tab group.
         if (!empty($filters['status']) && $filters['status'] !== 'all') {
-            $where[] = "so.status = :status";
-            $params['status'] = $filters['status'];
-        } elseif (empty($filters['status'])) {
-            // Warehouse receiving is only for orders that have already been processed by purchasing.
-            // Requested rows remain in purchasing and are intentionally excluded from the receiving queue.
-            $where[] = "so.status IN ('pending', 'processed', 'partially_received', 'For Inspection', 'received', 'rejected', 'cancelled')";
+            $statuses = [$filters['status']];
+        } else {
+            $statuses = $this->receivingStatusTabSet($filters['tab'] ?? '');
         }
-        // status === 'all' → no status clause (full history for audit/traceability)
+        if ($statuses !== null) {
+            $placeholders = [];
+            foreach ($statuses as $i => $status) {
+                $placeholders[] = ":st{$i}";
+                $params["st{$i}"] = $status;
+            }
+            $where[] = 'so.status IN (' . implode(', ', $placeholders) . ')';
+        }
         if (!empty($filters['supplier'])) {
             $where[] = "so.supplier_name = :supplier";
             $params['supplier'] = $filters['supplier'];
@@ -3724,7 +3834,7 @@ public function searchItems($query) {
 
         $whereSql = implode(' AND ', $where);
         // PO Ref is the explicit po_ref entered by procurement; '-' when empty.
-        $sql = "SELECT so.*, i.item_code, i.item_description,
+        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_type,
                        COALESCE(so.uom,
                                 (SELECT bi.uom FROM fg_bom_items bi
                                  JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
@@ -3788,51 +3898,23 @@ public function searchItems($query) {
             $remarksParts = [];
             if (!empty($data['lot_number'])) $remarksParts[] = 'Lot: ' . $data['lot_number'];
             if (!empty($data['expiry_date'])) $remarksParts[] = 'Expiry: ' . $data['expiry_date'];
-            if (!empty($data['delivery_receipt_no'])) $remarksParts[] = 'DR: ' . $data['delivery_receipt_no'];
             if (!empty($data['remarks'])) $remarksParts[] = $data['remarks'];
             $stagingRemarks = $remarksParts ? implode(' | ', $remarksParts) : null;
 
-            // Duplicate prevention: if a pending inspection row already exists
-            // for this po_ref + item_code on this PO line (double-click /
-            // resubmit), update it instead of creating a second QC queue
-            // entry. Quantities on the supplier order were already applied by
-            // the first submission.
-            $dup = $conn->prepare(
-                "SELECT id FROM receiving_items
-                 WHERE supplier_order_id = :sid
-                   AND po_ref = :po_ref
-                   AND item_code = :item_code
-                   AND qc_status = 'PENDING_QC'
-                 LIMIT 1"
-            );
-            $dup->execute(['sid' => $id, 'po_ref' => $poRef, 'item_code' => $order['item_code']]);
-            $dupRow = $dup->fetch();
-            if ($dupRow) {
-                $conn->prepare(
-                    "UPDATE receiving_items
-                     SET received_qty = :received_qty,
-                         received_date = :received_date,
-                         lot_number = :lot_number,
-                         expiry_date = :expiry_date,
-                         dr_invoice_no = :dr_invoice_no,
-                         remarks = :remarks
-                     WHERE id = :rid"
-                )->execute([
-                    'received_qty' => $receivedQty,
-                    'received_date' => $data['received_date'],
-                    'lot_number' => $data['lot_number'] ?? null,
-                    'expiry_date' => $data['expiry_date'] ?? null,
-                    'dr_invoice_no' => $data['delivery_receipt_no'] ?? null,
-                    'remarks' => $stagingRemarks,
-                    'rid' => $dupRow['id'],
-                ]);
-                $conn->commit();
-                return ['success' => true, 'receiving_item_id' => (int) $dupRow['id'], 'po_ref' => $poRef, 'duplicate' => true];
-            }
+            // Every confirmed submission is its own batch: insert a fresh QC
+            // queue row and add to supplier_orders.received_qty below. Duplicate
+            // protection (double-click / back-resubmit) is handled upstream by
+            // the one-shot receipt_token in WarehouseController::receivePurchasingPo,
+            // so a genuine second batch while the first is still PENDING_QC is
+            // not mistaken for a resubmit and is no longer silently swallowed.
 
-            // Status transitions to 'For Inspection' only here: explicit modal
-            // submission with received_qty > 0 (guarded above).
-            $qcGateStatus = 'For Inspection';
+            // Partial receiving: a balance still due keeps the order open as
+            // 'partially_received' so warehouse can receive the next batch.
+            // Only a fully-ordered receipt gates the line to QC inspection
+            // (guarded above). The pending QC batch stays queued regardless,
+            // because the queue is driven by receiving_items.qc_status.
+            $remainingAfter = max(0, $orderedQty - $newReceivedQty);
+            $qcGateStatus = $remainingAfter > 0.0001 ? 'partially_received' : 'For Inspection';
             $sql = "UPDATE supplier_orders 
                     SET received_qty = :received_qty,
                         received_date = :received_date,
@@ -3852,12 +3934,12 @@ public function searchItems($query) {
                 INSERT INTO receiving_items
                     (po_ref, supplier, item_code, item_name, uom,
                      ordered_qty, received_qty, passed_qty, rejected_qty,
-                     lot_number, expiry_date, dr_invoice_no, received_date,
+                     lot_number, expiry_date, received_date,
                      remarks, qc_status, supplier_order_id)
                 VALUES
                     (:po_ref, :supplier, :item_code, :item_name, :uom,
                      :ordered_qty, :received_qty, 0, 0,
-                     :lot_number, :expiry_date, :dr_invoice_no, :received_date,
+                     :lot_number, :expiry_date, :received_date,
                      :remarks, 'PENDING_QC', :supplier_order_id)
             ")->execute([
                 'po_ref' => $poRef,
@@ -3869,7 +3951,6 @@ public function searchItems($query) {
                 'received_qty' => $receivedQty,
                 'lot_number' => $data['lot_number'] ?? null,
                 'expiry_date' => $data['expiry_date'] ?? null,
-                'dr_invoice_no' => $data['delivery_receipt_no'] ?? null,
                 'received_date' => $data['received_date'],
                 'remarks' => $stagingRemarks,
                 'supplier_order_id' => $id,
@@ -3889,11 +3970,10 @@ public function searchItems($query) {
             ]);
 
             // Log the receipt details
-            if (!empty($data['remarks']) || !empty($data['lot_number']) || !empty($data['delivery_receipt_no'])) {
+            if (!empty($data['remarks']) || !empty($data['lot_number'])) {
                 $receiptInfo = [];
                 if (!empty($data['lot_number'])) $receiptInfo[] = "Lot: {$data['lot_number']}";
                 if (!empty($data['expiry_date'])) $receiptInfo[] = "Expiry: {$data['expiry_date']}";
-                if (!empty($data['delivery_receipt_no'])) $receiptInfo[] = "DR: {$data['delivery_receipt_no']}";
                 if (!empty($data['remarks'])) $receiptInfo[] = $data['remarks'];
                 
                 $receiptRemarks = implode(' | ', $receiptInfo);
@@ -3905,7 +3985,7 @@ public function searchItems($query) {
             }
 
             $conn->commit();
-            return ['success' => true, 'receiving_item_id' => $receivingItemId, 'po_ref' => $poRef];
+            return ['success' => true, 'receiving_item_id' => $receivingItemId, 'po_ref' => $poRef, 'status' => $qcGateStatus];
         } catch (\Exception $e) {
             $conn->rollBack();
             throw $e;
@@ -3949,6 +4029,147 @@ public function searchItems($query) {
         }
     }
 
+    /**
+     * Save an FG/customer/target MRP calculation: history run + component lines,
+     * committed-stock allocation, and the purchase requests for lacking items —
+     * all in one transaction so a failure leaves no half-saved run.
+     *
+     * $rows    — every BOM component: component_item_id, required, soh, allocated
+     * $lacking — [item_id => ['quantity' => float, 'uom' => string]] recomputed by caller
+     */
+    public function saveMrpCalculationRun($customerId, $fgItemId, $targetQty, $userId, array $rows, array $lacking, $customRef = null) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $fgStmt = $conn->prepare("SELECT item_code FROM items WHERE item_id = :id");
+            $fgStmt->execute(['id' => $fgItemId]);
+            $fgCode = $fgStmt->fetchColumn();
+            if ($fgCode === false) {
+                throw new \RuntimeException('Finished good not found.');
+            }
+
+            // Custom reference entered by the user (e.g. MRP-2026-001); the
+            // auto "MRP-#<id>" form is only a fallback for callers that skip it.
+            $mrpRef = trim((string) $customRef) !== '' ? trim((string) $customRef) : null;
+
+            $conn->prepare(
+                "INSERT INTO mrp_runs (po_id, customer_id, user_id, fg_item_id, fg_code, target_qty, mrp_ref)
+                 VALUES (NULL, :customer_id, :user_id, :fg_item_id, :fg_code, :target_qty, :mrp_ref)"
+            )->execute([
+                'customer_id' => $customerId > 0 ? $customerId : null,
+                'user_id' => $userId,
+                'fg_item_id' => $fgItemId,
+                'fg_code' => $fgCode,
+                'target_qty' => $targetQty,
+                'mrp_ref' => $mrpRef,
+            ]);
+            $runId = (int) $conn->lastInsertId();
+            if ($mrpRef === null) {
+                $mrpRef = 'MRP-#' . $runId;
+            }
+
+            $itemStmt = $conn->prepare(
+                "INSERT INTO mrp_run_items
+                    (run_id, fg_item_id, component_item_id, total_reqt, soh, allocated,
+                     pending, excess, remarks, qty_committed)
+                 VALUES
+                    (:run_id, :fg_item_id, :component_item_id, :total_reqt, :soh, :allocated,
+                     :pending, :excess, :remarks, :qty_committed)"
+            );
+            // ALLOCATED on the Item Master comes from view_inventory_status, which
+            // sums inventory_balances.qty_allocated — so committed stock is booked
+            // there (qty_on_hand / qty_for_inspect are never touched here).
+            $allocStmt = $conn->prepare(
+                "INSERT INTO inventory_balances (item_id, site_code, qty_allocated)
+                 VALUES (:item_id, 'MAIN', :qty)
+                 ON DUPLICATE KEY UPDATE qty_allocated = qty_allocated + :qty2"
+            );
+
+            $committed = 0;
+            foreach ($rows as $row) {
+                $itemId = (int) $row['component_item_id'];
+                $required = floatval($row['required']);
+                $soh = floatval($row['soh']);
+                $allocated = floatval($row['allocated']);
+                $available = $soh - $allocated;
+                $excess = $available - $required;
+
+                if ($required <= 0) {
+                    $remarks = 'NO NEED';
+                } elseif ($excess < 0) {
+                    $remarks = 'LACKING';
+                } elseif ($excess < $available * 0.1) {
+                    $remarks = 'LOW STOCK';
+                } else {
+                    $remarks = 'OK';
+                }
+
+                $itemStmt->execute([
+                    'run_id' => $runId,
+                    'fg_item_id' => $fgItemId,
+                    'component_item_id' => $itemId,
+                    'total_reqt' => $required,
+                    'soh' => $soh,
+                    'allocated' => $allocated,
+                    'pending' => $allocated,
+                    'excess' => $excess,
+                    'remarks' => $remarks,
+                    'qty_committed' => max(0, $required),
+                ]);
+
+                if ($required > 0) {
+                    $allocStmt->execute(['item_id' => $itemId, 'qty' => $required, 'qty2' => $required]);
+                    $committed++;
+                }
+            }
+
+            // Purchase requests for lacking items, tagged with this run id (mrp_run_id
+            // + mrp_ref + the legacy remarks format) so deleteMrpRun() finds them and
+            // the Purchasing table shows the MRP origin.
+            //
+            // Idempotency: getExistingRequestedOrders() skips any item that already has
+            // an ACTIVE 'requested' line — which covers the same-run duplicate rule and
+            // is stricter (it also stops a second run re-requesting an item that is
+            // already queued). Cancelled/rejected lines do not block a fresh request.
+            $existing = $this->getExistingRequestedOrders(array_keys($lacking));
+            $queued = 0;
+            $skipped = 0;
+            foreach ($lacking as $itemId => $target) {
+                if (isset($existing[$itemId])) {
+                    $skipped++;
+                    continue;
+                }
+                $this->createSupplierOrder([
+                    'supplier_name' => 'Pending Selection',
+                    'item_id' => $itemId,
+                    'quantity' => $target['quantity'],
+                    'uom' => $target['uom'] ?? null,
+                    'unit_cost' => 0,
+                    'order_date' => date('Y-m-d'),
+                    'expected_date' => null,
+                    'remarks' => 'Auto-generated from MRP Run #' . $runId,
+                    'created_by' => $userId,
+                    'status' => 'requested',
+                    'po_id' => null,
+                    'mrp_run_id' => $runId,
+                    'mrp_ref' => $mrpRef,
+                ]);
+                $queued++;
+            }
+
+            $conn->commit();
+            return [
+                'run_id' => $runId,
+                'queued' => $queued,
+                'skipped' => $skipped,
+                'committed' => $committed,
+            ];
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
     public function getMrpRunsByPO($po_id) {
         $sql = "SELECT mr.*, u.full_name AS user_name
                 FROM mrp_runs mr
@@ -3960,9 +4181,25 @@ public function searchItems($query) {
         return $stmt->fetchAll();
     }
 
+    /**
+     * Snapshot detail rows for the history modal (and PDF / delete release).
+     *
+     * FROZEN columns: total_reqt, soh, allocated, pending, excess and remarks are
+     * selected explicitly from mrp_run_items — captured at save time — so callers
+     * always get the historical figures. The items joins supply static descriptors
+     * only (codes, descriptions, uom) and never touch view_inventory_status.
+     *
+     * Values are returned RAW: the PDF runs number_format()/abs() on them and
+     * deleteMrpRun() subtracts qty_committed. Display formatting is applied by
+     * WarehouseController::mrpRunDetail() for the modal JSON.
+     */
     public function getMrpRunItems($run_id) {
-        $sql = "SELECT mri.*, i.item_code AS fg_code, i.item_description AS fg_name,
-                       ic.item_code AS component_code, ic.item_description AS component_name, ic.item_uom AS component_uom
+        $sql = "SELECT mri.id, mri.run_id, mri.fg_item_id, mri.component_item_id,
+                       mri.total_reqt, mri.soh, mri.allocated, mri.pending,
+                       mri.excess, mri.remarks, mri.qty_committed,
+                       i.item_code AS fg_code, i.item_description AS fg_name,
+                       ic.item_code AS component_code, ic.item_description AS component_name,
+                       ic.item_uom AS component_uom
                 FROM mrp_run_items mri
                 JOIN items i ON mri.fg_item_id = i.item_id
                 JOIN items ic ON mri.component_item_id = ic.item_id
@@ -3990,10 +4227,17 @@ public function searchItems($query) {
         return $stmt->fetchAll();
     }
 
+    /**
+     * Cancel the purchase requests this run generated while they are still
+     * unconverted (Requested / Draft). POs already converted to an active order
+     * (pending/processed), received, approved or rejected are deliberately NOT
+     * touched — they are real commitments that outlive the snapshot.
+     * Returns the number of orders cancelled.
+     */
     public function cancelLinkedSupplierOrdersForRun($run_id) {
-        $sql = "UPDATE supplier_orders SET status = 'cancelled'
+        $sql = "UPDATE supplier_orders SET status = 'cancelled', last_update = NOW()
                 WHERE remarks = CONCAT('Auto-generated from MRP Run #', :run_id)
-                  AND status = 'requested' AND `remove` = 0";
+                  AND LOWER(status) IN ('requested', 'draft') AND `remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['run_id' => $run_id]);
         return $stmt->rowCount();
@@ -4003,25 +4247,47 @@ public function searchItems($query) {
         $conn = self::getConnection();
         $conn->beginTransaction();
         try {
+            // 1. Identify every PO this run generated. Unconverted ones
+            //    (Requested/Draft) get cancelled below; anything already
+            //    converted / received / approved is preserved as-is.
             $linkedOrders = $this->getLinkedSupplierOrdersForRun($run_id);
-
+            $preserved = 0;
             foreach ($linkedOrders as $order) {
-                if (in_array($order['status'], ['pending', 'received', 'completed'])) {
-                    $conn->rollBack();
-                    return [
-                        'success' => false,
-                        'message' => 'Cannot delete MRP snapshot because associated Procurement POs have already been processed with suppliers.'
-                    ];
+                $status = strtolower(trim((string) ($order['status'] ?? '')));
+                if (!in_array($status, ['requested', 'draft', 'cancelled'], true)) {
+                    $preserved++;
+                }
+            }
+            $cancelled = $this->cancelLinkedSupplierOrdersForRun($run_id);
+
+            // 2. Release the stock this run committed (qty_committed), so deleting a
+            //    snapshot does not leave permanently reserved ALLOCATED behind.
+            $releaseStmt = $conn->prepare(
+                "UPDATE inventory_balances
+                 SET qty_allocated = GREATEST(0, qty_allocated - :qty)
+                 WHERE item_id = :item_id AND site_code = 'MAIN'"
+            );
+            foreach ($this->getMrpRunItems($run_id) as $runItem) {
+                $qty = floatval($runItem['qty_committed'] ?? 0);
+                if ($qty > 0) {
+                    $releaseStmt->execute(['qty' => $qty, 'item_id' => $runItem['component_item_id']]);
                 }
             }
 
-            $this->cancelLinkedSupplierOrdersForRun($run_id);
-
+            // 3. Remove the run (mrp_run_items goes with it via ON DELETE CASCADE).
             $runStmt = $conn->prepare("DELETE FROM mrp_runs WHERE run_id = :run_id");
             $runStmt->execute(['run_id' => $run_id]);
 
             $conn->commit();
-            return ['success' => true];
+
+            $message = "MRP Run #{$run_id} deleted.";
+            if ($cancelled > 0) {
+                $message .= " {$cancelled} pending purchase request(s) cancelled.";
+            }
+            if ($preserved > 0) {
+                $message .= " {$preserved} active PO(s) left untouched.";
+            }
+            return ['success' => true, 'cancelled' => $cancelled, 'preserved' => $preserved, 'message' => $message];
         } catch (\Exception $e) {
             $conn->rollBack();
             throw $e;
@@ -4029,13 +4295,15 @@ public function searchItems($query) {
     }
 
     public function getAllMrpRuns() {
+        // LEFT JOINs: FG/customer-target runs have no purchase order, and the
+        // customer may be unset ("All Customers") — they must still be listed.
         $sql = "SELECT mr.*, u.full_name AS user_name,
                        po.customer_po_number, po.total_quantity, po.produced_quantity, po.delivered_quantity,
                        c.customer_name, c.customer_code
                 FROM mrp_runs mr
                 JOIN users u ON mr.user_id = u.user_id
-                JOIN purchase_orders po ON mr.po_id = po.po_id
-                JOIN customers c ON mr.customer_id = c.customer_id
+                LEFT JOIN purchase_orders po ON mr.po_id = po.po_id
+                LEFT JOIN customers c ON mr.customer_id = c.customer_id
                 ORDER BY mr.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();

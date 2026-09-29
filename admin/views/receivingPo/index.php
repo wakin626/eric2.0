@@ -5,9 +5,8 @@
             <input type="hidden" name="controller" value="admin">
             <input type="hidden" name="action" value="receivingPo">
             <select name="status" class="form-select form-select-sm filter-select" style="width:180px">
-                <option value="">Active Orders</option>
+                <option value="">Any status (per tab)</option>
                 <option value="all" <?= ($filters['status'] ?? '') === 'all' ? 'selected' : '' ?>>All Statuses</option>
-                <option value="requested" <?= ($filters['status'] ?? '') === 'requested' ? 'selected' : '' ?>>Requested</option>
                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
                 <option value="processed" <?= ($filters['status'] ?? '') === 'processed' ? 'selected' : '' ?>>Processed</option>
                 <option value="partially_received" <?= ($filters['status'] ?? '') === 'partially_received' ? 'selected' : '' ?>>Partially Received</option>
@@ -29,12 +28,44 @@
 </div>
 
 <div class="card data-card">
+    <?php
+    $tabCounts = $tabCounts ?? ['pending' => 0, 'inspection' => 0, 'completed' => 0];
+    // Receiving has no "All Shipments" view — only actionable pipeline tabs,
+    // with In-Transit as the landing tab.
+    $activeTab = $filters['tab'] ?: 'pending';
+    $recvTabs = [
+        'pending'    => 'In-Transit',
+        'inspection' => 'For QC Inspection',
+        'completed'  => 'Completed / Approved',
+    ];
+    ?>
+    <div class="card-body pb-0">
+        <ul class="nav nav-pills flex-wrap gap-2" id="receivingTabs">
+            <?php foreach ($recvTabs as $tabKey => $tabLabel):
+                $tabHref = '?controller=admin&action=receivingPo&tab=' . rawurlencode($tabKey);
+                if (!empty($filters['search'])) {
+                    $tabHref .= '&search=' . rawurlencode($filters['search']);
+                }
+                if (!empty($filters['supplier'])) {
+                    $tabHref .= '&supplier=' . rawurlencode($filters['supplier']);
+                }
+                $tabCount = $tabCounts[$tabKey] ?? 0;
+            ?>
+            <li class="nav-item">
+                <a class="nav-link px-3 py-1 border rounded-pill <?= $activeTab === $tabKey ? 'active' : '' ?>"
+                   href="<?= $tabHref ?>">
+                    <?= $tabLabel ?> <span class="badge <?= $activeTab === $tabKey ? 'bg-white text-primary' : 'bg-secondary' ?>"><?= (int) $tabCount ?></span>
+                </a>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
                     <th>#</th>
-                    <th>PO Ref</th>
+                    <th>PO / MRP REF</th>
                     <th>Supplier</th>
                     <th>Item Code</th>
                     <th>Description</th>
@@ -51,16 +82,37 @@
                     <td colspan="10" class="text-center text-muted py-4">No purchasing POs ready for receiving.</td>
                 </tr>
                 <?php else: ?>
-                <?php foreach ($orders as $o): ?>
+                <?php foreach ($orders as $index => $o): ?>
+                <?php
+                    $hasPoRef = !empty($o['po_ref_display']) && $o['po_ref_display'] !== '-';
+                    $mrpRef = (string) ($o['mrp_ref'] ?? '');
+                    if ($mrpRef === '' && !empty($o['mrp_run_id'])) {
+                        $mrpRef = 'MRP-#' . $o['mrp_run_id'];
+                    }
+                ?>
                 <tr>
-                    <td><?= $o['supplier_order_id'] ?></td>
-                    <td><?= htmlspecialchars($o['po_ref_display']) ?></td>
+                    <td title="Order #<?= $o['supplier_order_id'] ?>"><?= $index + 1 ?></td>
+                    <td>
+                        <?php if ($hasPoRef): ?>
+                            <?= htmlspecialchars($o['po_ref_display']) ?>
+                        <?php endif; ?>
+                        <?php if ($mrpRef !== ''): ?>
+                            <div class="<?= $hasPoRef ? 'mt-1' : '' ?>"><span class="badge bg-secondary"><?= htmlspecialchars($mrpRef) ?></span></div>
+                        <?php elseif (!$hasPoRef): ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= number_format($o['quantity'], 4) ?></td>
-                    <td class="text-end"><?= $o['received_qty'] > 0 ? number_format($o['received_qty'], 4) : '<span class="text-muted">-</span>' ?></td>
-                    <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
+                    <td class="text-end"><?= rtrim(rtrim(number_format(floatval($o['quantity']), 4), '0'), '.') ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
+                    <td class="text-end"><?= $o['received_qty'] > 0
+                        ? rtrim(rtrim(number_format(floatval($o['received_qty']), 4), '0'), '.') . ' ' . htmlspecialchars($o['item_uom'] ?? '')
+                        : '<span class="text-muted">-</span>' ?></td>
+                    <td><?php
+                        $hasDate = !empty($o['received_date']) && $o['received_date'] !== '0000-00-00' && $o['received_date'] !== '0000-00-00 00:00:00';
+                        echo $hasDate ? date('m/d/Y', strtotime($o['received_date'])) : '-';
+                    ?></td>
                     <td>
                         <?php if ($o['status'] === 'requested'): ?>
                             <span class="badge bg-info">Requested</span>

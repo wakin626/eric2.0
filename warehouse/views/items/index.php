@@ -51,9 +51,9 @@
                         <span class="badge bg-<?= $badge ?>"><?= $item['item_type'] ?? '—' ?></span>
                     </td>
                     <td><?= htmlspecialchars($item['item_uom']) ?></td>
-                    <td><?= number_format($item['total_soh'], 4) ?></td>
-                    <td><?= number_format($item['total_allocated'], 4) ?></td>
-                    <td><strong><?= number_format($item['available_stock'], 4) ?></strong></td>
+                    <td><?= formatQty($item['total_soh'] ?? 0) ?></td>
+                    <td><?= formatQty($item['total_allocated'] ?? 0) ?></td>
+                    <td><strong><?= formatQty($item['available_stock'] ?? 0) ?></strong></td>
                     <td>
                         <?php
                         $statusColors = ['OUT OF STOCK' => 'danger', 'LOW STOCK' => 'warning', 'IN STOCK' => 'success'];

@@ -7,7 +7,7 @@
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="receivingPo">
             <select name="status" class="form-select form-select-sm filter-select" style="width:180px">
-                <option value="">Active Orders</option>
+                <option value="">Any status (per tab)</option>
                 <option value="all" <?= ($filters['status'] ?? '') === 'all' ? 'selected' : '' ?>>All Statuses</option>
                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
                 <option value="processed" <?= ($filters['status'] ?? '') === 'processed' ? 'selected' : '' ?>>Processed</option>
@@ -31,12 +31,45 @@
 </div>
 
 <div class="card data-card">
+    <?php
+    // Status tabs: in-transit vs quarantine (For QC) vs approved receipts.
+    $tabCounts = $tabCounts ?? ['pending' => 0, 'inspection' => 0, 'completed' => 0];
+    // Receiving has no "All Shipments" view — only actionable pipeline tabs,
+    // with In-Transit as the landing tab.
+    $activeTab = $filters['tab'] ?: 'pending';
+    $recvTabs = [
+        'pending'    => 'In-Transit',
+        'inspection' => 'For QC Inspection',
+        'completed'  => 'Completed / Approved',
+    ];
+    ?>
+    <div class="card-body pb-0">
+        <ul class="nav nav-pills flex-wrap gap-2" id="receivingTabs">
+            <?php foreach ($recvTabs as $tabKey => $tabLabel):
+                $tabHref = '?controller=warehouse&action=receivingPo&tab=' . rawurlencode($tabKey);
+                if (!empty($filters['search'])) {
+                    $tabHref .= '&search=' . rawurlencode($filters['search']);
+                }
+                if (!empty($filters['supplier'])) {
+                    $tabHref .= '&supplier=' . rawurlencode($filters['supplier']);
+                }
+                $tabCount = $tabCounts[$tabKey] ?? 0;
+            ?>
+            <li class="nav-item">
+                <a class="nav-link px-3 py-1 border rounded-pill <?= $activeTab === $tabKey ? 'active' : '' ?>"
+                   href="<?= $tabHref ?>">
+                    <?= $tabLabel ?> <span class="badge <?= $activeTab === $tabKey ? 'bg-white text-primary' : 'bg-secondary' ?>"><?= (int) $tabCount ?></span>
+                </a>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
                     <th>#</th>
-                    <th>PO Ref</th>
+                    <th>PO / MRP REF</th>
                     <th>Supplier</th>
                     <th>Item Code</th>
                     <th>Description</th>
@@ -53,20 +86,39 @@
                     <td colspan="10" class="text-center text-muted py-4">No purchasing POs ready for receiving.</td>
                 </tr>
                 <?php else: ?>
-                <?php foreach ($orders as $o): ?>
+                <?php foreach ($orders as $index => $o): ?>
                 <?php
                     $status = strtolower(trim((string) ($o['status'] ?? '')));
                     $remainingQty = floatval($o['quantity']) - floatval($o['received_qty'] ?? 0);
+                    $hasPoRef = !empty($o['po_ref_display']) && $o['po_ref_display'] !== '-';
+                    $mrpRef = (string) ($o['mrp_ref'] ?? '');
+                    if ($mrpRef === '' && !empty($o['mrp_run_id'])) {
+                        $mrpRef = 'MRP-#' . $o['mrp_run_id'];
+                    }
                 ?>
                 <tr>
-                    <td><?= $o['supplier_order_id'] ?></td>
-                    <td><?= htmlspecialchars($o['po_ref_display']) ?></td>
+                    <td title="Order #<?= $o['supplier_order_id'] ?>"><?= $index + 1 ?></td>
+                    <td>
+                        <?php if ($hasPoRef): ?>
+                            <?= htmlspecialchars($o['po_ref_display']) ?>
+                        <?php endif; ?>
+                        <?php if ($mrpRef !== ''): ?>
+                            <div class="<?= $hasPoRef ? 'mt-1' : '' ?>"><span class="badge bg-secondary"><?= htmlspecialchars($mrpRef) ?></span></div>
+                        <?php elseif (!$hasPoRef): ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= number_format($o['quantity'], 4) ?></td>
-                    <td class="text-end"><?= $o['received_qty'] > 0 ? number_format($o['received_qty'], 4) : '<span class="text-muted">-</span>' ?></td>
-                    <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
+                    <td class="text-end"><?= rtrim(rtrim(number_format(floatval($o['quantity']), 4), '0'), '.') ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
+                    <td class="text-end"><?= $o['received_qty'] > 0
+                        ? rtrim(rtrim(number_format(floatval($o['received_qty']), 4), '0'), '.') . ' ' . htmlspecialchars($o['item_uom'] ?? '')
+                        : '<span class="text-muted">-</span>' ?></td>
+                    <td><?php
+                        $hasDate = !empty($o['received_date']) && $o['received_date'] !== '0000-00-00' && $o['received_date'] !== '0000-00-00 00:00:00';
+                        echo $hasDate ? date('m/d/Y', strtotime($o['received_date'])) : '-';
+                    ?></td>
                     <td>
                         <?php if ($status === 'requested'): ?>
                             <span class="badge bg-info">Requested</span>
@@ -89,27 +141,41 @@
                         <?php endif; ?>
                     </td>
                     <td>
+                        <?php $isQcUser = (($_SESSION['department'] ?? '') === 'qc'); ?>
                         <?php if ($isReadOnly): ?>
-                            <span class="text-muted">-</span>
-                        <?php elseif (in_array($status, ['pending', 'processed']) && $remainingQty > 0.0001): ?>
+                            <?php if ($status === 'for inspection' && $isQcUser): ?>
+                                <a class="btn btn-sm btn-primary" href="?controller=qc&action=receivingInspection" title="Open the QC inspection queue">
+                                    <i class="bi bi-clipboard-check"></i> Process Inspection
+                                </a>
+                            <?php else: ?>
+                                <span class="text-muted">-</span>
+                            <?php endif; ?>
+                        <?php elseif (in_array($status, ['pending', 'processed', 'partially_received', 'for inspection']) && $remainingQty > 0.0001): ?>
                             <button class="btn btn-sm btn-success receive-shipment-btn"
                                     data-id="<?= $o['supplier_order_id'] ?>"
                                     data-supplier="<?= htmlspecialchars($o['supplier_name']) ?>"
                                     data-item-code="<?= htmlspecialchars($o['item_code']) ?>"
                                     data-item-desc="<?= htmlspecialchars($o['item_description']) ?>"
+                                    data-item-type="<?= htmlspecialchars($o['item_type'] ?? '') ?>"
                                     data-ordered-qty="<?= $o['quantity'] ?>"
                                     data-received-qty="<?= $o['received_qty'] ?? 0 ?>"
                                     data-uom="<?= htmlspecialchars($o['item_uom']) ?>"
                                     data-po-ref="<?= htmlspecialchars($o['po_ref_display']) ?>"
-                                    title="Receive Shipment">
-                                <i class="bi bi-box-arrow-in-down"></i> Receive
+                                    title="Receive and stage for QC inspection">
+                                <i class="bi bi-box-arrow-in-down"></i> Receive &amp; Send to QC
                             </button>
                         <?php elseif ($status === 'requested'): ?>
                             <span class="badge bg-secondary">Awaiting Purchasing</span>
                         <?php elseif ($status === 'for inspection'): ?>
-                            <span class="badge bg-warning text-dark">In QC Queue</span>
+                            <?php if ($isQcUser): ?>
+                                <a class="btn btn-sm btn-primary" href="?controller=qc&action=receivingInspection" title="Open the QC inspection queue">
+                                    <i class="bi bi-clipboard-check"></i> Process Inspection
+                                </a>
+                            <?php else: ?>
+                                <span class="badge bg-warning text-dark">In QC Queue</span>
+                            <?php endif; ?>
                         <?php elseif (in_array($status, ['approved', 'received'])): ?>
-                            <span class="badge bg-success">Received & Approved</span>
+                            <span class="badge bg-success">Received &amp; Approved</span>
                         <?php elseif ($status === 'rejected'): ?>
                             <span class="badge bg-danger">Rejected</span>
                         <?php else: ?>
@@ -132,6 +198,7 @@
             <form method="POST" action="?controller=warehouse&action=receivePurchasingPo" id="receiveShipmentForm"
                   onsubmit="return submitReceiveFormOnce(this);">
                 <input type="hidden" name="supplier_order_id" id="recvOrderId">
+                <input type="hidden" name="receipt_token" id="recvReceiptToken">
                 <div class="modal-header">
                     <h5 class="modal-title"><i class="bi bi-box-arrow-in-down me-2"></i>Receive Shipment</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -172,19 +239,15 @@
                         <input type="number" name="received_qty" id="recvReceivedQty" class="form-control" min="0.0001" step="0.0001" required>
                         <small class="text-muted">Enter the quantity actually received (may differ from ordered).</small>
                     </div>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Lot / Batch Number <span class="text-danger">*</span></label>
-                            <input type="text" name="lot_number" id="recvLotNumber" class="form-control" placeholder="Required" required>
+                    <div class="row mb-3" id="recvLotBatchRow">
+                        <div class="col-md-6" id="recvLotBatchContainer">
+                            <label class="form-label fw-bold">Lot / Batch Number <span class="text-danger" id="recvLotRequiredMark">*</span></label>
+                            <input type="text" name="lot_number" id="recvLotNumber" class="form-control" placeholder="Required">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6" id="recvExpiryContainer">
                             <label class="form-label fw-bold">Expiry Date</label>
                             <input type="date" name="expiry_date" id="recvExpiryDate" class="form-control">
                         </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Delivery Receipt / Invoice #</label>
-                        <input type="text" name="delivery_receipt_no" id="recvDeliveryReceipt" class="form-control" placeholder="DR / Invoice # for verification">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Received Date <span class="text-danger">*</span></label>
@@ -215,6 +278,11 @@ function submitReceiveFormOnce(form) {
     return true;
 }
 
+function fmtQty(n) {
+    // floatval()-equivalent: no trailing zeros (750.0000 -> 750, 2.5050 -> 2.505)
+    return String(parseFloat(Number(n).toFixed(4)));
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.receive-shipment-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -223,19 +291,40 @@ document.addEventListener('DOMContentLoaded', function() {
             var remaining = ordered - received;
 
             document.getElementById('recvOrderId').value = this.dataset.id;
+            // Fresh one-shot token per modal open: the backend uses it to tell a
+            // genuine new batch apart from a double-click / back-resubmit.
+            document.getElementById('recvReceiptToken').value =
+                (window.crypto && window.crypto.randomUUID)
+                    ? window.crypto.randomUUID()
+                    : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
             document.getElementById('recvPoRef').textContent = this.dataset.poRef;
             document.getElementById('recvSupplier').textContent = this.dataset.supplier;
             document.getElementById('recvItemCode').textContent = this.dataset.itemCode;
             document.getElementById('recvItemDesc').textContent = this.dataset.itemDesc;
             document.getElementById('recvUom').textContent = this.dataset.uom;
-            document.getElementById('recvOrderedQty').textContent = ordered.toFixed(4);
-            document.getElementById('recvAlreadyReceived').textContent = received.toFixed(4);
-            document.getElementById('recvRemaining').textContent = remaining.toFixed(4);
-            document.getElementById('recvReceivedQty').value = remaining.toFixed(4);
-            document.getElementById('recvReceivedQty').max = remaining.toFixed(4);
-            document.getElementById('recvLotNumber').value = '';
+            document.getElementById('recvOrderedQty').textContent = fmtQty(ordered);
+            document.getElementById('recvAlreadyReceived').textContent = fmtQty(received);
+            document.getElementById('recvRemaining').textContent = fmtQty(remaining);
+            document.getElementById('recvReceivedQty').value = fmtQty(remaining);
+            document.getElementById('recvReceivedQty').max = fmtQty(remaining);
+
+            // Lot / Batch + Expiry are required for RM, FG and SFG; hidden for PM / SUPPLIES.
+            var itemType = (this.dataset.itemType || '').toUpperCase();
+            var requiresLot = ['RM', 'FG', 'SFG'].indexOf(itemType) !== -1;
+            document.getElementById('recvLotBatchContainer').style.display = requiresLot ? '' : 'none';
+            document.getElementById('recvExpiryContainer').style.display = requiresLot ? '' : 'none';
+            var lotInput = document.getElementById('recvLotNumber');
+            var lotMark = document.getElementById('recvLotRequiredMark');
+            lotInput.required = requiresLot;
+            lotMark.style.display = requiresLot ? '' : 'none';
+            lotInput.value = '';
             document.getElementById('recvExpiryDate').value = '';
-            document.getElementById('recvDeliveryReceipt').value = '';
+            if (!requiresLot) {
+                lotInput.placeholder = '';
+            } else {
+                lotInput.placeholder = 'Required';
+            }
+
             document.getElementById('recvReceivedDate').value = '<?= date('Y-m-d') ?>';
             document.getElementById('recvRemarks').value = '';
 

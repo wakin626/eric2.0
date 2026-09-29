@@ -16,7 +16,7 @@
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="purchasingPo">
             <select name="status" class="form-select form-select-sm filter-select" style="width:170px">
-                <option value="">Active Orders</option>
+                <option value="">Any status (per tab)</option>
                 <option value="all" <?= ($filters['status'] ?? '') === 'all' ? 'selected' : '' ?>>All Statuses</option>
                 <option value="requested" <?= ($filters['status'] ?? '') === 'requested' ? 'selected' : '' ?>>Requested</option>
                 <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
@@ -34,6 +34,34 @@
 </div>
 
 <div class="card data-card">
+    <?php
+    // Status tabs: separate unassigned requisitions from active supplier orders.
+    $activeTab = $filters['tab'] ?: 'all';
+    $tabCounts = $tabCounts ?? [];
+    $poTabs = [
+        'all'       => 'All Orders',
+        'requested' => 'Requisitions (Requested)',
+        'active'    => 'Active POs (Pending)',
+        'history'   => 'History (Received / Cancelled)',
+    ];
+    ?>
+    <div class="card-body pb-0">
+        <ul class="nav nav-pills flex-wrap gap-2" id="purchasingTabs">
+            <?php foreach ($poTabs as $tabKey => $tabLabel):
+                $tabHref = '?controller=warehouse&action=purchasingPo&tab=' . rawurlencode($tabKey);
+                if (!empty($filters['search'])) {
+                    $tabHref .= '&search=' . rawurlencode($filters['search']);
+                }
+            ?>
+            <li class="nav-item">
+                <a class="nav-link px-3 py-1 border rounded-pill <?= $activeTab === $tabKey ? 'active' : '' ?>"
+                   href="<?= $tabHref ?>">
+                    <?= $tabLabel ?> <span class="badge <?= $activeTab === $tabKey ? 'bg-white text-primary' : 'bg-secondary' ?>"><?= (int) ($tabCounts[$tabKey] ?? 0) ?></span>
+                </a>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead>
@@ -47,7 +75,7 @@
                     <th class="text-end">Unit Cost</th>
                     <th>Order Date</th>
                     <th>Expected</th>
-                    <th>PO Ref</th>
+                    <th>PO REF / SOURCE</th>
                     <th>Status</th>
                     <th class="text-end">Received Qty</th>
                     <th>Received Date</th>
@@ -61,7 +89,7 @@
                     <td colspan="15" class="text-center text-muted py-4">No purchasing POs found.</td>
                 </tr>
                 <?php else: ?>
-                <?php foreach ($orders as $o): $qty = floatval($o['quantity']); ?>
+                <?php foreach ($orders as $index => $o): $qty = floatval($o['quantity']); ?>
                 <tr>
                     <td>
                         <?php if (in_array($o['status'], ['requested', 'pending'])): ?>
@@ -73,7 +101,7 @@
                                data-po-ref="<?= htmlspecialchars($o['po_ref_display']) ?>">
                         <?php endif; ?>
                     </td>
-                    <td><?= $o['supplier_order_id'] ?></td>
+                    <td title="Order #<?= $o['supplier_order_id'] ?>"><?= $index + 1 ?></td>
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
@@ -81,7 +109,12 @@
                     <td class="text-end"><?= number_format($o['unit_cost'], 2) ?></td>
                     <td><?= $o['order_date'] ? date('m/d/Y', strtotime($o['order_date'])) : '-' ?></td>
                     <td><?= $o['expected_date'] ? date('m/d/Y', strtotime($o['expected_date'])) : '-' ?></td>
-                    <td><?= htmlspecialchars($o['po_ref_display']) ?></td>
+                    <td>
+                        <?= htmlspecialchars($o['po_ref_display']) ?>
+                        <?php if (!empty($o['mrp_ref'])): ?>
+                            <div class="mt-1"><span class="badge bg-secondary"><?= htmlspecialchars($o['mrp_ref']) ?></span></div>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if ($o['status'] === 'requested'): ?>
                             <span class="badge bg-info">Requested</span>
@@ -101,7 +134,12 @@
                             <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
                         <?php endif; ?>
                     </td>
-                    <td class="text-end"><?= $o['received_qty'] > 0 ? number_format($o['received_qty'], 4) : '-' ?></td>
+                    <td class="text-end"><?php
+                        $recvQty = floatval($o['received_qty'] ?? 0);
+                        echo $recvQty > 0
+                            ? rtrim(rtrim(number_format($recvQty, 4), '0'), '.') . ' ' . htmlspecialchars($o['item_uom'] ?? '')
+                            : '-';
+                    ?></td>
                     <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
                     <td><?= htmlspecialchars($o['created_by_name'] ?? '') ?></td>
                     <td>

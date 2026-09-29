@@ -45,7 +45,7 @@ function submitQcDecisionOnce(form) {
                                 <td><?= htmlspecialchars($item['supplier_name'] ?? '-') ?></td>
                                 <td><strong><?= htmlspecialchars($item['item_code'] ?? '-') ?></strong></td>
                                 <td><?= htmlspecialchars($item['item_description'] ?? '-') ?></td>
-                                <td class="text-end"><?= number_format($receivedQty, 4) ?></td>
+                                <td class="text-end"><?= formatQty($receivedQty) ?> <?= htmlspecialchars($item['item_uom'] ?? $item['uom'] ?? '') ?></td>
                                 <td><?= !empty($item['received_date']) ? date('Y-m-d', strtotime($item['received_date'])) : '-' ?></td>
                                 <td>
                                     <span class="badge bg-warning text-dark"><?= htmlspecialchars($currentStatus === 'PENDING_QC' ? 'Pending Inspection' : $currentStatus) ?></span>
@@ -117,7 +117,7 @@ function submitQcDecisionOnce(form) {
                                 <td><?= htmlspecialchars($item['supplier_name'] ?? '-') ?></td>
                                 <td><strong><?= htmlspecialchars($item['item_code'] ?? '-') ?></strong></td>
                                 <td><?= htmlspecialchars($item['item_description'] ?? '-') ?></td>
-                                <td class="text-end"><?= number_format((float) ($item['received_qty'] ?? 0), 4) ?></td>
+                                <td class="text-end"><?= formatQty($item['received_qty'] ?? 0) ?> <?= htmlspecialchars($item['item_uom'] ?? $item['uom'] ?? '') ?></td>
                                 <td><?= !empty($item['received_date']) ? date('Y-m-d', strtotime($item['received_date'])) : '-' ?></td>
                                 <td>
                                     <?php $decision = strtoupper((string) ($item['qc_status'] ?? '')); ?>

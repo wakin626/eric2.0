@@ -297,10 +297,14 @@ CREATE TABLE IF NOT EXISTS manufacturing_order_items (
 -- MRP Runs Table
 CREATE TABLE IF NOT EXISTS mrp_runs (
     run_id INT AUTO_INCREMENT PRIMARY KEY,
-    po_id INT NOT NULL,
+    po_id INT NULL,
     customer_id INT NULL,
     user_id INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fg_item_id INT NULL,
+    fg_code VARCHAR(50) NULL,
+    target_qty DECIMAL(15,4) NULL,
+    mrp_ref VARCHAR(30) NULL,
     FOREIGN KEY (po_id) REFERENCES purchase_orders(po_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -317,5 +321,6 @@ CREATE TABLE IF NOT EXISTS mrp_run_items (
     pending DECIMAL(15,4) DEFAULT 0,
     excess DECIMAL(15,4) DEFAULT 0,
     remarks VARCHAR(50) NULL,
+    qty_committed DECIMAL(15,4) NOT NULL DEFAULT 0,
     FOREIGN KEY (run_id) REFERENCES mrp_runs(run_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

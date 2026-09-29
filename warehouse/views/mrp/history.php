@@ -28,10 +28,10 @@
             <thead>
                 <tr>
                     <th>Run #</th>
+                    <th>MRP REF</th>
                     <?php if (empty($selectedPO)): ?>
-                    <th>PO Number</th>
-                    <th>Customer</th>
-                    <th>PO Qty</th>
+                    <th>FG</th>
+                    <th>Target Qty</th>
                     <?php endif; ?>
                     <th>Date Saved</th>
                     <th>Saved By</th>
@@ -42,16 +42,16 @@
             <tbody>
                 <?php if (empty($runs)): ?>
                 <tr>
-                    <td colspan="<?= empty($selectedPO) ? 8 : 5 ?>" class="text-center text-muted py-4">No snapshots saved yet.</td>
+                    <td colspan="<?= empty($selectedPO) ? 8 : 6 ?>" class="text-center text-muted py-4">No snapshots saved yet.</td>
                 </tr>
                 <?php else: ?>
                 <?php foreach ($runs as $r): ?>
                 <tr>
                     <td><strong>#<?= $r['run_id'] ?></strong></td>
+                    <td><code><?= htmlspecialchars($r['mrp_ref'] ?? ('MRP-#' . $r['run_id'])) ?></code></td>
                     <?php if (empty($selectedPO)): ?>
-                    <td><code><?= htmlspecialchars($r['customer_po_number'] ?? '') ?></code></td>
-                    <td><?= htmlspecialchars($r['customer_name'] ?? '') ?></td>
-                    <td class="text-end"><?= number_format($r['total_quantity'] ?? 0) ?> cases</td>
+                    <td><code><?= htmlspecialchars($r['fg_code'] ?? '-') ?></code></td>
+                    <td class="text-end"><?= $r['target_qty'] !== null && $r['target_qty'] !== '' ? formatQty($r['target_qty']) : '-' ?></td>
                     <?php endif; ?>
                     <td><?= date('m/d/Y h:i A', strtotime($r['date_created'])) ?></td>
                     <td><?= htmlspecialchars($r['user_name'] ?? '') ?></td>
@@ -63,9 +63,11 @@
                             <button class="btn btn-outline-primary view-snapshot-btn" data-run-id="<?= $r['run_id'] ?>" title="View Details">
                                 <i class="bi bi-eye"></i>
                             </button>
+                            <?php if (!empty($r['po_id'])): ?>
                             <a href="?controller=warehouse&action=mrpSnapshotPDF&run_id=<?= $r['run_id'] ?>" class="btn btn-outline-danger" title="Print PDF" target="_blank">
                                 <i class="bi bi-printer"></i>
                             </a>
+                            <?php endif; ?>
                             <a href="?controller=warehouse&action=deleteMrpRun&run_id=<?= $r['run_id'] ?>&po_id=<?= $selectedPO ?? '' ?>" class="btn btn-outline-danger" title="Delete" onclick="return confirm('Delete this snapshot? Associated pending procurement requests will be cancelled.')">
                                 <i class="bi bi-trash"></i>
                             </a>
@@ -97,6 +99,8 @@
 </div>
 
 <script>
+// Quantities arrive pre-formatted by formatQty() in mrpRunDetail — render them
+// as-is; only the sign of the frozen excess value is parsed, for colouring.
 document.addEventListener('DOMContentLoaded', function() {
     <?php foreach ($runs as $r): ?>
     fetch('?controller=warehouse&action=mrpRunDetail&run_id=<?= $r['run_id'] ?>')
@@ -125,16 +129,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         '<th class="text-end">Allocated</th><th class="text-end">Pending</th>' +
                         '<th class="text-end">Excess</th><th>Remarks</th></tr></thead><tbody>';
                     items.forEach(function(row) {
-                        var excessClass = row.excess < 0 ? 'text-danger fw-bold' : 'text-success fw-bold';
+                        // excess is a formatted string ("-2,500"); a leading '-' marks a shortage.
+                        var isLacking = String(row.excess || '').trim().charAt(0) === '-';
+                        var excessClass = isLacking ? 'text-danger fw-bold' : 'text-success fw-bold';
                         html += '<tr>' +
                             '<td><code>' + (row.fg_code || '') + '</code></td>' +
                             '<td>' + (row.component_name || '') + '</td>' +
                             '<td>' + (row.component_uom || '') + '</td>' +
-                            '<td class="text-end">' + parseFloat(row.total_reqt).toFixed(2) + '</td>' +
-                            '<td class="text-end">' + parseFloat(row.soh).toFixed(2) + '</td>' +
-                            '<td class="text-end">' + parseFloat(row.allocated).toFixed(2) + '</td>' +
-                            '<td class="text-end">' + parseFloat(row.pending).toFixed(2) + '</td>' +
-                            '<td class="text-end ' + excessClass + '">' + parseFloat(row.excess).toFixed(2) + '</td>' +
+                            '<td class="text-end">' + (row.total_reqt || '0') + '</td>' +
+                            '<td class="text-end">' + (row.soh || '0') + '</td>' +
+                            '<td class="text-end">' + (row.allocated || '0') + '</td>' +
+                            '<td class="text-end">' + (row.pending || '0') + '</td>' +
+                            '<td class="text-end ' + excessClass + '">' + (row.excess || '0') + '</td>' +
                             '<td>' + (row.remarks || '') + '</td></tr>';
                     });
                     html += '</tbody></table>';

@@ -1,7 +1,11 @@
 <?php
-function formatQty($val, $maxDecimals = 4) {
-    $formatted = number_format((float)$val, $maxDecimals, '.', ',');
-    return str_contains($formatted, '.') ? rtrim(rtrim($formatted, '0'), '.') : $formatted;
+// formatQty() is global (app/helpers/format_helper.php, required by index.php);
+// this guard only matters if the view is ever rendered standalone.
+if (!function_exists('formatQty')) {
+    function formatQty($val, $maxDecimals = 4) {
+        $formatted = number_format((float)$val, $maxDecimals, '.', ',');
+        return str_contains($formatted, '.') ? rtrim(rtrim($formatted, '0'), '.') : $formatted;
+    }
 }
 
 $mrpLackingRows = [];
@@ -265,6 +269,31 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
 <?php endif; ?>
 <?php endif; ?>
 
+<!-- Custom MRP Reference prompt (Save & Transfer) -->
+<div class="modal fade" id="mrpRefModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-tag me-2"></i>MRP Reference</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2 text-muted" id="mrpRefModalSummary">Queue lacking material(s) as Purchase Requests for Procurement.</p>
+                <label class="form-label fw-bold" for="mrpRefInput">Enter Custom MRP Reference Number (e.g., MRP-2026-001):</label>
+                <input type="text" class="form-control" id="mrpRefInput" maxlength="30"
+                       placeholder="MRP-2026-001" autocomplete="off" spellcheck="false">
+                <div class="text-danger small mt-1 d-none" id="mrpRefError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="mrpRefConfirmBtn">
+                    <i class="bi bi-cart-plus me-1"></i>Save &amp; Transfer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     var customer = document.getElementById('mrpCustomer');
@@ -292,14 +321,76 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
         window.refreshSearchableDropdown(customer);
     }
 
-    // Save & Transfer Lacking → build a POST form (cannot nest inside the GET form)
-    var saveBtn = document.getElementById('saveMrpCalculationBtn');
-    if (saveBtn) {
+    // Save & Transfer Lacking → prompt for a custom MRP reference, then build
+    // a POST form (cannot nest inside the GET form). Cancelling or submitting
+    // an empty reference aborts the save entirely.
+    //
+    // Wired on DOMContentLoaded: this view is rendered from $content BEFORE the
+    // layout loads public/js/bootstrap.bundle.min.js, so touching `bootstrap`
+    // at parse time would throw a ReferenceError and silently skip attaching
+    // this handler (same reason the receiving view defers its own modal code).
+    document.addEventListener('DOMContentLoaded', function () {
+        var saveBtn = document.getElementById('saveMrpCalculationBtn');
+        var refModalEl = document.getElementById('mrpRefModal');
+        if (!saveBtn || !refModalEl) return;
+        var refModal = bootstrap.Modal.getOrCreateInstance(refModalEl);
+        var refInput = document.getElementById('mrpRefInput');
+        var refError = document.getElementById('mrpRefError');
+        var pendingRows = [];
+
+        var showRefError = function (msg) {
+            refError.textContent = msg;
+            refError.classList.remove('d-none');
+        };
+        var clearRefError = function () {
+            refError.textContent = '';
+            refError.classList.add('d-none');
+        };
+        // Runs whenever the modal closes (Cancel, Esc, backdrop) — unless the
+        // save has already been committed and the page is navigating away.
+        var resetRefPrompt = function () {
+            pendingRows = [];
+            refInput.value = '';
+            clearRefError();
+            if (!saveBtn.dataset.saving) saveBtn.disabled = false;
+        };
+
         saveBtn.addEventListener('click', function () {
+            if (saveBtn.disabled) return;   // debounce: ignore any further clicks
             var rows = [];
             try { rows = JSON.parse(saveBtn.getAttribute('data-lacking') || '[]'); } catch (e) {}
             if (!rows.length) return;
-            if (!confirm('Queue ' + rows.length + ' lacking material(s) as Purchase Requests for Procurement?')) return;
+
+            pendingRows = rows;
+            document.getElementById('mrpRefModalSummary').textContent =
+                'Queue ' + rows.length + ' lacking material(s) as Purchase Requests for Procurement?';
+            refInput.value = '';
+            clearRefError();
+            refModal.show();
+        });
+
+        refModalEl.addEventListener('shown.bs.modal', function () { refInput.focus(); });
+
+        var commitRefPrompt = function () {
+            var ref = (refInput.value || '').trim();
+            if (!ref) {
+                showRefError('Enter a custom MRP reference number before saving.');
+                refInput.focus();
+                return;                       // abort: nothing is saved
+            }
+            if (ref.length > 30) {
+                showRefError('The reference may be at most 30 characters.');
+                refInput.focus();
+                return;                       // abort
+            }
+            if (!pendingRows.length) { refModal.hide(); return; }
+
+            // Commit: lock the button so a double click cannot submit twice,
+            // then close the prompt and submit the form.
+            saveBtn.disabled = true;
+            saveBtn.dataset.saving = '1';
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transferring...';
+            refModal.hide();
 
             var form = document.createElement('form');
             form.method = 'POST';
@@ -309,7 +400,8 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                 fg_item_id: <?= (int)($selectedFg ?? 0) ?>,
                 target_qty: <?= json_encode((string)($targetQty ?? '')) ?>,
                 calculate: '1',
-                lacking_json: JSON.stringify(rows)
+                lacking_json: JSON.stringify(pendingRows),
+                custom_mrp_ref: ref
             };
             Object.keys(fields).forEach(function (name) {
                 var input = document.createElement('input');
@@ -319,10 +411,15 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                 form.appendChild(input);
             });
             document.body.appendChild(form);
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Transferring...';
             form.submit();
+        };
+
+        document.getElementById('mrpRefConfirmBtn').addEventListener('click', commitRefPrompt);
+        refInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); commitRefPrompt(); }
         });
-    }
+        refInput.addEventListener('input', clearRefError);
+        refModalEl.addEventListener('hidden.bs.modal', resetRefPrompt);
+    });
 })();
 </script>
