@@ -105,7 +105,7 @@ class QcModel extends BaseModel {
     public function getPendingQcItems() {
         $sql = "SELECT
                     ri.id AS receiving_item_id,
-                    ri.po_ref AS customer_po_number,
+                    ri.po_ref,
                     ri.supplier AS supplier_name,
                     ri.item_code,
                     ri.item_name AS item_description,
@@ -132,7 +132,7 @@ class QcModel extends BaseModel {
     public function getCompletedQcItems() {
         $sql = "SELECT
                     ri.id AS receiving_item_id,
-                    ri.po_ref AS customer_po_number,
+                    ri.po_ref,
                     ri.supplier AS supplier_name,
                     ri.item_code,
                     ri.item_name AS item_description,
@@ -162,7 +162,7 @@ class QcModel extends BaseModel {
         $sql = "SELECT
                     ri.*,
                     ri.id AS receiving_item_id,
-                    ri.po_ref AS customer_po_number,
+                    ri.po_ref,
                     ri.supplier AS supplier_name,
                     ri.item_name AS item_description,
                     ri.uom AS item_uom,

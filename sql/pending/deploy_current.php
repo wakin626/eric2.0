@@ -169,7 +169,10 @@ if (!tableExists($pdo, 'fg_boms')) {
     $pdo->exec("CREATE TABLE `fg_boms` (
         `id` INT AUTO_INCREMENT PRIMARY KEY,
         `fg_item_id` INT NOT NULL,
+        `customer_id` INT NULL,
         `bom_code` VARCHAR(50) DEFAULT NULL,
+        `is_legacy_formula` TINYINT(1) NOT NULL DEFAULT 0,
+        `status` ENUM('active','inactive') NOT NULL DEFAULT 'active',
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (`fg_item_id`) REFERENCES `items`(`item_id`) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -185,6 +188,8 @@ if (!tableExists($pdo, 'fg_bom_items')) {
         `raw_material_id` INT NOT NULL,
         `dosage_rate` DECIMAL(15,6) DEFAULT 0.000000,
         `wastage_allowance_pct` DECIMAL(5,2) DEFAULT 0.00,
+        `phase_code` VARCHAR(20) NOT NULL DEFAULT '101',
+        `uom` VARCHAR(50) NULL,
         FOREIGN KEY (`bom_id`) REFERENCES `fg_boms`(`id`) ON DELETE CASCADE,
         FOREIGN KEY (`raw_material_id`) REFERENCES `raw_materials`(`id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
@@ -383,6 +388,7 @@ if (!tableExists($pdo, 'supplier_orders')) {
         `supplier_name` VARCHAR(150) NOT NULL,
         `item_id` INT NOT NULL,
         `quantity` DECIMAL(15,4) NOT NULL,
+        `uom` VARCHAR(50) NULL,
         `unit_cost` DECIMAL(15,2) DEFAULT 0.00,
         `order_date` DATE,
         `expected_date` DATE,
@@ -390,6 +396,7 @@ if (!tableExists($pdo, 'supplier_orders')) {
         `received_qty` DECIMAL(15,4) DEFAULT 0.0000,
         `received_date` DATE NULL,
         `remarks` TEXT NULL,
+        `po_ref` VARCHAR(50) NULL,
         `created_by` INT NOT NULL,
         `remove` TINYINT(1) DEFAULT 0,
         `date_created` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -555,5 +562,30 @@ $record8 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (
 $record8->execute(['purchasing-receiving-po-status-v1']);
 
 // ─── End Phase 8 ──────────────────────────────────────────────────────
+
+// ─── Phase 9: Procurement PO per-order uom ─────────────────────────────
+
+echo "\n--- Phase 9: Procurement PO per-order uom ---\n";
+
+addColumn($pdo, 'supplier_orders', 'uom', 'VARCHAR(50) NULL', 'quantity');
+
+$uomBackfill = $pdo->exec("UPDATE supplier_orders so
+    JOIN items i ON i.item_id = so.item_id
+    LEFT JOIN (
+        SELECT bi.item_id, MAX(bi.uom) AS bom_uom
+        FROM fg_bom_items bi
+        JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
+        WHERE bi.uom IS NOT NULL AND bi.uom <> ''
+        GROUP BY bi.item_id
+    ) bu ON bu.item_id = so.item_id
+    SET so.uom = COALESCE(bu.bom_uom, i.item_uom)
+    WHERE so.uom IS NULL OR so.uom = ''");
+echo "Backfilled uom on {$uomBackfill} procurement orders\n";
+
+$record9 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (?)
+    ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP');
+$record9->execute(['supplier-orders-uom-v1']);
+
+// ─── End Phase 9 ──────────────────────────────────────────────────────
 
 echo "\nSchema deployment complete.\n";

@@ -26,7 +26,7 @@
                 <option value="received" <?= ($filters['status'] ?? '') === 'received' ? 'selected' : '' ?>>Received</option>
                 <option value="cancelled" <?= ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
             </select>
-            <input type="text" name="search" class="form-control form-control-sm" placeholder="Search supplier/item..." value="<?= htmlspecialchars($filters['search'] ?? '') ?>" style="width:220px">
+            <input type="text" name="search" class="form-control form-control-sm" placeholder="Search supplier, item, PO Ref..." value="<?= htmlspecialchars($filters['search'] ?? '') ?>" style="width:220px">
             <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-search"></i></button>
             <a href="?controller=warehouse&action=purchasingPo" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle"></i></a>
         </form>
@@ -61,7 +61,7 @@
                     <td colspan="15" class="text-center text-muted py-4">No purchasing POs found.</td>
                 </tr>
                 <?php else: ?>
-                <?php foreach ($orders as $o): ?>
+                <?php foreach ($orders as $o): $qty = floatval($o['quantity']); ?>
                 <tr>
                     <td>
                         <?php if (in_array($o['status'], ['requested', 'pending'])): ?>
@@ -70,18 +70,18 @@
                                data-item-code="<?= htmlspecialchars($o['item_code']) ?>"
                                data-item-desc="<?= htmlspecialchars($o['item_description']) ?>"
                                data-qty="<?= $o['quantity'] ?>"
-                               data-po-ref="<?= htmlspecialchars($o['customer_po_number'] ?? ($o['po_id'] ? 'PO #'.$o['po_id'] : '-')) ?>">
+                               data-po-ref="<?= htmlspecialchars($o['po_ref_display']) ?>">
                         <?php endif; ?>
                     </td>
                     <td><?= $o['supplier_order_id'] ?></td>
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= number_format($o['quantity'], 4) ?></td>
+                    <td class="text-end"><?= number_format($qty, $qty == floor($qty) ? 0 : 4) ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
                     <td class="text-end"><?= number_format($o['unit_cost'], 2) ?></td>
                     <td><?= $o['order_date'] ? date('m/d/Y', strtotime($o['order_date'])) : '-' ?></td>
                     <td><?= $o['expected_date'] ? date('m/d/Y', strtotime($o['expected_date'])) : '-' ?></td>
-                    <td><?= $o['customer_po_number'] ?? ($o['po_id'] ? 'PO #' . $o['po_id'] : '-') ?></td>
+                    <td><?= htmlspecialchars($o['po_ref_display']) ?></td>
                     <td>
                         <?php if ($o['status'] === 'requested'): ?>
                             <span class="badge bg-info">Requested</span>
@@ -112,10 +112,10 @@
                                     data-id="<?= $o['supplier_order_id'] ?>"
                                     data-supplier="<?= htmlspecialchars($o['supplier_name']) ?>"
                                     data-qty="<?= $o['quantity'] ?>"
+                                    data-uom="<?= htmlspecialchars($o['item_uom'] ?? '') ?>"
                                     data-cost="<?= $o['unit_cost'] ?>"
                                     data-order-date="<?= $o['order_date'] ?>"
                                     data-expected="<?= $o['expected_date'] ?>"
-                                    data-remarks="<?= htmlspecialchars($o['remarks'] ?? '') ?>"
                                     data-po-id="<?= $o['po_id'] ?? '' ?>"
                                     title="Process Order">
                                 <i class="bi bi-gear"></i> Process
@@ -187,6 +187,12 @@
                             <input type="date" name="expected_date" class="form-control">
                         </div>
                     </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">PO REF</label>
+                            <input type="text" name="po_ref" class="form-control" placeholder="e.g. PO-2026-001">
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Remarks</label>
                         <textarea name="remarks" class="form-control" rows="2"></textarea>
@@ -225,7 +231,10 @@
                     <div class="row mb-3">
                         <div class="col-6">
                             <label class="form-label fw-bold">Quantity <span class="text-danger">*</span></label>
-                            <input type="number" name="quantity" id="procQuantity" class="form-control" min="0.01" step="0.0001" required>
+                            <div class="input-group">
+                                <input type="number" name="quantity" id="procQuantity" class="form-control" min="0.01" step="0.0001" required>
+                                <span class="input-group-text" id="procQuantityUom">&nbsp;</span>
+                            </div>
                             <small class="text-muted">Adjust to supplier MOQ/packaging size.</small>
                         </div>
                         <div class="col-6">
@@ -243,9 +252,15 @@
                             <input type="date" name="expected_date" id="procExpectedDate" class="form-control">
                         </div>
                     </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">PO REF</label>
+                            <input type="text" name="po_ref" id="procPoRef" class="form-control" placeholder="e.g. PO-2026-001">
+                        </div>
+                    </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Remarks / PO Reference</label>
-                        <textarea name="remarks" id="procRemarks" class="form-control" rows="2" placeholder="e.g. PO#-2026-001, expected delivery..."></textarea>
+                        <label class="form-label fw-bold">Remarks</label>
+                        <textarea name="remarks" id="procRemarks" class="form-control" rows="2" placeholder="e.g. expected delivery, notes..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -370,11 +385,13 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('procOrderId').value = this.dataset.id;
             document.getElementById('procPoId').value = this.dataset.poId || '';
             document.getElementById('procSupplierName').value = this.dataset.supplier === 'Pending Selection' ? '' : this.dataset.supplier;
-            document.getElementById('procQuantity').value = this.dataset.qty;
+            var qty = parseFloat(this.dataset.qty);
+            document.getElementById('procQuantity').value = isNaN(qty) ? '' : qty;
+            document.getElementById('procQuantityUom').textContent = this.dataset.uom || '-';
             document.getElementById('procUnitCost').value = this.dataset.cost;
             document.getElementById('procOrderDate').value = this.dataset.orderDate || '<?= date('Y-m-d') ?>';
             document.getElementById('procExpectedDate').value = this.dataset.expected || '';
-            document.getElementById('procRemarks').value = this.dataset.remarks || '';
+            // PO Reference input is intentionally left blank for manual entry.
             new bootstrap.Modal(document.getElementById('processOrderModal')).show();
         });
     });

@@ -93,7 +93,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
             <tr class="<?= $row['excess'] < 0 ? 'shortage-row' : '' ?>">
                 <td><?= htmlspecialchars($row['item_code']) ?></td>
                 <td><?= htmlspecialchars($row['item_description']) ?></td>
-                <td><?= htmlspecialchars($row['item_uom']) ?></td>
+                <td><?= htmlspecialchars($row['display_uom'] ?? $row['item_uom']) ?></td>
                 <td class="num"><?= number_format($row['total_reqt'], 2) ?></td>
                 <td class="num"><?= number_format($row['soh'], 2) ?></td>
                 <td class="num"><?= number_format($row['allocated'], 2) ?></td>
@@ -137,7 +137,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
             <tr class="<?= $row['excess'] < 0 ? 'shortage-row' : '' ?>">
                 <td><?= htmlspecialchars($row['item_code']) ?></td>
                 <td><?= htmlspecialchars($row['item_description']) ?></td>
-                <td><?= htmlspecialchars($row['item_uom']) ?></td>
+                <td><?= htmlspecialchars($row['display_uom'] ?? $row['item_uom']) ?></td>
                 <td class="num"><?= number_format($row['total_reqt'], 2) ?></td>
                 <td class="num"><?= number_format($row['soh'], 2) ?></td>
                 <td class="num"><?= number_format($row['allocated'], 2) ?></td>

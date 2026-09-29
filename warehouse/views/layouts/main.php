@@ -101,6 +101,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link <?= in_array($currentAction, ['items', 'itemImportForm', 'itemImportPreview', 'itemImportConfirm']) ? 'active' : '' ?>" href="?controller=warehouse&action=items">
+                            <i class="bi bi-box-seam me-2"></i>Item Master List
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link <?= in_array($currentAction, ['purchasingPo', 'createPurchasingPo']) ? 'active' : '' ?>" href="?controller=warehouse&action=purchasingPo">
                             <i class="bi bi-cart3 me-2"></i>Purchasing PO
                         </a>

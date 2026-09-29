@@ -60,7 +60,7 @@
                 ?>
                 <tr>
                     <td><?= $o['supplier_order_id'] ?></td>
-                    <td><?= $o['customer_po_number'] ?? ($o['po_id'] ? 'PO #' . $o['po_id'] : 'SO #' . $o['supplier_order_id']) ?></td>
+                    <td><?= htmlspecialchars($o['po_ref_display']) ?></td>
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
@@ -100,7 +100,7 @@
                                     data-ordered-qty="<?= $o['quantity'] ?>"
                                     data-received-qty="<?= $o['received_qty'] ?? 0 ?>"
                                     data-uom="<?= htmlspecialchars($o['item_uom']) ?>"
-                                    data-po-ref="<?= htmlspecialchars($o['customer_po_number'] ?? ($o['po_id'] ? 'PO #'.$o['po_id'] : 'SO #'.$o['supplier_order_id'])) ?>"
+                                    data-po-ref="<?= htmlspecialchars($o['po_ref_display']) ?>"
                                     title="Receive Shipment">
                                 <i class="bi bi-box-arrow-in-down"></i> Receive
                             </button>

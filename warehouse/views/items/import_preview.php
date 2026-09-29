@@ -1,6 +1,6 @@
 <div class="d-flex justify-content-between mb-4">
     <div class="d-flex gap-2">
-        <a href="?controller=rnd&action=itemImportForm" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Import</a>
+        <a href="?controller=warehouse&action=itemImportForm" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Import</a>
     </div>
 </div>
 
@@ -40,7 +40,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-table me-2"></i>Preview (first 200 rows)</span>
         <?php if ($errorCount === 0): ?>
-        <form method="POST" action="?controller=rnd&action=itemImportConfirm" class="d-inline">
+        <form method="POST" action="?controller=warehouse&action=itemImportConfirm" class="d-inline">
             <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i>Confirm Import</button>
         </form>
         <?php else: ?>
@@ -110,7 +110,7 @@
 
 <?php if ($errorCount === 0): ?>
 <div class="text-center mb-4">
-    <form method="POST" action="?controller=rnd&action=itemImportConfirm">
+    <form method="POST" action="?controller=warehouse&action=itemImportConfirm">
         <button type="submit" class="btn btn-success btn-lg"><i class="bi bi-check-circle me-1"></i>Confirm Import <?= $newCount + $updateCount ?> Items</button>
     </form>
 </div>

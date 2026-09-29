@@ -49,17 +49,17 @@
                     <td colspan="14" class="text-center text-muted py-4">No purchasing POs found.</td>
                 </tr>
                 <?php else: ?>
-                <?php foreach ($orders as $o): ?>
+                <?php foreach ($orders as $o): $qty = floatval($o['quantity']); ?>
                 <tr>
                     <td><?= $o['supplier_order_id'] ?></td>
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= number_format($o['quantity'], 4) ?></td>
+                    <td class="text-end"><?= number_format($qty, $qty == floor($qty) ? 0 : 4) ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
                     <td class="text-end"><?= number_format($o['unit_cost'], 2) ?></td>
                     <td><?= $o['order_date'] ? date('m/d/Y', strtotime($o['order_date'])) : '-' ?></td>
                     <td><?= $o['expected_date'] ? date('m/d/Y', strtotime($o['expected_date'])) : '-' ?></td>
-                    <td><?= $o['customer_po_number'] ?? ($o['po_id'] ? 'PO #' . $o['po_id'] : '-') ?></td>
+                    <td><?= htmlspecialchars($o['po_ref_display']) ?></td>
                     <td>
                         <?php if ($o['status'] === 'requested'): ?>
                             <span class="badge bg-info">Requested</span>

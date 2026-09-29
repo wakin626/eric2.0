@@ -62,18 +62,20 @@ class BomModel extends BaseModel {
      * @param bool $isLegacy Import-created BOMs stay on the legacy lot-based
      *                       formula until an operator re-saves with fill volume.
      */
-    public function create($fgItemId, $bomCode, $fillVolume = 1.0, $uom = 'PCS', $batchUnitDivisor = 1000, $isLegacy = false) {
+    public function create($fgItemId, $bomCode, $fillVolume = 1.0, $uom = 'PCS', $batchUnitDivisor = 1000, $isLegacy = false, $customerId = null, $status = 'active') {
         $conn = self::getConnection();
-        $sql = "INSERT INTO {$this->table} (fg_item_id, bom_code, batch_qty, batch_uom, batch_unit_divisor, is_legacy_formula)
-                VALUES (:fg_item_id, :bom_code, :batch_qty, :batch_uom, :batch_unit_divisor, :is_legacy_formula)";
+        $sql = "INSERT INTO {$this->table} (fg_item_id, customer_id, bom_code, batch_qty, batch_uom, batch_unit_divisor, is_legacy_formula, status)
+                VALUES (:fg_item_id, :customer_id, :bom_code, :batch_qty, :batch_uom, :batch_unit_divisor, :is_legacy_formula, :status)";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'fg_item_id' => $fgItemId,
+            'customer_id' => $customerId !== null && $customerId !== '' ? $customerId : null,
             'bom_code' => $bomCode,
             'batch_qty' => $fillVolume > 0 ? $fillVolume : 1.0,
             'batch_uom' => $uom ?: 'PCS',
             'batch_unit_divisor' => $batchUnitDivisor > 0 ? $batchUnitDivisor : 1000,
             'is_legacy_formula' => $isLegacy ? 1 : 0,
+            'status' => $status === 'inactive' ? 'inactive' : 'active',
         ]);
         return $conn->lastInsertId();
     }
@@ -83,7 +85,7 @@ class BomModel extends BaseModel {
      *                            formula flag is cleared. Import passes false so
      *                            the flag and header basis are preserved.
      */
-    public function update($id, $fgItemId, $bomCode, $fillVolume = 1.0, $uom = 'PCS', $batchUnitDivisor = 1000, $markNonLegacy = true) {
+    public function update($id, $fgItemId, $bomCode, $fillVolume = 1.0, $uom = 'PCS', $batchUnitDivisor = 1000, $markNonLegacy = true, $customerId = null, $status = null) {
         $sql = "UPDATE {$this->table}
                 SET fg_item_id = :fg_item_id,
                     bom_code = :bom_code,
@@ -91,16 +93,25 @@ class BomModel extends BaseModel {
                     batch_uom = :batch_uom,
                     batch_unit_divisor = :batch_unit_divisor" .
                 ($markNonLegacy ? ", is_legacy_formula = 0" : "") .
+                ($customerId !== null ? ", customer_id = :customer_id" : "") .
+                ($status !== null ? ", status = :status" : "") .
                 " WHERE id = :id";
-        $stmt = self::getConnection()->prepare($sql);
-        return $stmt->execute([
+        $params = [
             'id' => $id,
             'fg_item_id' => $fgItemId,
             'bom_code' => $bomCode,
             'batch_qty' => $fillVolume > 0 ? $fillVolume : 1.0,
             'batch_uom' => $uom ?: 'PCS',
             'batch_unit_divisor' => $batchUnitDivisor > 0 ? $batchUnitDivisor : 1000,
-        ]);
+        ];
+        if ($customerId !== null) {
+            $params['customer_id'] = $customerId !== '' ? $customerId : null;
+        }
+        if ($status !== null) {
+            $params['status'] = $status === 'inactive' ? 'inactive' : 'active';
+        }
+        $stmt = self::getConnection()->prepare($sql);
+        return $stmt->execute($params);
     }
 
     public function delete($id) {
@@ -119,9 +130,9 @@ class BomModel extends BaseModel {
         }
     }
 
-    public function addItem($bomId, $itemId, $dosageRate, $wastagePct, $phaseCode = '101') {
-        $sql = "INSERT INTO fg_bom_items (bom_id, item_id, dosage_rate, wastage_allowance_pct, phase_code)
-                VALUES (:bom_id, :item_id, :dosage_rate, :wastage_allowance_pct, :phase_code)";
+    public function addItem($bomId, $itemId, $dosageRate, $wastagePct, $phaseCode = '101', $uom = null) {
+        $sql = "INSERT INTO fg_bom_items (bom_id, item_id, dosage_rate, wastage_allowance_pct, phase_code, uom)
+                VALUES (:bom_id, :item_id, :dosage_rate, :wastage_allowance_pct, :phase_code, :uom)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'bom_id' => $bomId,
@@ -129,16 +140,18 @@ class BomModel extends BaseModel {
             'dosage_rate' => $dosageRate,
             'wastage_allowance_pct' => $wastagePct,
             'phase_code' => $phaseCode !== '' ? $phaseCode : '101',
+            'uom' => $uom !== null && $uom !== '' ? $uom : null,
         ]);
         return self::getConnection()->lastInsertId();
     }
 
-    public function updateItem($itemId, $newItemId, $dosageRate, $wastagePct, $phaseCode = '101') {
+    public function updateItem($itemId, $newItemId, $dosageRate, $wastagePct, $phaseCode = '101', $uom = null) {
         $sql = "UPDATE fg_bom_items
                 SET item_id = :item_id,
                     dosage_rate = :dosage_rate,
                     wastage_allowance_pct = :wastage_allowance_pct,
-                    phase_code = :phase_code
+                    phase_code = :phase_code,
+                    uom = :uom
                 WHERE id = :id";
         $stmt = self::getConnection()->prepare($sql);
         return $stmt->execute([
@@ -147,6 +160,7 @@ class BomModel extends BaseModel {
             'dosage_rate' => $dosageRate,
             'wastage_allowance_pct' => $wastagePct,
             'phase_code' => $phaseCode !== '' ? $phaseCode : '101',
+            'uom' => $uom !== null && $uom !== '' ? $uom : null,
         ]);
     }
 
@@ -176,16 +190,18 @@ class BomModel extends BaseModel {
                 $placeholders = [];
                 $params = [];
                 foreach ($items as $idx => $item) {
-                    $offset = $idx * 5;
+                    $offset = $idx * 6;
                     $phaseCode = ($item['phase_code'] ?? '') !== '' ? $item['phase_code'] : '101';
-                    $placeholders[] = "(:bom_id_{$offset}, :item_id_{$offset}, :dosage_{$offset}, :wastage_{$offset}, :phase_{$offset})";
+                    $uom = isset($item['uom']) && $item['uom'] !== '' ? mb_substr($item['uom'], 0, 50) : null;
+                    $placeholders[] = "(:bom_id_{$offset}, :item_id_{$offset}, :dosage_{$offset}, :wastage_{$offset}, :phase_{$offset}, :uom_{$offset})";
                     $params["bom_id_{$offset}"] = $bomId;
                     $params["item_id_{$offset}"] = $item['item_id'];
                     $params["dosage_{$offset}"] = $item['dosage_rate'];
                     $params["wastage_{$offset}"] = $item['wastage_allowance_pct'];
                     $params["phase_{$offset}"] = $phaseCode;
+                    $params["uom_{$offset}"] = $uom;
                 }
-                $sql = "INSERT INTO fg_bom_items (bom_id, item_id, dosage_rate, wastage_allowance_pct, phase_code) VALUES " . implode(', ', $placeholders);
+                $sql = "INSERT INTO fg_bom_items (bom_id, item_id, dosage_rate, wastage_allowance_pct, phase_code, uom) VALUES " . implode(', ', $placeholders);
                 $conn->prepare($sql)->execute($params);
             }
 

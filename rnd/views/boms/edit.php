@@ -43,6 +43,18 @@ if (!function_exists('formatBomValue')) {
                         <label class="form-label">BOM Code *</label>
                         <input type="text" name="bom_code" class="form-control" value="<?= htmlspecialchars($bom['bom_code'] ?? '') ?>" required>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Customer *</label>
+                        <select name="customer_id" class="form-select filter-select" required>
+                            <option value="">-- Select Customer --</option>
+                            <?php foreach (($customers ?? []) as $cust): ?>
+                            <option value="<?= (int)$cust['customer_id'] ?>" <?= (int)($bom['customer_id'] ?? 0) === (int)$cust['customer_id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars(trim(($cust['customer_code'] ?? '') . ' - ' . ($cust['customer_name'] ?? ''))) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">MRP filters FG/SFG by this assignment.</small>
+                    </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label">Fill Volume *</label>
@@ -102,7 +114,7 @@ if (!function_exists('formatBomValue')) {
                             <td><code><?= htmlspecialchars($bi['phase_code'] ?? '101') ?></code></td>
                             <td><?= htmlspecialchars($bi['rm_name']) ?></td>
                             <td><code><?= htmlspecialchars($bi['rm_code']) ?></code></td>
-                            <td><?= htmlspecialchars($bi['rm_uom']) ?></td>
+                            <td><?= htmlspecialchars(($bi['uom'] ?? '') !== '' ? $bi['uom'] : $bi['rm_uom']) ?></td>
                             <td><?= formatBomValue($bi['dosage_rate']) ?><?= ($bi['item_type'] ?? '') === 'RM' ? '%' : '' ?></td>
                             <td><?= formatBomValue($bi['wastage_allowance_pct']) ?>%</td>
                             <td>
@@ -111,7 +123,8 @@ if (!function_exists('formatBomValue')) {
                                     data-item-id="<?= $bi['item_id'] ?>"
                                     data-dosage="<?= $bi['dosage_rate'] ?>"
                                     data-wastage="<?= $bi['wastage_allowance_pct'] ?>"
-                                    data-phase="<?= htmlspecialchars($bi['phase_code'] ?? '101') ?>"><i class="bi bi-pencil"></i></button>
+                                    data-phase="<?= htmlspecialchars($bi['phase_code'] ?? '101') ?>"
+                                    data-uom="<?= htmlspecialchars(($bi['uom'] ?? '') !== '' ? $bi['uom'] : $bi['rm_uom']) ?>"><i class="bi bi-pencil"></i></button>
                                 <button class="btn btn-sm btn-danger remove-bom-item" data-item-id="<?= $bi['id'] ?>"><i class="bi bi-trash"></i></button>
                             </td>
                         </tr>
@@ -143,20 +156,30 @@ if (!function_exists('formatBomValue')) {
                         <select id="add_item_id" class="form-select filter-select" required>
                             <option value="">-- Select Ingredient --</option>
                             <?php foreach ($allIngredients as $ing): ?>
-                            <option value="<?= $ing['item_id'] ?>"><?= htmlspecialchars($ing['item_code'] . ' - ' . $ing['item_description'] . ' (' . $ing['item_uom'] . ')') ?></option>
+                            <option value="<?= $ing['item_id'] ?>" data-uom="<?= htmlspecialchars($ing['item_uom']) ?>"><?= htmlspecialchars($ing['item_code'] . ' - ' . $ing['item_description'] . ' (' . $ing['item_uom'] . ')') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                 </div>
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label">Dosage / Qty *</label>
                         <input type="number" step="0.000001" id="add_dosage" class="form-control" value="0" required>
                         <small class="text-muted">RM: % of bulk batch &middot; PM/SFG: qty per unit</small>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label">Wastage Allowance %</label>
                         <input type="number" step="0.01" id="add_wastage" class="form-control" value="0">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">UOM</label>
+                        <select id="add_uom" class="form-select">
+                            <option value="">Select UOM</option>
+                            <?php foreach (['Kg', 'g', 'mL', 'L', 'Pc', 'Pcs', 'Box', 'Roll', 'Set'] as $u): ?>
+                            <option value="<?= $u ?>"><?= $u ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">Defaults to the ingredient's UOM</small>
                     </div>
                 </div>
                 <datalist id="phaseCodeList">
@@ -199,20 +222,30 @@ if (!function_exists('formatBomValue')) {
                         <select id="edit_item_id" class="form-select filter-select" required>
                             <option value="">-- Select Ingredient --</option>
                             <?php foreach ($allIngredients as $ing): ?>
-                            <option value="<?= $ing['item_id'] ?>"><?= htmlspecialchars($ing['item_code'] . ' - ' . $ing['item_description'] . ' (' . $ing['item_uom'] . ')') ?></option>
+                            <option value="<?= $ing['item_id'] ?>" data-uom="<?= htmlspecialchars($ing['item_uom']) ?>"><?= htmlspecialchars($ing['item_code'] . ' - ' . $ing['item_description'] . ' (' . $ing['item_uom'] . ')') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                 </div>
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label">Dosage / Qty *</label>
                         <input type="number" step="0.000001" id="edit_dosage" class="form-control" required>
                         <small class="text-muted">RM: % of bulk batch &middot; PM/SFG: qty per unit</small>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label">Wastage Allowance %</label>
                         <input type="number" step="0.01" id="edit_wastage" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">UOM</label>
+                        <select id="edit_uom" class="form-select">
+                            <option value="">Select UOM</option>
+                            <?php foreach (['Kg', 'g', 'mL', 'L', 'Pc', 'Pcs', 'Box', 'Roll', 'Set'] as $u): ?>
+                            <option value="<?= $u ?>"><?= $u ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">Defaults to the ingredient's UOM</small>
                     </div>
                 </div>
             </div>
@@ -225,12 +258,44 @@ if (!function_exists('formatBomValue')) {
 </div>
 
 <script>
+function ensureUomOption(selectEl, uom) {
+    if (!uom) return;
+    for (var i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].value === uom) return;
+    }
+    var opt = document.createElement('option');
+    opt.value = uom;
+    opt.textContent = uom;
+    selectEl.appendChild(opt);
+}
+
+function ingredientUom(ingredientSelect) {
+    var opt = ingredientSelect.options[ingredientSelect.selectedIndex];
+    return opt ? (opt.getAttribute('data-uom') || '') : '';
+}
+
+function autoFillUom(ingredientId, uomId) {
+    var ing = document.getElementById(ingredientId);
+    var uom = document.getElementById(uomId);
+    if (!ing || !uom) return;
+    ing.addEventListener('change', function() {
+        var value = ingredientUom(ing);
+        if (!value) return;
+        ensureUomOption(uom, value);
+        uom.value = value;
+    });
+}
+
+autoFillUom('add_item_id', 'add_uom');
+autoFillUom('edit_item_id', 'edit_uom');
+
 document.getElementById('saveAddItem').addEventListener('click', function() {
     var bomId = document.getElementById('add_bom_id').value;
     var itemId = document.getElementById('add_item_id').value;
     var dosage = document.getElementById('add_dosage').value;
     var wastage = document.getElementById('add_wastage').value;
     var phaseCode = document.getElementById('add_phase_code').value.trim();
+    var uom = document.getElementById('add_uom').value.trim();
 
     if (!itemId) { alert('Select an ingredient'); return; }
     if (!phaseCode) { alert('Phase / Comp Code is required'); return; }
@@ -241,6 +306,7 @@ document.getElementById('saveAddItem').addEventListener('click', function() {
     formData.append('dosage_rate', dosage);
     formData.append('wastage_allowance_pct', wastage);
     formData.append('phase_code', phaseCode);
+    formData.append('uom', uom);
 
     fetch('?controller=rnd&action=bomAddItem', { method: 'POST', body: formData })
         .then(function(r) { return r.json(); })
@@ -261,6 +327,10 @@ document.querySelectorAll('.edit-bom-item').forEach(function(btn) {
         document.getElementById('edit_dosage').value = this.getAttribute('data-dosage');
         document.getElementById('edit_wastage').value = this.getAttribute('data-wastage');
         document.getElementById('edit_phase_code').value = this.getAttribute('data-phase') || '';
+        var editUom = this.getAttribute('data-uom') || '';
+        var editUomSelect = document.getElementById('edit_uom');
+        ensureUomOption(editUomSelect, editUom);
+        editUomSelect.value = editUom;
         new bootstrap.Modal(document.getElementById('editItemModal')).show();
     });
 });
@@ -271,6 +341,7 @@ document.getElementById('saveEditItem').addEventListener('click', function() {
     var dosage = document.getElementById('edit_dosage').value;
     var wastage = document.getElementById('edit_wastage').value;
     var phaseCode = document.getElementById('edit_phase_code').value.trim();
+    var uom = document.getElementById('edit_uom').value.trim();
 
     if (!itemId) { alert('Select an ingredient'); return; }
     if (!phaseCode) { alert('Phase / Comp Code is required'); return; }
@@ -281,6 +352,7 @@ document.getElementById('saveEditItem').addEventListener('click', function() {
     formData.append('dosage_rate', dosage);
     formData.append('wastage_allowance_pct', wastage);
     formData.append('phase_code', phaseCode);
+    formData.append('uom', uom);
 
     fetch('?controller=rnd&action=bomUpdateItem', { method: 'POST', body: formData })
         .then(function(r) { return r.json(); })

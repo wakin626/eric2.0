@@ -4,15 +4,18 @@ namespace App\Controllers;
 use App\Models\WarehouseModel;
 use App\Models\BackloadModel;
 use App\Models\CatalogModel;
+use App\Models\ItemImportModel;
 use App\Models\AuditModel;
 use App\Helpers\Pagination;
 use App\Helpers\NotificationHelper;
+use App\Helpers\SpreadsheetReader;
 use App\Helpers\XlsxExport;
 
 class WarehouseController {
     private $warehouseModel;
     private $backloadModel;
     private $catalogModel;
+    private $itemImportModel;
 
     public function __construct() {
         if (!isset($_SESSION['user_id'])) {
@@ -26,13 +29,16 @@ class WarehouseController {
             'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
             'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery', 'searchItems',
             'mrpRunDetail', 'purchasingPo', 'receivingPo', 'moEntry', 'getCustomerPOs', 'getItemBomInfo'];
-        if (!$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
+        // Item Master List is viewable read-only by rnd/admin; only warehouse can create/import items
+        $itemListReadOnly = $action === 'items' && in_array($dept, ['warehouse', 'rnd', 'admin']);
+        if (!$itemListReadOnly && !$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
         }
         $this->warehouseModel = new WarehouseModel();
         $this->backloadModel = new BackloadModel();
         $this->catalogModel = new CatalogModel();
+        $this->itemImportModel = new ItemImportModel();
     }
 
     private function redirectToRoleHome(string $action): void {
@@ -1878,7 +1884,7 @@ class WarehouseController {
         $calculate = !empty($_GET['calculate']);
         $noFgsForCustomer = false;
 
-        // FG dropdown: filtered by customer when selected; else all FGs with active BOMs
+        // FG/SFG dropdown: filtered by customer when selected; else all FG/SFG with active BOMs
         $fgOptions = $this->warehouseModel->getFgsWithBomByCustomer($customerId);
         if (!empty($customerId) && empty($fgOptions)) {
             $noFgsForCustomer = true;
@@ -1909,6 +1915,7 @@ class WarehouseController {
                         'item_code' => $comp['item_code'],
                         'item_description' => $comp['item_description'],
                         'item_uom' => $comp['item_uom'],
+                        'display_uom' => $comp['display_uom'] ?? $comp['item_uom'],
                         'item_type' => $comp['item_type'] ?? '',
                         'category' => $comp['item_type'] ?? '-',
                         'phase_code' => $comp['phase_code'] ?? '101',
@@ -2012,7 +2019,10 @@ class WarehouseController {
                 $available = floatval($comp['soh']) - floatval($comp['allocated']);
                 $lacking = $required - $available;
                 if ($lacking > 0) {
-                    $recomputed[intval($comp['component_item_id'])] = $lacking;
+                    $recomputed[intval($comp['component_item_id'])] = [
+                        'quantity' => $lacking,
+                        'uom' => $comp['display_uom'] ?? $comp['item_uom'],
+                    ];
                 }
             }
 
@@ -2031,7 +2041,7 @@ class WarehouseController {
             $existing = $this->warehouseModel->getExistingRequestedOrders(array_keys($targets));
             $queued = 0;
             $skipped = 0;
-            foreach ($targets as $itemId => $qty) {
+            foreach ($targets as $itemId => $target) {
                 if (isset($existing[$itemId])) {
                     $skipped++;
                     continue;
@@ -2039,7 +2049,8 @@ class WarehouseController {
                 $this->warehouseModel->createSupplierOrder([
                     'supplier_name' => 'Pending Selection',
                     'item_id' => $itemId,
-                    'quantity' => $qty,
+                    'quantity' => $target['quantity'],
+                    'uom' => $target['uom'] ?? null,
                     'unit_cost' => 0,
                     'order_date' => date('Y-m-d'),
                     'expected_date' => null,
@@ -2124,6 +2135,7 @@ class WarehouseController {
                     'item_code' => $comp['item_code'],
                     'item_description' => $comp['item_description'],
                     'item_uom' => $comp['item_uom'],
+                    'display_uom' => $comp['display_uom'] ?? $comp['item_uom'],
                     'phase_code' => $comp['phase_code'] ?? '101',
                     'total_reqt' => $totalReqt,
                     'soh' => $soh,
@@ -2223,6 +2235,7 @@ class WarehouseController {
             $orderDate = $_POST['order_date'] ?: null;
             $expectedDate = $_POST['expected_date'] ?: null;
             $remarks = trim($_POST['remarks'] ?? '') ?: null;
+            $poRef = trim($_POST['po_ref'] ?? '') ?: null;
 
             if (empty($supplierName) || $itemId <= 0 || $quantity <= 0) {
                 throw new \RuntimeException('Supplier name, item, and quantity are required.');
@@ -2236,6 +2249,7 @@ class WarehouseController {
                 'order_date' => $orderDate,
                 'expected_date' => $expectedDate,
                 'remarks' => $remarks,
+                'po_ref' => $poRef,
                 'created_by' => $_SESSION['user_id']
             ]);
 
@@ -2270,6 +2284,7 @@ class WarehouseController {
                 'order_date' => $_POST['order_date'] ?: null,
                 'expected_date' => $_POST['expected_date'] ?: null,
                 'remarks' => trim($_POST['remarks'] ?? '') ?: null,
+                'po_ref' => trim($_POST['po_ref'] ?? '') ?: null,
                 'po_id' => !empty($_POST['po_id']) ? intval($_POST['po_id']) : null,
             ]);
 
@@ -2410,9 +2425,9 @@ class WarehouseController {
                     'received_by' => $_SESSION['user_id']
                 ]);
 
-                $this->notifyProcurementOfReceipt($order, $receivedQty);
+                $this->notifyProcurementOfReceipt($order, $receivedQty, $result['po_ref'] ?? null);
                 try {
-                    $poRef = $order['customer_po_number'] ?? ($order['po_id'] ? 'PO #' . $order['po_id'] : 'SO #' . $id);
+                    $poRef = $result['po_ref'] ?? ('SO #' . $id);
                     NotificationHelper::qcInspectionNeeded($poRef, $lotNumber ?: ($order['item_code'] ?? 'N/A'), $_SESSION['user_id'] ?? null);
                 } catch (\Exception $e) {
                     error_log('qcInspectionNeeded error: ' . $e->getMessage());
@@ -2430,9 +2445,9 @@ class WarehouseController {
         exit;
     }
 
-    private function notifyProcurementOfReceipt($order, $receivedQty) {
+    private function notifyProcurementOfReceipt($order, $receivedQty, $poRef = null) {
         try {
-            $poRef = $order['customer_po_number'] ?? ($order['po_id'] ? 'PO #' . $order['po_id'] : 'SO #' . $order['supplier_order_id']);
+            $poRef = $poRef ?: ('SO #' . $order['supplier_order_id']);
             $itemDesc = $order['item_description'] ?? '';
             $supplier = $order['supplier_name'] ?? 'Unknown Supplier';
             $newReceived = floatval($order['received_qty'] ?? 0) + floatval($receivedQty);
@@ -2527,6 +2542,7 @@ class WarehouseController {
 
                     $rows[] = [
                         'component_item_id' => $comp['component_item_id'],
+                        'display_uom' => $comp['display_uom'] ?? $comp['item_uom'],
                         'total_reqt' => $totalReqt,
                         'soh' => $soh,
                         'allocated' => $allocated,
@@ -2544,11 +2560,15 @@ class WarehouseController {
             $runId = $this->warehouseModel->saveMrpRun($poId, $customerId, $_SESSION['user_id'], $sections, []);
 
             $lackingItems = [];
+            $lackingUom = [];
             foreach ($sections as $sec) {
                 foreach ($sec['components'] as $comp) {
                     if ($comp['excess'] < 0) {
                         $itemId = $comp['component_item_id'];
                         $lackingItems[$itemId] = ($lackingItems[$itemId] ?? 0) + abs($comp['excess']);
+                        if (!isset($lackingUom[$itemId])) {
+                            $lackingUom[$itemId] = $comp['display_uom'] ?? null;
+                        }
                     }
                 }
             }
@@ -2561,6 +2581,7 @@ class WarehouseController {
                         'supplier_name' => 'Pending Selection',
                         'item_id' => $itemId,
                         'quantity' => $qty,
+                        'uom' => $lackingUom[$itemId] ?? null,
                         'unit_cost' => 0,
                         'order_date' => date('Y-m-d'),
                         'expected_date' => null,
@@ -2691,6 +2712,245 @@ class WarehouseController {
     public function batchProcessSupplierOrders() {
         header('Location: ?controller=warehouse&action=batchProcessPurchasingPo');
         exit;
+    }
+
+    // ─── Item Master List & ERIC Import ──────────────────────────────────────
+
+    public function items() {
+        $search = trim($_GET['search'] ?? '');
+        $typeFilter = trim($_GET['item_type'] ?? '');
+        $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        if ($page < 1) $page = 1;
+        $perPage = 20;
+
+        $filters = [];
+        if ($search !== '') $filters['search'] = $search;
+        if ($typeFilter !== '' && $typeFilter !== 'All Types') $filters['item_type'] = $typeFilter;
+
+        $total = $this->itemImportModel->countWithStock($filters);
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        if ($page > $totalPages) $page = $totalPages;
+        $offset = ($page - 1) * $perPage;
+
+        $data['items'] = $this->itemImportModel->getAllWithStock($filters, $perPage, $offset);
+        $data['page'] = $page;
+        $data['totalPages'] = $totalPages;
+        $data['total'] = $total;
+        $data['search'] = $search;
+        $data['typeFilter'] = $typeFilter;
+        $data['canEdit'] = (($_SESSION['department'] ?? '') === 'warehouse');
+        $data['page_title'] = 'Item Master List';
+        $this->render('items/index', $data);
+    }
+
+    public function storeItem() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?controller=warehouse&action=items');
+            exit;
+        }
+        if (($_SESSION['department'] ?? '') !== 'warehouse') {
+            $_SESSION['error'] = 'Only warehouse users can create master items.';
+            header('Location: ?controller=warehouse&action=items');
+            exit;
+        }
+
+        $code = trim($_POST['code'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $type = strtoupper(trim($_POST['type'] ?? ''));
+        $uom = trim($_POST['uom'] ?? '');
+        $soh = $_POST['soh'] ?? 0;
+
+        if ($code === '' || $description === '' || $uom === '') {
+            $_SESSION['error'] = 'Item code, description and UOM are required.';
+            header('Location: ?controller=warehouse&action=items');
+            exit;
+        }
+        if (!in_array($type, ['RM', 'PM', 'FG', 'SFG', 'SUPPLIES'], true)) {
+            $_SESSION['error'] = 'Invalid item type.';
+            header('Location: ?controller=warehouse&action=items');
+            exit;
+        }
+        if (!is_numeric($soh) || (float)$soh < 0) {
+            $_SESSION['error'] = 'Initial SOH must be a number greater than or equal to 0.';
+            header('Location: ?controller=warehouse&action=items');
+            exit;
+        }
+        $soh = round((float)$soh, 4);
+
+        try {
+            $itemId = $this->itemImportModel->createItem([
+                'item_code' => $code,
+                'item_description' => $description,
+                'item_type' => $type,
+                'item_uom' => $uom,
+                'soh' => $soh
+            ]);
+        } catch (\Exception $e) {
+            $_SESSION['error'] = $e->getMessage();
+            header('Location: ?controller=warehouse&action=items');
+            exit;
+        }
+
+        AuditModel::log($_SESSION['user_id'], 'CREATE', 'warehouse', "Item created: {$code} ({$type}, SOH {$soh})", null, [
+            'item_code' => $code,
+            'item_description' => $description,
+            'item_type' => $type,
+            'item_uom' => $uom,
+            'soh' => $soh
+        ], 'item', (int)$itemId);
+
+        $_SESSION['success'] = 'Item created successfully!';
+        header('Location: ?controller=warehouse&action=items');
+        exit;
+    }
+
+    public function itemImportForm() {
+        $data['page_title'] = 'Import ERIC Items';
+        $this->render('items/import_form', $data);
+    }
+
+    public function itemImportPreview() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_FILES['import_file'])) {
+            $_SESSION['error'] = 'No file uploaded.';
+            header('Location: ?controller=warehouse&action=itemImportForm');
+            exit;
+        }
+
+        $file = $_FILES['import_file'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'xlsx'])) {
+            $_SESSION['error'] = 'Only .csv and .xlsx files are supported.';
+            header('Location: ?controller=warehouse&action=itemImportForm');
+            exit;
+        }
+        if ($file['size'] > 10 * 1024 * 1024) {
+            $_SESSION['error'] = 'File size must be less than 10MB.';
+            header('Location: ?controller=warehouse&action=itemImportForm');
+            exit;
+        }
+
+        try {
+            $tempPath = sys_get_temp_dir() . '/' . uniqid('item_') . '.' . $ext;
+            move_uploaded_file($file['tmp_name'], $tempPath);
+            $rows = SpreadsheetReader::read($tempPath);
+            unlink($tempPath);
+        } catch (\Exception $e) {
+            if (isset($tempPath) && file_exists($tempPath)) unlink($tempPath);
+            $_SESSION['error'] = 'Failed to read file: ' . $e->getMessage();
+            header('Location: ?controller=warehouse&action=itemImportForm');
+            exit;
+        }
+
+        if (empty($rows)) {
+            error_log('ERIC Import: 0 rows parsed. File: ' . $file['name'] . ' | Extension: ' . $ext);
+            $_SESSION['error'] = 'No data rows found in the file. Please check the file format and ensure Row 1 contains headers.';
+            header('Location: ?controller=warehouse&action=itemImportForm');
+            exit;
+        }
+
+        $preview = [];
+        foreach ($rows as $idx => $row) {
+            $rowNum = $idx + 2;
+            $errors = [];
+            $itemCode = trim($row['c_item'] ?? '');
+            $description = trim($row['c_desc'] ?? '');
+            $cType = trim($row['c_type'] ?? '');
+            $um = trim($row['um'] ?? '');
+            $site = trim($row['site'] ?? '');
+            $qtyOnHand = floatval($row['qty_on_hand'] ?? 0);
+            $qtyForInspect = floatval($row['qty_for_inspect'] ?? 0);
+
+            if ($itemCode === '') $errors[] = 'c_item is required';
+            if ($description === '') $errors[] = 'c_desc is required';
+            if ($cType === '') $errors[] = 'c_type is required';
+            if ($um === '') $errors[] = 'um is required';
+            if ($site === '') $site = 'MAIN';
+
+            $itemType = $cType !== '' ? ItemImportModel::mapItemType($cType) : 'SUPPLIES';
+            $existing = $itemCode !== '' ? $this->itemImportModel->getItemByCode($itemCode) : null;
+
+            $preview[] = [
+                'row' => $rowNum,
+                'item_code' => $itemCode,
+                'description' => $description,
+                'item_type' => $itemType,
+                'raw_c_type' => $cType,
+                'uom' => $um,
+                'site' => $site,
+                'qty_on_hand' => $qtyOnHand,
+                'qty_for_inspect' => $qtyForInspect,
+                'status' => $existing ? 'update' : 'new',
+                'errors' => $errors,
+            ];
+        }
+
+        $_SESSION['import_preview_items'] = $preview;
+        $data['preview'] = $preview;
+        $data['newCount'] = count(array_filter($preview, fn($r) => $r['status'] === 'new' && empty($r['errors'])));
+        $data['updateCount'] = count(array_filter($preview, fn($r) => $r['status'] === 'update' && empty($r['errors'])));
+        $data['errorCount'] = count(array_filter($preview, fn($r) => !empty($r['errors'])));
+        $data['page_title'] = 'Import ERIC Items - Preview';
+        $this->render('items/import_preview', $data);
+    }
+
+    public function itemImportConfirm() {
+        $preview = $_SESSION['import_preview_items'] ?? null;
+        if (!$preview) {
+            $_SESSION['error'] = 'No import data found. Please upload again.';
+            header('Location: ?controller=warehouse&action=itemImportForm');
+            exit;
+        }
+        unset($_SESSION['import_preview_items']);
+
+        $conn = \App\Core\BaseModel::getConnection();
+        $conn->beginTransaction();
+
+        $created = 0;
+        $updated = 0;
+        $inventoryRows = 0;
+        $errors = 0;
+
+        try {
+            foreach ($preview as $row) {
+                if (!empty($row['errors'])) {
+                    $errors++;
+                    continue;
+                }
+
+                $itemId = $this->itemImportModel->upsertItem([
+                    'item_code' => $row['item_code'],
+                    'item_description' => $row['description'],
+                    'item_type' => $row['item_type'],
+                    'raw_c_type' => $row['raw_c_type'],
+                    'item_uom' => $row['uom']
+                ]);
+
+                if ($row['qty_on_hand'] > 0 || $row['qty_for_inspect'] > 0) {
+                    $this->itemImportModel->upsertInventoryBalance(
+                        $itemId,
+                        $row['site'],
+                        $row['qty_on_hand'],
+                        $row['qty_for_inspect']
+                    );
+                    $inventoryRows++;
+                }
+            }
+
+            $conn->commit();
+
+            $created = count(array_filter($preview, fn($r) => empty($r['errors']) && $r['status'] === 'new'));
+            $updated = count(array_filter($preview, fn($r) => empty($r['errors']) && $r['status'] === 'update'));
+
+            AuditModel::log($_SESSION['user_id'], 'IMPORT', 'warehouse', "ERIC item import: {$created} new, {$updated} updated, {$inventoryRows} inventory records, {$errors} errors", null, ['created' => $created, 'updated' => $updated, 'inventory' => $inventoryRows, 'errors' => $errors], 'item', null);
+            $_SESSION['success'] = "Import complete: {$created} new items, {$updated} updated, {$inventoryRows} inventory records";
+            header('Location: ?controller=warehouse&action=items');
+            exit;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            $_SESSION['error'] = 'Import failed: ' . $e->getMessage();
+            header('Location: ?controller=warehouse&action=itemImportForm');
+            exit;
+        }
     }
 
     private function render($view, $data = []) {

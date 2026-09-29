@@ -87,7 +87,7 @@
             <form method="POST" action="?controller=rnd&action=bomCreate" id="bomCreateForm">
                 <div class="modal-body">
                     <div class="row g-3 mb-4">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Finished Good / SFG Item *</label>
                             <select name="fg_item_id" class="form-select filter-select" required>
                                 <option value="">-- Select Finished Good / SFG --</option>
@@ -104,9 +104,19 @@
                             </select>
                             <small class="text-muted">Items with existing BOMs are disabled.</small>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">BOM Code *</label>
                             <input type="text" name="bom_code" class="form-control" placeholder="e.g. BOM-001" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Customer *</label>
+                            <select name="customer_id" class="form-select filter-select" required>
+                                <option value="">-- Select Customer --</option>
+                                <?php foreach (($customers ?? []) as $cust): ?>
+                                <option value="<?= (int)$cust['customer_id'] ?>"><?= htmlspecialchars(trim(($cust['customer_code'] ?? '') . ' - ' . ($cust['customer_name'] ?? ''))) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="text-muted">Used to filter FG/SFG and demand on the MRP sheet.</small>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Fill Volume *</label>
@@ -160,7 +170,14 @@
                                     </td>
                                     <td><input type="number" step="0.000001" name="component_dosage[]" class="form-control form-control-sm dosage-input" min="0.000001" required placeholder="Qty per unit"></td>
                                     <td><input type="number" step="0.01" name="component_wastage[]" class="form-control form-control-sm" min="0" max="100" value="0" placeholder="%"></td>
-                                    <td class="component-uom-cell text-muted small">-</td>
+                                    <td class="component-uom-cell">
+                                        <select name="component_uom[]" class="form-select form-select-sm component-uom-select" aria-label="Component UOM">
+                                            <option value="">Auto (item UOM)</option>
+                                            <?php foreach (['Kg', 'g', 'mL', 'L', 'Pc', 'Pcs', 'Box', 'Roll', 'Set'] as $cu): ?>
+                                            <option value="<?= $cu ?>"><?= $cu ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </td>
                                     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger remove-row"><i class="bi bi-trash"></i></button></td>
                                 </tr>
                             </tbody>
@@ -229,11 +246,26 @@ document.getElementById('searchBom').addEventListener('input', function() {
     _searchTimer = setTimeout(function() { form.submit(); }, 500);
 });
 
+function ensureComponentUomOption(selectEl, uom) {
+    if (!uom) return;
+    for (var i = 0; i < selectEl.options.length; i++) {
+        if (selectEl.options[i].value === uom) return;
+    }
+    var opt = document.createElement('option');
+    opt.value = uom;
+    opt.textContent = uom;
+    selectEl.appendChild(opt);
+}
+
 function onComponentItemSelect(sel) {
     var opt = sel.options[sel.selectedIndex];
-    var uom = opt.getAttribute('data-uom') || '-';
+    var uom = opt.getAttribute('data-uom') || '';
     var type = opt.getAttribute('data-type') || '';
-    sel.closest('tr').querySelector('.component-uom-cell').textContent = uom;
+    var uomSelect = sel.closest('tr').querySelector('.component-uom-select');
+    if (uomSelect) {
+        ensureComponentUomOption(uomSelect, uom);
+        uomSelect.value = uom;
+    }
     var dosageInput = sel.closest('tr').querySelector('.dosage-input');
     if (dosageInput) {
         dosageInput.placeholder = (type === 'RM') ? '% of bulk batch' : 'Qty per unit';
@@ -250,7 +282,6 @@ document.getElementById('addComponentBtn').addEventListener('click', function() 
         else if (el.name && el.name.indexOf('phase') !== -1) el.value = '';
         else el.value = '';
     });
-    newRow.querySelector('.component-uom-cell').textContent = '-';
     var dosageInput = newRow.querySelector('.dosage-input');
     if (dosageInput) dosageInput.placeholder = 'Qty per unit';
     tbody.appendChild(newRow);

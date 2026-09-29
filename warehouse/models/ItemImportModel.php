@@ -13,6 +13,32 @@ class ItemImportModel extends BaseModel {
         return $stmt->fetch();
     }
 
+    public function createItem($data) {
+        if ($this->getItemByCode($data['item_code'])) {
+            throw new \Exception("Item code already exists.");
+        }
+
+        $conn = self::getConnection();
+        $sql = "INSERT INTO {$this->table}
+                (item_code, item_description, item_type, item_uom, status, `remove`)
+                VALUES (:item_code, :item_description, :item_type, :item_uom, 1, 0)";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute([
+            'item_code' => $data['item_code'],
+            'item_description' => $data['item_description'],
+            'item_type' => $data['item_type'],
+            'item_uom' => $data['item_uom']
+        ]);
+        $itemId = $conn->lastInsertId();
+
+        $soh = (float)($data['soh'] ?? 0);
+        if ($soh > 0) {
+            $this->upsertInventoryBalance($itemId, $data['site_code'] ?? 'MAIN', $soh, 0);
+        }
+
+        return $itemId;
+    }
+
     public function upsertItem($data) {
         $existing = $this->getItemByCode($data['item_code']);
         $conn = self::getConnection();
@@ -73,9 +99,8 @@ class ItemImportModel extends BaseModel {
         return 'SUPPLIES';
     }
 
-    public function getAllWithStock($filters = []) {
-        $sql = "SELECT v.*, i.customer_id, i.date_created, i.status, i.remove
-                FROM view_inventory_status v
+    private function stockQuery($filters = []) {
+        $sql = "FROM view_inventory_status v
                 JOIN items i ON v.item_id = i.item_id
                 WHERE i.remove = 0";
         $params = [];
@@ -91,7 +116,28 @@ class ItemImportModel extends BaseModel {
             $params['item_type'] = $filters['item_type'];
         }
 
-        $sql .= " ORDER BY v.item_code ASC";
+        return [$sql, $params];
+    }
+
+    public function countWithStock($filters = []) {
+        [$from, $params] = $this->stockQuery($filters);
+        $stmt = self::getConnection()->prepare("SELECT COUNT(*) AS total {$from}");
+        $stmt->execute($params);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function getAllWithStock($filters = [], $limit = null, $offset = null) {
+        [$from, $params] = $this->stockQuery($filters);
+        $sql = "SELECT v.*, i.customer_id, i.date_created, i.status, i.remove
+                {$from}
+                ORDER BY v.item_code ASC";
+
+        if ($limit !== null) {
+            $limit = max(1, (int)$limit);
+            $offset = max(0, (int)$offset);
+            $sql .= " LIMIT {$limit} OFFSET {$offset}";
+        }
+
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();

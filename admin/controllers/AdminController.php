@@ -1349,6 +1349,7 @@ public function deleteProductionHistory() {
         $data['allItems'] = $this->itemModel->getAll(false);
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['customers'] = $this->customerModel->getAll();
         $data['page_title'] = 'BOM Components';
         $this->render('boms/index', $data);
     }
@@ -1361,12 +1362,21 @@ public function deleteProductionHistory() {
                 $fillVolume = floatval($_POST['fill_volume'] ?? 0);
                 $uom = trim($_POST['uom'] ?? 'PCS');
                 $batchUnitDivisor = floatval($_POST['batch_unit_divisor'] ?? 1000);
+                $customerIdInput = trim($_POST['customer_id'] ?? '');
                 if (!$fgItemId) {
                     throw new \Exception("Finished good item is required.");
                 }
                 if ($bomCode === '') {
                     throw new \Exception("BOM Code is required.");
                 }
+                if ($customerIdInput === '') {
+                    throw new \Exception("Customer is required.");
+                }
+                $customer = ctype_digit($customerIdInput) ? $this->customerModel->getById((int)$customerIdInput) : false;
+                if (!$customer || (int)$customer['status'] !== 1) {
+                    throw new \Exception("Please select a valid customer.");
+                }
+                $customerId = (int)$customerIdInput;
                 if ($fillVolume <= 0) {
                     throw new \Exception("Fill volume must be greater than 0.");
                 }
@@ -1377,9 +1387,9 @@ public function deleteProductionHistory() {
                 if ($existing) {
                     throw new \Exception("A BOM already exists for this finished good. Edit the existing one.");
                 }
-                $result = $this->bomModel->create($fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, false);
+                $result = $this->bomModel->create($fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, false, $customerId, 'active');
                 if ($result) {
-                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created BOM for item #' . $fgItemId, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor], 'bom', $result);
+                    AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Created BOM for item #' . $fgItemId, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'customer_id' => $customerId, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor], 'bom', $result);
                     $_SESSION['success'] = 'BOM created successfully';
                     header('Location: ?controller=admin&action=bomEdit&id=' . $result);
                     exit;
@@ -1412,6 +1422,7 @@ public function deleteProductionHistory() {
         $data['allIngredients'] = $stmt->fetchAll();
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
+        $data['customers'] = $this->customerModel->getAll();
         $data['page_title'] = 'Edit BOM - ' . ($data['bom']['fg_name'] ?? '');
         $this->render('boms/edit', $data);
     }
@@ -1435,14 +1446,23 @@ public function deleteProductionHistory() {
                 if ($bomCode === '') {
                     throw new \Exception("BOM Code is required.");
                 }
+                $customerIdInput = trim($_POST['customer_id'] ?? '');
+                if ($customerIdInput === '') {
+                    throw new \Exception("Customer is required.");
+                }
+                $customer = ctype_digit($customerIdInput) ? $this->customerModel->getById((int)$customerIdInput) : false;
+                if (!$customer || (int)$customer['status'] !== 1) {
+                    throw new \Exception("Please select a valid customer.");
+                }
+                $customerId = (int)$customerIdInput;
                 if ($fillVolume <= 0) {
                     throw new \Exception("Fill volume must be greater than 0.");
                 }
                 if ($batchUnitDivisor <= 0) {
                     $batchUnitDivisor = 1000;
                 }
-                $this->bomModel->update($id, $fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, true);
-                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated BOM #' . $id, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor], 'bom', $id);
+                $this->bomModel->update($id, $fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, true, $customerId, 'active');
+                AuditModel::log($_SESSION['user_id'], 'UPDATE', 'admin', 'Updated BOM #' . $id, null, ['fg_item_id' => $fgItemId, 'bom_code' => $bomCode, 'customer_id' => $customerId, 'fill_volume' => $fillVolume, 'uom' => $uom, 'batch_unit_divisor' => $batchUnitDivisor], 'bom', $id);
                 $_SESSION['success'] = 'BOM updated';
             } catch (\Exception $e) {
                 $_SESSION['error'] = $e->getMessage();
@@ -1479,6 +1499,7 @@ public function deleteProductionHistory() {
             $dosageRate = $_POST['dosage_rate'] ?? 0;
             $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
             $phaseCode = trim($_POST['phase_code'] ?? '') ?: '101';
+            $uom = mb_substr(trim($_POST['uom'] ?? ''), 0, 50);
 
             if (!$bomId || !$itemId) {
                 http_response_code(400);
@@ -1486,8 +1507,8 @@ public function deleteProductionHistory() {
                 exit;
             }
 
-            $result = $this->bomModel->addItem($bomId, $itemId, $dosageRate, $wastagePct, $phaseCode);
-            AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Added ingredient to BOM #' . $bomId, null, ['item_id' => $itemId, 'dosage_rate' => $dosageRate, 'phase_code' => $phaseCode], 'bom_item', $result);
+            $result = $this->bomModel->addItem($bomId, $itemId, $dosageRate, $wastagePct, $phaseCode, $uom);
+            AuditModel::log($_SESSION['user_id'], 'CREATE', 'admin', 'Added ingredient to BOM #' . $bomId, null, ['item_id' => $itemId, 'dosage_rate' => $dosageRate, 'phase_code' => $phaseCode, 'uom' => $uom], 'bom_item', $result);
             echo json_encode(['success' => true, 'id' => $result]);
         } catch (\Exception $e) {
             error_log('bomAddItem error: ' . $e->getMessage());
@@ -1510,6 +1531,7 @@ public function deleteProductionHistory() {
             $dosageRate = $_POST['dosage_rate'] ?? 0;
             $wastagePct = $_POST['wastage_allowance_pct'] ?? 0;
             $phaseCode = trim($_POST['phase_code'] ?? '') ?: '101';
+            $uom = mb_substr(trim($_POST['uom'] ?? ''), 0, 50);
 
             if (!$bomItemId || !$itemId) {
                 http_response_code(400);
@@ -1517,7 +1539,7 @@ public function deleteProductionHistory() {
                 exit;
             }
 
-            $result = $this->bomModel->updateItem($bomItemId, $itemId, $dosageRate, $wastagePct, $phaseCode);
+            $result = $this->bomModel->updateItem($bomItemId, $itemId, $dosageRate, $wastagePct, $phaseCode, $uom);
             echo json_encode(['success' => true]);
         } catch (\Exception $e) {
             error_log('bomUpdateItem error: ' . $e->getMessage());

@@ -41,7 +41,7 @@ function submitQcDecisionOnce(form) {
                             <?php $receivedQty = (float) ($item['received_qty'] ?? 0); ?>
                             <?php $currentStatus = strtoupper((string) ($item['qc_status'] ?? 'PENDING_QC')); ?>
                             <tr>
-                                <td><?= htmlspecialchars($item['customer_po_number'] ?? ($item['po_ref'] ?? '-')) ?></td>
+                                <td><?= htmlspecialchars($item['po_ref'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($item['supplier_name'] ?? '-') ?></td>
                                 <td><strong><?= htmlspecialchars($item['item_code'] ?? '-') ?></strong></td>
                                 <td><?= htmlspecialchars($item['item_description'] ?? '-') ?></td>
@@ -113,7 +113,7 @@ function submitQcDecisionOnce(form) {
                     <?php else: ?>
                         <?php foreach ($completedQcItems as $item): ?>
                             <tr>
-                                <td><?= htmlspecialchars($item['customer_po_number'] ?? ($item['po_ref'] ?? '-')) ?></td>
+                                <td><?= htmlspecialchars($item['po_ref'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($item['supplier_name'] ?? '-') ?></td>
                                 <td><strong><?= htmlspecialchars($item['item_code'] ?? '-') ?></strong></td>
                                 <td><?= htmlspecialchars($item['item_description'] ?? '-') ?></td>

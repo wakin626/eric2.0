@@ -101,6 +101,16 @@
                         <label class="form-label">BOM Code *</label>
                         <input type="text" name="bom_code" class="form-control" placeholder="e.g. BOM-001" required>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Customer *</label>
+                        <select name="customer_id" class="form-select filter-select" required>
+                            <option value="">-- Select Customer --</option>
+                            <?php foreach (($customers ?? []) as $cust): ?>
+                            <option value="<?= (int)$cust['customer_id'] ?>"><?= htmlspecialchars(trim(($cust['customer_code'] ?? '') . ' - ' . ($cust['customer_name'] ?? ''))) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">Used to filter FG/SFG and demand on the MRP sheet.</small>
+                    </div>
                     <div class="row g-3 mb-2">
                         <div class="col-md-4">
                             <label class="form-label">Fill Volume *</label>

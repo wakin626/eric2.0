@@ -122,11 +122,6 @@
 <ul class="nav flex-column sidebar-menu">
 <?php $currentAction = $_GET['action'] ?? ''; ?>
 <li class="nav-item">
-<a class="nav-link <?= in_array($currentAction, ['items', 'itemImportForm', 'itemImportPreview', 'itemImportConfirm']) ? 'active' : '' ?>" href="?controller=rnd&action=items">
-<i class="bi bi-box-seam me-2"></i>Items (RM PM FG)
-</a>
-</li>
-<li class="nav-item">
 <a class="nav-link <?= in_array($currentAction, ['boms', 'bomCreate', 'bomEdit', 'bomUpdate', 'bomDelete', 'bomAddItem', 'bomUpdateItem', 'bomRemoveItem', 'bomImportPreview', 'bomImportConfirm']) ? 'active' : '' ?>" href="?controller=rnd&action=boms">
 <i class="bi bi-diagram-3 me-2"></i>BOM Components
 </a>

@@ -99,12 +99,12 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             </div>
 
             <div class="col-md-3">
-                <label class="form-label fw-bold">Select Finished Good</label>
+                <label class="form-label fw-bold">Select Finished Good / SFG</label>
                 <select name="fg_item_id" id="mrpFg" class="form-select filter-select" <?= empty($fgOptions) ? 'disabled' : '' ?>>
                     <?php if (empty($fgOptions)): ?>
-                    <option value=""><?= !empty($noFgsForCustomer) ? 'No FGs with active BOM for this customer' : 'No FGs with active BOM' ?></option>
+                    <option value=""><?= !empty($noFgsForCustomer) ? 'No FG/SFG with active BOM for this customer' : 'No FG/SFG with active BOM' ?></option>
                     <?php else: ?>
-                    <option value="">-- Select Finished Good --</option>
+                    <option value="">-- Select Finished Good / SFG --</option>
                     <?php foreach ($fgOptions as $fg): ?>
                     <option value="<?= $fg['item_id'] ?>" <?= ($selectedFg == $fg['item_id']) ? 'selected' : '' ?>>
                         <?= htmlspecialchars($fg['item_code'] . ' — ' . $fg['item_description']) ?>
@@ -147,8 +147,8 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
 <div class="card data-card mb-4 no-print">
     <div class="mrp-empty">
         <i class="bi bi-box-seam" style="font-size: 3rem; opacity: 0.3;"></i>
-        <h5 class="mt-3">No FGs with active BOM for this customer</h5>
-        <p class="text-muted">Create or activate a BOM for this customer's finished goods, or choose another customer.</p>
+        <h5 class="mt-3">No FG/SFG with active BOM for this customer</h5>
+        <p class="text-muted">Create or activate a BOM for this customer's FG/SFG items, or choose another customer.</p>
     </div>
 </div>
 <?php endif; ?>
@@ -158,8 +158,8 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
 <div class="card data-card">
     <div class="mrp-empty">
         <i class="bi bi-calculator" style="font-size: 3rem; opacity: 0.3;"></i>
-        <h5 class="mt-3">Select a Customer, Finished Good, and enter Target Quantity to calculate material requirements.</h5>
-        <p class="text-muted">Choose a customer, pick a finished good with an active BOM, enter the target production quantity, then click Calculate.</p>
+        <h5 class="mt-3">Select a Customer, Finished Good / SFG, and enter Target Quantity to calculate material requirements.</h5>
+        <p class="text-muted">Choose a customer, pick an FG/SFG with an active BOM, enter the target production quantity, then click Calculate.</p>
     </div>
 </div>
 <?php endif; ?>
@@ -173,11 +173,11 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
         <div class="row">
             <div class="col-md-3"><strong>FG Code:</strong> <code><?= htmlspecialchars($fgHeader['fg_code']) ?></code></div>
             <div class="col-md-4"><strong>Description:</strong> <?= htmlspecialchars($fgHeader['fg_name']) ?></div>
-            <div class="col-md-2"><strong>Target Qty:</strong> <?= number_format($fgHeader['target_qty'], 2) ?> <?= htmlspecialchars($fgHeader['item_uom']) ?></div>
+            <div class="col-md-2"><strong>Target Qty:</strong> <?= formatQty($fgHeader['target_qty']) ?> Pcs</div>
             <div class="col-md-3"><strong>BOM:</strong> <?= htmlspecialchars($fgHeader['bom_code']) ?></div>
         </div>
         <div class="row mt-2">
-            <div class="col-md-3"><strong>Fill Volume:</strong> <?= number_format($fgHeader['fill_volume'], 4) ?> <?= htmlspecialchars($fgHeader['uom']) ?></div>
+            <div class="col-md-3"><strong>Fill Volume:</strong> <?= formatQty($fgHeader['fill_volume']) ?> <?= htmlspecialchars($fgHeader['uom']) ?></div>
             <div class="col-md-3"><strong>UOM Divisor:</strong> <?= number_format($fgHeader['batch_unit_divisor'], 0) ?></div>
             <?php if (!empty($fgHeader['is_legacy_formula'])): ?>
             <div class="col-md-3"><span class="badge bg-warning text-dark">Legacy formula flag on BOM</span></div>
@@ -228,7 +228,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                     <td><code><?= htmlspecialchars($row['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($row['item_description']) ?></td>
                     <td><span class="badge bg-light text-dark border mrp-cat-badge"><?= htmlspecialchars($row['category']) ?></span></td>
-                    <td class="num"><?= formatQty($row['required_qty']) ?> <?= htmlspecialchars($row['item_uom']) ?></td>
+                    <td class="num"><?= formatQty($row['required_qty']) ?> <?= htmlspecialchars($row['display_uom'] ?? $row['item_uom']) ?></td>
                     <td class="num"><?= formatQty($row['soh']) ?></td>
                     <td class="num"><?= formatQty($row['allocated']) ?></td>
                     <td class="num <?= $row['available'] >= $row['required_qty'] ? 'text-success' : 'text-danger' ?> fw-bold"><?= formatQty($row['available']) ?></td>

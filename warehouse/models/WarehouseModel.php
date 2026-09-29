@@ -28,6 +28,10 @@ class WarehouseModel extends BaseModel {
         return $this->catalogModel->getCustomers();
     }
 
+    public function getCustomerById($customer_id) {
+        return $this->catalogModel->getCustomerById($customer_id);
+    }
+
     public function getItems() {
         return $this->catalogModel->getItems();
     }
@@ -3019,36 +3023,26 @@ public function searchItems($query) {
     }
 
     public function getActiveCustomersForMrp() {
-        $sql = "SELECT c.customer_id, c.customer_code, c.customer_name
+        $sql = "SELECT DISTINCT c.customer_id, c.customer_code, c.customer_name
                 FROM customers c
+                INNER JOIN fg_boms b ON b.customer_id = c.customer_id
                 WHERE c.`remove` = 0 AND c.status = 1
-                  AND (
-                        EXISTS (
-                            SELECT 1 FROM items i
-                            INNER JOIN fg_boms b ON b.fg_item_id = i.item_id
-                            WHERE i.customer_id = c.customer_id
-                              AND i.item_type = 'FG'
-                              AND i.`remove` = 0 AND i.status = 1
-                        )
-                     OR EXISTS (
-                            SELECT 1 FROM customer_finished_goods cfg
-                            INNER JOIN items i2 ON i2.item_code = cfg.item_code
-                            INNER JOIN fg_boms b2 ON b2.fg_item_id = i2.item_id
-                            WHERE cfg.customer_id = c.customer_id
-                              AND cfg.`remove` = 0 AND cfg.status = 1
-                              AND i2.item_type = 'FG'
-                              AND i2.`remove` = 0 AND i2.status = 1
-                        )
-                      )
-                ORDER BY c.customer_code ASC";
+                  AND b.status = 'active'
+                  AND EXISTS (
+                        SELECT 1 FROM items i
+                        WHERE i.item_id = b.fg_item_id
+                          AND i.`remove` = 0 AND i.status = 1
+                          AND i.item_type IN ('FG', 'SFG')
+                  )
+                ORDER BY c.customer_name ASC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
     }
 
     /**
-     * FGs that have an active BOM, optionally filtered to a customer
-     * (items.customer_id or customer_finished_goods.item_code match).
+     * FGs and SFGs with an active BOM, optionally filtered to the customer
+     * assigned on the BOM header (fg_boms.customer_id).
      */
     public function getFgsWithBomByCustomer($customerId = null) {
         $sql = "SELECT i.item_id, i.item_code, i.item_description, i.item_uom, i.customer_id,
@@ -3058,20 +3052,12 @@ public function searchItems($query) {
                 FROM items i
                 INNER JOIN fg_boms b ON b.fg_item_id = i.item_id
                 WHERE i.`remove` = 0 AND i.status = 1
-                  AND i.item_type = 'FG'";
+                  AND i.item_type IN ('FG', 'SFG')
+                  AND b.status = 'active'";
         $params = [];
         if (!empty($customerId)) {
-            $sql .= " AND (
-                        i.customer_id = :cid
-                        OR i.item_code IN (
-                            SELECT cfg.item_code
-                            FROM customer_finished_goods cfg
-                            WHERE cfg.customer_id = :cid2
-                              AND cfg.`remove` = 0 AND cfg.status = 1
-                        )
-                      )";
+            $sql .= " AND b.customer_id = :cid";
             $params['cid'] = $customerId;
-            $params['cid2'] = $customerId;
         }
         $sql .= " ORDER BY i.item_code ASC";
         $stmt = self::getConnection()->prepare($sql);
@@ -3135,6 +3121,7 @@ public function searchItems($query) {
         $sql = "SELECT bi.bom_id, bi.item_id AS component_item_id, bi.dosage_rate, bi.wastage_allowance_pct,
                        bi.phase_code, i.item_type,
                        i.item_code, i.item_description, i.item_uom,
+                       COALESCE(NULLIF(bi.uom, ''), i.item_uom) AS display_uom,
                        COALESCE(v.total_soh, 0) AS soh,
                        COALESCE(v.total_allocated, 0) AS allocated,
                        COALESCE(v.available_stock, 0) AS available_stock
@@ -3235,18 +3222,34 @@ public function searchItems($query) {
             $params['supplier_name'] = '%' . $filters['supplier_name'] . '%';
         }
         if (!empty($filters['search'])) {
-            $where[] = "(so.supplier_name LIKE :search OR i.item_code LIKE :search OR i.item_description LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $where[] = "(so.supplier_name LIKE :search1 OR i.item_code LIKE :search2 OR i.item_description LIKE :search3 OR so.po_ref LIKE :search4 OR so.remarks LIKE :search5)";
+            $params['search1'] = '%' . $filters['search'] . '%';
+            $params['search2'] = $params['search1'];
+            $params['search3'] = $params['search1'];
+            $params['search4'] = $params['search1'];
+            $params['search5'] = $params['search1'];
         }
 
         $whereSql = implode(' AND ', $where);
-        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom,
+        // PO Ref is the explicit po_ref entered by procurement (New/Process
+        // modal); '-' until one is provided. Never customer_po_number, never
+        // auto-generated internal ids.
+        $sql = "SELECT so.*, i.item_code, i.item_description,
+                       COALESCE(so.uom,
+                                (SELECT bi.uom FROM fg_bom_items bi
+                                 JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
+                                 WHERE bi.item_id = so.item_id
+                                   AND bi.uom IS NOT NULL AND bi.uom <> ''
+                                 ORDER BY bi.id DESC LIMIT 1),
+                                i.item_uom) AS item_uom,
                        u.full_name AS created_by_name,
-                       po.customer_po_number
+                       CASE WHEN so.po_ref IS NOT NULL AND TRIM(so.po_ref) <> ''
+                            THEN TRIM(so.po_ref)
+                            ELSE '-'
+                       END AS po_ref_display
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
                 JOIN users u ON so.created_by = u.user_id
-                LEFT JOIN purchase_orders po ON so.po_id = po.po_id
                 WHERE {$whereSql}
                 ORDER BY so.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -3255,7 +3258,14 @@ public function searchItems($query) {
     }
 
     public function getSupplierOrderById($id) {
-        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom
+        $sql = "SELECT so.*, i.item_code, i.item_description,
+                       COALESCE(so.uom,
+                                (SELECT bi.uom FROM fg_bom_items bi
+                                 JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
+                                 WHERE bi.item_id = so.item_id
+                                   AND bi.uom IS NOT NULL AND bi.uom <> ''
+                                 ORDER BY bi.id DESC LIMIT 1),
+                                i.item_uom) AS item_uom
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
                 WHERE so.supplier_order_id = :id AND so.`remove` = 0";
@@ -3267,13 +3277,20 @@ public function searchItems($query) {
     public function createSupplierOrder($data) {
         $status = $data['status'] ?? 'pending';
         $poId = $data['po_id'] ?? null;
-        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, unit_cost, order_date, expected_date, remarks, created_by, status, po_id)
-                VALUES (:supplier_name, :item_id, :quantity, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id)";
+        $uom = $data['uom'] ?? null;
+        if ($uom === null || $uom === '') {
+            $uomStmt = self::getConnection()->prepare("SELECT item_uom FROM items WHERE item_id = ?");
+            $uomStmt->execute([$data['item_id']]);
+            $uom = $uomStmt->fetchColumn() ?: null;
+        }
+        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, uom, unit_cost, order_date, expected_date, remarks, created_by, status, po_id)
+                VALUES (:supplier_name, :item_id, :quantity, :uom, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'supplier_name' => $data['supplier_name'],
             'item_id' => $data['item_id'],
             'quantity' => $data['quantity'],
+            'uom' => $uom,
             'unit_cost' => $data['unit_cost'],
             'order_date' => $data['order_date'],
             'expected_date' => $data['expected_date'],
@@ -3461,18 +3478,32 @@ public function searchItems($query) {
             $params['supplier_name'] = '%' . $filters['supplier_name'] . '%';
         }
         if (!empty($filters['search'])) {
-            $where[] = "(so.supplier_name LIKE :search OR i.item_code LIKE :search OR i.item_description LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $where[] = "(so.supplier_name LIKE :search1 OR i.item_code LIKE :search2 OR i.item_description LIKE :search3 OR so.po_ref LIKE :search4 OR so.remarks LIKE :search5)";
+            $params['search1'] = '%' . $filters['search'] . '%';
+            $params['search2'] = $params['search1'];
+            $params['search3'] = $params['search1'];
+            $params['search4'] = $params['search1'];
+            $params['search5'] = $params['search1'];
         }
 
         $whereSql = implode(' AND ', $where);
-        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom,
+        // PO Ref is the explicit po_ref entered by procurement; '-' when empty.
+        $sql = "SELECT so.*, i.item_code, i.item_description,
+                       COALESCE(so.uom,
+                                (SELECT bi.uom FROM fg_bom_items bi
+                                 JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
+                                 WHERE bi.item_id = so.item_id
+                                   AND bi.uom IS NOT NULL AND bi.uom <> ''
+                                 ORDER BY bi.id DESC LIMIT 1),
+                                i.item_uom) AS item_uom,
                        u.full_name AS created_by_name,
-                       po.customer_po_number
+                       CASE WHEN so.po_ref IS NOT NULL AND TRIM(so.po_ref) <> ''
+                            THEN TRIM(so.po_ref)
+                            ELSE '-'
+                       END AS po_ref_display
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
                 JOIN users u ON so.created_by = u.user_id
-                LEFT JOIN purchase_orders po ON so.po_id = po.po_id
                 WHERE {$whereSql}
                 ORDER BY so.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -3481,11 +3512,16 @@ public function searchItems($query) {
     }
 
     public function getPurchasingPoById($id) {
-        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom,
-                       po.customer_po_number
+        $sql = "SELECT so.*, i.item_code, i.item_description,
+                       COALESCE(so.uom,
+                                (SELECT bi.uom FROM fg_bom_items bi
+                                 JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
+                                 WHERE bi.item_id = so.item_id
+                                   AND bi.uom IS NOT NULL AND bi.uom <> ''
+                                 ORDER BY bi.id DESC LIMIT 1),
+                                i.item_uom) AS item_uom
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
-                LEFT JOIN purchase_orders po ON so.po_id = po.po_id
                 WHERE so.supplier_order_id = :id AND so.`remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
@@ -3495,17 +3531,25 @@ public function searchItems($query) {
     public function createPurchasingPo($data) {
         $status = $data['status'] ?? 'requested';
         $poId = $data['po_id'] ?? null;
-        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, unit_cost, order_date, expected_date, remarks, created_by, status, po_id, received_qty, received_date)
-                VALUES (:supplier_name, :item_id, :quantity, :unit_cost, :order_date, :expected_date, :remarks, :created_by, :status, :po_id, 0, NULL)";
+        $uom = $data['uom'] ?? null;
+        if ($uom === null || $uom === '') {
+            $uomStmt = self::getConnection()->prepare("SELECT item_uom FROM items WHERE item_id = ?");
+            $uomStmt->execute([$data['item_id']]);
+            $uom = $uomStmt->fetchColumn() ?: null;
+        }
+        $sql = "INSERT INTO supplier_orders (supplier_name, item_id, quantity, uom, unit_cost, order_date, expected_date, remarks, po_ref, created_by, status, po_id, received_qty, received_date)
+                VALUES (:supplier_name, :item_id, :quantity, :uom, :unit_cost, :order_date, :expected_date, :remarks, :po_ref, :created_by, :status, :po_id, 0, NULL)";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute([
             'supplier_name' => $data['supplier_name'],
             'item_id' => $data['item_id'],
             'quantity' => $data['quantity'],
+            'uom' => $uom,
             'unit_cost' => $data['unit_cost'],
             'order_date' => $data['order_date'],
             'expected_date' => $data['expected_date'],
             'remarks' => $data['remarks'],
+            'po_ref' => $data['po_ref'] ?? null,
             'created_by' => $data['created_by'],
             'status' => $status,
             'po_id' => $poId
@@ -3514,13 +3558,17 @@ public function searchItems($query) {
     }
 
     public function processPurchasingPo($id, $data) {
+        // po_ref is the explicit vendor PO reference entered by procurement;
+        // COALESCE keeps an existing value when the field is submitted blank.
+        // remarks keeps its COALESCE so blank submissions preserve receipt logs.
         $sql = "UPDATE supplier_orders
                 SET supplier_name = :supplier_name,
                     quantity = :quantity,
                     unit_cost = :unit_cost,
                     order_date = :order_date,
                     expected_date = :expected_date,
-                    remarks = :remarks,
+                    remarks = COALESCE(:remarks, remarks),
+                    po_ref = COALESCE(:po_ref, po_ref),
                     po_id = :po_id,
                     status = 'pending'
                 WHERE supplier_order_id = :id AND status IN ('requested', 'pending')";
@@ -3532,6 +3580,7 @@ public function searchItems($query) {
             'order_date' => $data['order_date'],
             'expected_date' => $data['expected_date'],
             'remarks' => $data['remarks'],
+            'po_ref' => $data['po_ref'] ?? null,
             'po_id' => $data['po_id'] ?? null,
             'id' => $id
         ]);
@@ -3665,18 +3714,32 @@ public function searchItems($query) {
             $params['supplier'] = $filters['supplier'];
         }
         if (!empty($filters['search'])) {
-            $where[] = "(so.supplier_name LIKE :search OR i.item_code LIKE :search OR i.item_description LIKE :search OR po.customer_po_number LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $where[] = "(so.supplier_name LIKE :search1 OR i.item_code LIKE :search2 OR i.item_description LIKE :search3 OR so.po_ref LIKE :search4 OR so.remarks LIKE :search5)";
+            $params['search1'] = '%' . $filters['search'] . '%';
+            $params['search2'] = $params['search1'];
+            $params['search3'] = $params['search1'];
+            $params['search4'] = $params['search1'];
+            $params['search5'] = $params['search1'];
         }
 
         $whereSql = implode(' AND ', $where);
-        $sql = "SELECT so.*, i.item_code, i.item_description, i.item_uom,
+        // PO Ref is the explicit po_ref entered by procurement; '-' when empty.
+        $sql = "SELECT so.*, i.item_code, i.item_description,
+                       COALESCE(so.uom,
+                                (SELECT bi.uom FROM fg_bom_items bi
+                                 JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
+                                 WHERE bi.item_id = so.item_id
+                                   AND bi.uom IS NOT NULL AND bi.uom <> ''
+                                 ORDER BY bi.id DESC LIMIT 1),
+                                i.item_uom) AS item_uom,
                        u.full_name AS created_by_name,
-                       po.customer_po_number
+                       CASE WHEN so.po_ref IS NOT NULL AND TRIM(so.po_ref) <> ''
+                            THEN TRIM(so.po_ref)
+                            ELSE '-'
+                       END AS po_ref_display
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
                 JOIN users u ON so.created_by = u.user_id
-                LEFT JOIN purchase_orders po ON so.po_id = po.po_id
                 WHERE {$whereSql}
                 ORDER BY so.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -3717,10 +3780,11 @@ public function searchItems($query) {
             }
 
             // Resolve PO ref up front (used for staging + duplicate check).
-            $poRef = $order['customer_po_number'] ?? null;
-            if (!$poRef) {
-                $poRef = $order['po_id'] ? ('PO #' . $order['po_id']) : ('SO #' . $id);
-            }
+            // receiving_items.po_ref (NOT NULL) takes the explicit po_ref entered
+            // by procurement; only when left blank fall back to the internal id
+            // so the QC queue still has an identifier. Never the customer PO number.
+            $ref = trim((string) ($order['po_ref'] ?? ''));
+            $poRef = $ref !== '' ? $ref : 'SO #' . $id;
             $remarksParts = [];
             if (!empty($data['lot_number'])) $remarksParts[] = 'Lot: ' . $data['lot_number'];
             if (!empty($data['expiry_date'])) $remarksParts[] = 'Expiry: ' . $data['expiry_date'];
@@ -3763,7 +3827,7 @@ public function searchItems($query) {
                     'rid' => $dupRow['id'],
                 ]);
                 $conn->commit();
-                return ['success' => true, 'receiving_item_id' => (int) $dupRow['id'], 'duplicate' => true];
+                return ['success' => true, 'receiving_item_id' => (int) $dupRow['id'], 'po_ref' => $poRef, 'duplicate' => true];
             }
 
             // Status transitions to 'For Inspection' only here: explicit modal
@@ -3841,7 +3905,7 @@ public function searchItems($query) {
             }
 
             $conn->commit();
-            return ['success' => true, 'receiving_item_id' => $receivingItemId];
+            return ['success' => true, 'receiving_item_id' => $receivingItemId, 'po_ref' => $poRef];
         } catch (\Exception $e) {
             $conn->rollBack();
             throw $e;

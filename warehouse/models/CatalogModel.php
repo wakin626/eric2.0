@@ -13,6 +13,14 @@ class CatalogModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    public function getCustomerById($customerId) {
+        $sql = "SELECT customer_id FROM customers
+                WHERE customer_id = :customer_id AND `remove` = 0 AND status = 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['customer_id' => $customerId]);
+        return $stmt->fetch();
+    }
+
     public function getItems() {
         $sql = "SELECT * FROM items WHERE `remove` = 0 AND status = 1 ORDER BY item_code ASC";
         $stmt = self::getConnection()->prepare($sql);

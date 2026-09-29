@@ -28,7 +28,7 @@
                     <?php else: ?>
                         <?php foreach ($pendingQcItems as $item): ?>
                             <tr>
-                                <td><?= htmlspecialchars($item['customer_po_number'] ?? ($item['po_id'] ? 'PO #' . $item['po_id'] : '-')) ?></td>
+                                <td><?= htmlspecialchars($item['po_ref'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($item['supplier_name'] ?? '-') ?></td>
                                 <td><strong><?= htmlspecialchars($item['item_code'] ?? '-') ?></strong><br><small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small></td>
                                 <td><?= htmlspecialchars($item['lot_number'] ?? '-') ?></td>
@@ -39,7 +39,7 @@
                                     <button type="button"
                                             class="btn btn-sm btn-primary inspect-qc-btn"
                                             data-receiving-item-id="<?= (int) ($item['receiving_item_id'] ?? 0) ?>"
-                                            data-po-ref="<?= htmlspecialchars($item['customer_po_number'] ?? ($item['po_id'] ? 'PO #' . $item['po_id'] : '-')) ?>"
+                                            data-po-ref="<?= htmlspecialchars($item['po_ref'] ?? '-') ?>"
                                             data-supplier="<?= htmlspecialchars($item['supplier_name'] ?? '-') ?>"
                                             data-item-code="<?= htmlspecialchars($item['item_code'] ?? '-') ?>"
                                             data-item-description="<?= htmlspecialchars($item['item_description'] ?? '-') ?>"

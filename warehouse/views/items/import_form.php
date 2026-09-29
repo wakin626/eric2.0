@@ -1,6 +1,6 @@
 <div class="d-flex justify-content-between mb-4">
     <div class="d-flex gap-2">
-        <a href="?controller=rnd&action=items" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Items</a>
+        <a href="?controller=warehouse&action=items" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Items</a>
     </div>
 </div>
 
@@ -9,7 +9,7 @@
         <div class="card data-card">
             <div class="card-header"><i class="bi bi-upload me-2"></i>Import ERIC Item Master & Stock</div>
             <div class="card-body">
-                <form method="POST" action="?controller=rnd&action=itemImportPreview" enctype="multipart/form-data">
+                <form method="POST" action="?controller=warehouse&action=itemImportPreview" enctype="multipart/form-data">
                     <div class="mb-4">
                         <label class="form-label">Select ERIC Export File (.csv or .xlsx)</label>
                         <input type="file" name="import_file" class="form-control" accept=".csv,.xlsx" required>
@@ -43,7 +43,7 @@
                     </div>
 
                     <div class="d-flex justify-content-end gap-2">
-                        <a href="?controller=rnd&action=items" class="btn btn-secondary">Cancel</a>
+                        <a href="?controller=warehouse&action=items" class="btn btn-secondary">Cancel</a>
                         <button type="submit" class="btn btn-success"><i class="bi bi-upload me-1"></i>Upload & Preview</button>
                     </div>
                 </form>
