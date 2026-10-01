@@ -68,7 +68,7 @@
                                 <i class="bi bi-printer"></i>
                             </a>
                             <?php endif; ?>
-                            <a href="?controller=warehouse&action=deleteMrpRun&run_id=<?= $r['run_id'] ?>&po_id=<?= $selectedPO ?? '' ?>" class="btn btn-outline-danger" title="Delete" onclick="return confirm('Delete this snapshot? Associated pending procurement requests will be cancelled.')">
+                            <a href="?controller=warehouse&action=deleteMrpRun&run_id=<?= $r['run_id'] ?>&po_id=<?= $selectedPO ?? '' ?>" class="btn btn-outline-danger" title="Delete" onclick="return confirm('Delete this snapshot? Its unfulfilled purchase requests will be removed too.')">
                                 <i class="bi bi-trash"></i>
                             </a>
                         </div>
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     var html = '<table class="table table-sm table-bordered"><thead><tr>' +
                         '<th>FG Code</th><th>Component</th><th>UoM</th>' +
                         '<th class="text-end">Total Reqt</th><th class="text-end">SOH</th>' +
-                        '<th class="text-end">Allocated</th><th class="text-end">Pending</th>' +
+                        '<th class="text-end">Allocated</th><th class="text-end">Pending PO/RR</th>' +
                         '<th class="text-end">Excess</th><th>Remarks</th></tr></thead><tbody>';
                     items.forEach(function(row) {
                         // excess is a formatted string ("-2,500"); a leading '-' marks a shortage.

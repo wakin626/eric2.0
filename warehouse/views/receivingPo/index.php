@@ -136,6 +136,8 @@
                             <span class="badge bg-danger">Rejected</span>
                         <?php elseif ($status === 'cancelled'): ?>
                             <span class="badge bg-secondary">Cancelled</span>
+                        <?php elseif ($status === 'po_created'): ?>
+                            <span class="badge bg-dark">PO Created (consolidated)</span>
                         <?php else: ?>
                             <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst((string) ($o['status'] ?? 'Unknown'))) ?: 'Unknown' ?></span>
                         <?php endif; ?>

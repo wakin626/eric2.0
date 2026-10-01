@@ -25,6 +25,7 @@
                 <option value="For Inspection" <?= ($filters['status'] ?? '') === 'For Inspection' ? 'selected' : '' ?>>For Inspection</option>
                 <option value="received" <?= ($filters['status'] ?? '') === 'received' ? 'selected' : '' ?>>Received</option>
                 <option value="cancelled" <?= ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                <option value="PO_Created" <?= ($filters['status'] ?? '') === 'PO_Created' ? 'selected' : '' ?>>PO Created (consolidated)</option>
             </select>
             <input type="text" name="search" class="form-control form-control-sm" placeholder="Search supplier, item, PO Ref..." value="<?= htmlspecialchars($filters['search'] ?? '') ?>" style="width:220px">
             <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-search"></i></button>
@@ -95,10 +96,13 @@
                         <?php if (in_array($o['status'], ['requested', 'pending'])): ?>
                         <input type="checkbox" class="form-check-input order-checkbox"
                                data-id="<?= $o['supplier_order_id'] ?>"
+                               data-req-id="<?= $o['supplier_order_id'] ?>"
                                data-item-code="<?= htmlspecialchars($o['item_code']) ?>"
                                data-item-desc="<?= htmlspecialchars($o['item_description']) ?>"
+                               data-item-name="<?= htmlspecialchars($o['item_description']) ?>"
                                data-qty="<?= $o['quantity'] ?>"
-                               data-po-ref="<?= htmlspecialchars($o['po_ref_display']) ?>">
+                               data-po-ref="<?= htmlspecialchars($o['po_ref_display']) ?>"
+                               data-mrp-ref="<?= htmlspecialchars($o['mrp_ref'] ?? '') ?>">
                         <?php endif; ?>
                     </td>
                     <td title="Order #<?= $o['supplier_order_id'] ?>"><?= $index + 1 ?></td>
@@ -130,6 +134,8 @@
                             <span class="badge bg-success">Received</span>
                         <?php elseif ($o['status'] === 'cancelled'): ?>
                             <span class="badge bg-secondary">Cancelled</span>
+                        <?php elseif ($o['status'] === 'PO_Created'): ?>
+                            <span class="badge bg-dark">PO Created</span>
                         <?php else: ?>
                             <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
                         <?php endif; ?>
@@ -336,9 +342,13 @@
                                 <div class="col-4 fw-bold">Total Consolidated Qty:</div>
                                 <div class="col-8" id="batchTotalQty"></div>
                             </div>
-                            <div class="row">
+                            <div class="row mb-1">
                                 <div class="col-4 fw-bold">Linked PO Refs:</div>
                                 <div class="col-8" id="batchPoRefs"></div>
+                            </div>
+                            <div class="row">
+                                <div class="col-4 fw-bold">MRP Refs:</div>
+                                <div class="col-8" id="batchMrpRefs">-</div>
                             </div>
                         </div>
                     </div>
@@ -362,6 +372,25 @@
                     <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Confirm & Process All</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Selection Error Modal (different item codes selected together) -->
+<div class="modal fade" id="bulkItemErrorModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-danger">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Invalid Selection</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                You can only bulk process requisitions for the <b>SAME item code</b>.<br><br>
+                Selected items contain: <span id="bulkErrorCodes"></span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+            </div>
         </div>
     </div>
 </div>
@@ -464,30 +493,57 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function openBatchProcessModal() {
     var checked = document.querySelectorAll('.order-checkbox:checked');
-    if (checked.length === 0) return;
+    if (checked.length === 0) {
+        alert('Please select at least one item to process.');
+        return;
+    }
 
     var groups = {};
     checked.forEach(function(cb) {
         var code = cb.dataset.itemCode;
         if (!groups[code]) {
-            groups[code] = { code: code, desc: cb.dataset.itemDesc, qty: 0, poRefs: [] };
+            groups[code] = {
+                code: code,
+                desc: cb.dataset.itemName || cb.dataset.itemDesc || '',
+                qty: 0,
+                poRefs: [],
+                mrpRefs: []
+            };
         }
         groups[code].qty += parseFloat(cb.dataset.qty);
-        groups[code].poRefs.push(cb.dataset.poRef);
+        if (cb.dataset.poRef) groups[code].poRefs.push(cb.dataset.poRef);
+        var mrp = (cb.dataset.mrpRef || '').trim();
+        if (mrp && groups[code].mrpRefs.indexOf(mrp) === -1) {
+            groups[code].mrpRefs.push(mrp);
+        }
     });
 
+    // 1. Validation: ALL selected rows must be the same item code — show the
+    //    offending codes in an error dialog instead of ignoring the selection.
     var keys = Object.keys(groups);
     if (keys.length > 1) {
-        alert('Please select items of the same product only. You have selected ' + keys.length + ' different items.');
+        var codeList = document.getElementById('bulkErrorCodes');
+        codeList.innerHTML = '';
+        keys.forEach(function(k) {
+            var code = document.createElement('code');
+            code.className = 'me-1';
+            code.textContent = k;
+            codeList.appendChild(code);
+        });
+        new bootstrap.Modal(document.getElementById('bulkItemErrorModal')).show();
         return;
     }
 
+    // 2. Open the consolidation modal with the summed quantity and linked refs.
     var g = groups[keys[0]];
     document.getElementById('batchItemCode').textContent = g.code;
     document.getElementById('batchItemDesc').textContent = g.desc;
     document.getElementById('batchTotalQty').textContent = g.qty.toFixed(4);
-    document.getElementById('batchPoRefs').textContent = g.poRefs.join(', ');
-    document.getElementById('batchOrderIds').value = Array.from(checked).map(function(cb) { return cb.dataset.id; }).join(',');
+    document.getElementById('batchPoRefs').textContent = g.poRefs.join(', ') || '-';
+    document.getElementById('batchMrpRefs').textContent = g.mrpRefs.join(', ') || '-';
+    document.getElementById('batchOrderIds').value = Array.from(checked).map(function(cb) {
+        return cb.dataset.reqId || cb.dataset.id;
+    }).join(',');
 
     new bootstrap.Modal(document.getElementById('batchProcessModal')).show();
 }

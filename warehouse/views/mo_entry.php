@@ -464,10 +464,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         bomBatchInfo.textContent = batchInfoText;
 
-        if (data.has_shortage) {
+        var hasShortage = data.components.some(function (c) { return Number(c.shortage) > 0; });
+        if (hasShortage) {
             bomStatusAlert.innerHTML = '<div class="alert alert-warning py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>BOM <strong>' + data.bom_code + '</strong> found — stock shortages detected below.</div>';
             bomShortageWarning.style.display = 'block';
-            var shortageItems = data.components.filter(function (c) { return c.status === 'lacking'; });
+            var shortageItems = data.components.filter(function (c) { return Number(c.shortage) > 0; });
             var shortageListHtml = shortageItems.map(function (c) {
                 return '<li><strong>' + c.item_code + '</strong> (' + (c.item_description || '') + ') — Short by <strong>' + c.shortage.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + (c.item_uom || '') + '</strong></li>';
             }).join('');
@@ -480,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var html = '';
         data.components.forEach(function (c) {
             var statusBadge = c.status === 'available'
-                ? '<span class="badge bg-success"><i class="bi bi-check-lg"></i> Sufficient</span>'
+                ? '<span class="badge bg-success"><i class="bi bi-check-lg"></i> In Stock</span>'
                 : '<span class="badge bg-danger"><i class="bi bi-x-lg"></i> Shortage ' + c.shortage.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + '</span>';
             html += '<tr>';
             html += '<td><strong>' + c.item_code + '</strong> ' + (c.item_description || '') + '</td>';
@@ -669,6 +670,14 @@ document.addEventListener('DOMContentLoaded', function () {
             fetchBomBreakdown(itemSelect.value, lineQtyOrdered.value || 0);
         }
     });
+
+    var moSiteSelect = document.querySelector('select[name="mo_site"]');
+    if (moSiteSelect) {
+        // Site is display-only data (shown on LMR print) — it does not affect SOH.
+        moSiteSelect.addEventListener('change', function () {
+            document.getElementById('lineSite').value = this.value;
+        });
+    }
 
     document.getElementById('moItemModal').addEventListener('hidden.bs.modal', function () {
         resetBomPreview();

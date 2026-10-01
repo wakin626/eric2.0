@@ -237,7 +237,7 @@ if (!tableExists($pdo, 'inventory_balances')) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS inventory_balances (
         id INT AUTO_INCREMENT PRIMARY KEY,
         item_id INT NOT NULL,
-        site_code VARCHAR(20) DEFAULT 'MAIN',
+        site_code VARCHAR(20) DEFAULT '001',
         qty_on_hand DECIMAL(15,4) DEFAULT 0.0000,
         qty_allocated DECIMAL(15,4) DEFAULT 0.0000,
         qty_for_inspect DECIMAL(15,4) DEFAULT 0.0000,
@@ -282,7 +282,7 @@ echo "Migrated: raw_materials → items (master records)\n";
 
 // Migrate raw_materials stock into inventory_balances
 $pdo->exec("INSERT INTO inventory_balances (item_id, site_code, qty_on_hand, qty_allocated)
-    SELECT i.item_id, 'MAIN', rm.stock_on_hand, rm.allocated_stock
+    SELECT i.item_id, '001', rm.stock_on_hand, rm.allocated_stock
     FROM raw_materials rm
     JOIN items i ON i.item_code = rm.item_code
     WHERE rm.is_active = 1

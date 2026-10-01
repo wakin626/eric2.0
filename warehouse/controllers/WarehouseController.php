@@ -28,7 +28,7 @@ class WarehouseController {
         $apiActions = ['getPODetails', 'getItemsByCustomer', 'backloadDelivery', 'getDeliveryLotsForBackload',
             'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
             'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery', 'searchItems',
-            'mrpRunDetail', 'purchasingPo', 'receivingPo', 'moEntry', 'getCustomerPOs', 'getItemBomInfo'];
+            'mrpRunDetail', 'purchasingPo', 'receivingPo', 'moEntry', 'getCustomerPOs', 'getItemBomInfo', 'getItemBalances'];
         // Item Master List is viewable read-only by rnd/admin; only warehouse can create/import items
         $itemListReadOnly = $action === 'items' && in_array($dept, ['warehouse', 'rnd', 'admin']);
         if (!$itemListReadOnly && !$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
@@ -1894,6 +1894,10 @@ class WarehouseController {
             $bom = $this->warehouseModel->getBomForFg($fgItemId);
             if ($bom) {
                 $components = $this->warehouseModel->getBOMComponentsWithStock([$bom['bom_id']]);
+                $componentIds = array_map(function ($c) {
+                    return $c['component_item_id'];
+                }, $components);
+                $pendingPoRrMap = $this->warehouseModel->getPendingPoRrForItems($componentIds);
                 $meta = [
                     'fill_volume' => floatval($bom['fill_volume'] ?? 0),
                     'uom' => $bom['uom'] ?? '',
@@ -1905,11 +1909,14 @@ class WarehouseController {
                     $required = $this->computeMrpPoolRequiredQty($targetQty, $meta, $comp);
                     $soh = floatval($comp['soh']);
                     $allocated = floatval($comp['allocated']);
-                    $available = $soh - $allocated;
-                    $lacking = $required - $available;
-                    if ($lacking <= 0) {
-                        $lacking = 0;
-                    }
+                    // Available is unallocated physical SOH only
+                    // (max(0, SOH - Allocated)). Lacking deducts that and
+                    // nothing else — stock promised to prior MRP runs/MOs must
+                    // not shrink what this run orders. Pending PO/RR stays an
+                    // informational column.
+                    $available = max(0, $soh - $allocated);
+                    $pendingPoRr = floatval($pendingPoRrMap[$comp['component_item_id']] ?? 0);
+                    $lacking = max(0, $required - $available);
                     $rows[] = [
                         'component_item_id' => $comp['component_item_id'],
                         'item_code' => $comp['item_code'],
@@ -1922,6 +1929,7 @@ class WarehouseController {
                         'required_qty' => $required,
                         'soh' => $soh,
                         'allocated' => $allocated,
+                        'pending_po_rr' => $pendingPoRr,
                         'available' => $available,
                         'lacking_qty' => $lacking,
                         'dosage_rate' => floatval($comp['dosage_rate'] ?? 0),
@@ -2023,20 +2031,29 @@ class WarehouseController {
             // quantities are authoritative from here (same math as Calculate).
             // Every component is kept for the snapshot/history row; only the
             // lackings drive purchase requests.
+            $componentIds = array_map(function ($c) {
+                return $c['component_item_id'];
+            }, $components);
+            $pendingPoRrMap = $this->warehouseModel->getPendingPoRrForItems($componentIds);
             $rows = [];
             $recomputed = [];
             foreach ($components as $comp) {
                 $required = $this->computeMrpPoolRequiredQty($targetQty, $meta, $comp);
                 $soh = floatval($comp['soh']);
                 $allocated = floatval($comp['allocated']);
-                $available = $soh - $allocated;
-                $lacking = $required - $available;
+                // Same netting as the Calculate screen: deduct only
+                // unallocated physical SOH (never negative). Pending PO/RR is
+                // informational and never reduces the lacking quantity.
+                $available = max(0, $soh - $allocated);
+                $pendingPoRr = floatval($pendingPoRrMap[$comp['component_item_id']] ?? 0);
+                $lacking = max(0, $required - $available);
                 $itemId = intval($comp['component_item_id']);
                 $rows[] = [
                     'component_item_id' => $itemId,
                     'required' => $required,
                     'soh' => $soh,
                     'allocated' => $allocated,
+                    'pending_po_rr' => $pendingPoRr,
                     'uom' => $comp['display_uom'] ?? $comp['item_uom'],
                 ];
                 if ($lacking > 0) {
@@ -2072,8 +2089,7 @@ class WarehouseController {
             );
 
             $_SESSION['success'] = "MRP Run #{$result['run_id']} saved — stock committed for {$result['committed']} component(s); "
-                . "{$result['queued']} purchase request(s) queued for Procurement"
-                . ($result['skipped'] ? " ({$result['skipped']} skipped: already requested)" : '') . '.';
+                . "{$result['queued']} purchase request(s) queued for Procurement.";
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
         }
@@ -2324,14 +2340,16 @@ class WarehouseController {
                 throw new \RuntimeException('Supplier name is required.');
             }
 
-            $this->warehouseModel->batchProcessPurchasingPo($orderIds, [
+            $result = $this->warehouseModel->batchProcessPurchasingPo($orderIds, [
                 'supplier_name' => $supplierName,
                 'unit_cost' => floatval($_POST['unit_cost'] ?? 0),
                 'order_date' => $_POST['order_date'] ?: null,
                 'expected_date' => $_POST['expected_date'] ?: null,
             ]);
 
-            $_SESSION['success'] = count($orderIds) . ' purchasing PO(s) processed successfully.';
+            $_SESSION['success'] = count($orderIds) . ' requisition(s) consolidated into PO #'
+                . $result['consolidated_id'] . ' (total qty '
+                . rtrim(rtrim(number_format((float) $result['total_qty'], 4), '0'), '.') . ').';
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
         }
@@ -2873,6 +2891,108 @@ class WarehouseController {
         exit;
     }
 
+    public function getItemBalances() {
+        header('Content-Type: application/json');
+        $itemId = (int)($_GET['item_id'] ?? 0);
+        $item = $itemId > 0 ? $this->itemImportModel->getItemById($itemId) : null;
+        if (!$item) {
+            echo json_encode(['success' => false, 'message' => 'Item not found.']);
+            exit;
+        }
+
+        $balances = $this->itemImportModel->getBalances($itemId);
+        $totalSoh = 0.0;
+        $totalAllocated = 0.0;
+        foreach ($balances as $b) {
+            $totalSoh += (float)$b['qty_on_hand'];
+            $totalAllocated += (float)$b['qty_allocated'];
+        }
+
+        echo json_encode([
+            'success' => true,
+            'item' => $item,
+            'balances' => $balances,
+            'total_soh' => round($totalSoh, 4),
+            'total_allocated' => round($totalAllocated, 4)
+        ]);
+        exit;
+    }
+
+    public function adjustItemSoh() {
+        $backParams = ['controller' => 'warehouse', 'action' => 'items'];
+        foreach (['back_search' => 'search', 'back_type' => 'item_type', 'back_page' => 'page'] as $postKey => $getParam) {
+            $val = trim($_POST[$postKey] ?? '');
+            if ($val !== '' && $val !== '0') {
+                $backParams[$getParam] = $val;
+            }
+        }
+        $back = '?' . http_build_query($backParams);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . $back);
+            exit;
+        }
+        if (($_SESSION['department'] ?? '') !== 'warehouse') {
+            $_SESSION['error'] = 'Only warehouse users can adjust SOH.';
+            header('Location: ' . $back);
+            exit;
+        }
+
+        $itemId = (int)($_POST['item_id'] ?? 0);
+        $site = trim($_POST['site_code'] ?? '');
+        $rawQty = trim($_POST['qty_on_hand'] ?? '');
+
+        $item = $itemId > 0 ? $this->itemImportModel->getItemById($itemId) : null;
+        if (!$item) {
+            $_SESSION['error'] = 'Item not found.';
+            header('Location: ' . $back);
+            exit;
+        }
+        if (!preg_match('/^[A-Za-z0-9_\-]{1,20}$/', $site)) {
+            $_SESSION['error'] = 'Invalid site code.';
+            header('Location: ' . $back);
+            exit;
+        }
+        if ($rawQty === '' || !is_numeric($rawQty) || (float)$rawQty < 0) {
+            $_SESSION['error'] = 'New SOH must be a number greater than or equal to 0.';
+            header('Location: ' . $back);
+            exit;
+        }
+        $qty = round((float)$rawQty, 4);
+
+        $oldSiteQty = null;
+        $oldTotal = 0.0;
+        $oldAllocated = 0.0;
+        foreach ($this->itemImportModel->getBalances($itemId) as $b) {
+            $oldTotal += (float)$b['qty_on_hand'];
+            $oldAllocated += (float)$b['qty_allocated'];
+            if (strcasecmp($b['site_code'], $site) === 0) {
+                $oldSiteQty = (float)$b['qty_on_hand'];
+            }
+        }
+        $oldSiteQty = $oldSiteQty ?? 0.0;
+
+        $this->itemImportModel->setSoh($itemId, $site, $qty);
+        $newTotal = round($oldTotal - $oldSiteQty + $qty, 4);
+
+        AuditModel::log(
+            $_SESSION['user_id'],
+            'UPDATE',
+            'warehouse',
+            "SOH adjusted: {$item['item_code']} @ {$site} " . formatQty($oldSiteQty) . ' -> ' . formatQty($qty)
+                . ' (total ' . formatQty($oldTotal) . ' -> ' . formatQty($newTotal) . ')',
+            ['site_code' => $site, 'qty_on_hand' => $oldSiteQty, 'total_soh' => $oldTotal],
+            ['site_code' => $site, 'qty_on_hand' => $qty, 'total_soh' => $newTotal],
+            'item',
+            $itemId
+        );
+
+        $_SESSION['success'] = "SOH updated for {$item['item_code']} @ {$site}: "
+            . formatQty($oldSiteQty) . ' -> ' . formatQty($qty) . '.';
+        header('Location: ' . $back);
+        exit;
+    }
+
     public function itemImportForm() {
         $data['page_title'] = 'Import ERIC Items';
         $this->render('items/import_form', $data);
@@ -2933,7 +3053,7 @@ class WarehouseController {
             if ($description === '') $errors[] = 'c_desc is required';
             if ($cType === '') $errors[] = 'c_type is required';
             if ($um === '') $errors[] = 'um is required';
-            if ($site === '') $site = 'MAIN';
+            if ($site === '') $site = \App\Core\BaseModel::DEFAULT_SITE_CODE;
 
             $itemType = $cType !== '' ? ItemImportModel::mapItemType($cType) : 'SUPPLIES';
             $existing = $itemCode !== '' ? $this->itemImportModel->getItemByCode($itemCode) : null;

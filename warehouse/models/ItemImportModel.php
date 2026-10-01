@@ -33,7 +33,7 @@ class ItemImportModel extends BaseModel {
 
         $soh = (float)($data['soh'] ?? 0);
         if ($soh > 0) {
-            $this->upsertInventoryBalance($itemId, $data['site_code'] ?? 'MAIN', $soh, 0);
+            $this->upsertInventoryBalance($itemId, $data['site_code'] ?? self::DEFAULT_SITE_CODE, $soh, 0);
         }
 
         return $itemId;
@@ -87,6 +87,38 @@ class ItemImportModel extends BaseModel {
             'site_code' => $siteCode,
             'qty_on_hand' => $qtyOnHand,
             'qty_for_inspect' => $qtyForInspect
+        ]);
+    }
+
+    public function getItemById($itemId) {
+        $sql = "SELECT item_id, item_code, item_description, item_type, item_uom
+                FROM {$this->table}
+                WHERE item_id = :item_id";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['item_id' => (int)$itemId]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function getBalances($itemId) {
+        $sql = "SELECT site_code, qty_on_hand, qty_allocated, qty_for_inspect
+                FROM inventory_balances
+                WHERE item_id = :item_id
+                ORDER BY site_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['item_id' => (int)$itemId]);
+        return $stmt->fetchAll();
+    }
+
+    public function setSoh($itemId, $siteCode, $qtyOnHand) {
+        $sql = "INSERT INTO inventory_balances (item_id, site_code, qty_on_hand)
+                VALUES (:item_id, :site_code, :qty_on_hand)
+                ON DUPLICATE KEY UPDATE qty_on_hand = VALUES(qty_on_hand)";
+        $stmt = self::getConnection()->prepare($sql);
+        return $stmt->execute([
+            'item_id' => (int)$itemId,
+            'site_code' => $siteCode,
+            'qty_on_hand' => (float)$qtyOnHand
         ]);
     }
 

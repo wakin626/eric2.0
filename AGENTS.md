@@ -24,7 +24,7 @@ warehouse/     - PO creation, deliveries
 production/    - Production tracking, history
 finance/       - Finance dashboard, delivery receipts, file uploads
 public/        - Static assets (Bootstrap, CSS, JS, fonts, images)
-sql/           - Schema: schema.sql (main), finance_delivery_receipts.sql
+sql/           - Schema: schema.sql (generated from live DB), applied/ + pending/ migrations
 uploads/       - Receipt files (finance module)
 ```
 
@@ -39,15 +39,16 @@ uploads/       - Receipt files (finance module)
 
 ## Database
 - DB: `manufacturing_mgmt`, user: `root`, no password
-- Schema: `sql/schema.sql` + `sql/finance_delivery_receipts.sql`
+- Schema: `sql/schema.sql` — generated dump of the live DB (32 tables + 2 views), do not hand-edit; regenerate per the command in its file header
+- Migrations: `sql/applied/` (done) + `sql/pending/` (run with `sql/run_pending.php` or idempotent `sql/pending/deploy_current.php`; tracked in `schema_migrations`)
 - Install admin: `php install-admin.php` (creates admin/admin user)
-- Key tables: users, customers, items, purchase_orders, purchase_order_items, deliveries, manufacturing_requests, sales_orders, delivery_receipts, production_history
+- Key tables: users, customers, items, inventory_balances, purchase_orders, purchase_order_items, deliveries, supplier_orders, mrp_runs, mrp_run_items, delivery_receipts, production_history
 
 ## Key Gotchas
 - Hardcoded absolute paths in autoloader (`C:\xampp\htdocs\order-billing-system\...`) — won't work outside XAMPP default install
 - `URL_ROOT` hardcoded to `http://localhost/order-billing-system/`
 - `WarehouseModel` has methods spanning POs, deliveries, production, and users — it's a god model
-- `produced_quantity`, `delivered_quantity`, `delivery_quantity` columns referenced in models but not in `sql/schema.sql` — schema may be out of sync
+- `sql/schema.sql` is a generated dump — regenerate instead of hand-editing; 5 unused-but-live tables + `vw_lmr_available_stock` are annotated "not used by application code"
 - No CSRF protection on forms
 - File uploads go to `uploads/receipts/` (finance module only)
 - `warehouse` and `finance` controllers restrict actions by `$_SESSION['department']`

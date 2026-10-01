@@ -5,6 +5,13 @@ use PDO;
 use PDOException;
 
 class BaseModel {
+    /**
+     * Canonical inventory site code written by QC, receiving, MRP and MO
+     * allocation. Replaces the legacy 'MAIN' placeholder so stock always
+     * lands on the same row the MO/MRP screens read from.
+     */
+    const DEFAULT_SITE_CODE = '001';
+
     private static $host = 'localhost';
     private static $dbname = 'manufacturing_mgmt';
     private static $username = 'root';

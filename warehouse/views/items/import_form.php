@@ -39,7 +39,7 @@
                     </div>
 
                     <div class="alert alert-warning py-2 mb-4">
-                        <small><i class="bi bi-exclamation-triangle me-1"></i>Items with existing <code>item_code</code> will be updated. New items will be created. Inventory balances are recorded per site (default: MAIN).</small>
+                        <small><i class="bi bi-exclamation-triangle me-1"></i>Items with existing <code>item_code</code> will be updated. New items will be created. Inventory balances are recorded per site (default: 001).</small>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2">

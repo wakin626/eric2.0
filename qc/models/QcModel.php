@@ -348,9 +348,10 @@ class QcModel extends BaseModel {
             if ($qtyToRelease > 0) {
                 $conn->prepare("UPDATE inventory_balances
                     SET qty_for_inspect = GREATEST(qty_for_inspect - :qty_to_release, 0)
-                    WHERE item_id = :item_id AND site_code = 'MAIN'")->execute([
+                    WHERE item_id = :item_id AND site_code = :site_code")->execute([
                     'qty_to_release' => $qtyToRelease,
                     'item_id' => $itemId,
+                    'site_code' => self::DEFAULT_SITE_CODE,
                 ]);
             }
 
@@ -358,13 +359,14 @@ class QcModel extends BaseModel {
                 $stockSql = "INSERT INTO inventory_stock (
                                 item_id, site_code, lot_number, qty_on_hand, qty_blocked, qty_rejected, status, source_receiving_item_id, reference_type, reference_id, updated_at
                             ) VALUES (
-                                :item_id, 'MAIN', :lot_number, :qty_on_hand, 0, 0, 'PASSED', :source_receiving_item_id, 'receiving_item', :source_id, NOW()
+                                :item_id, :site_code, :lot_number, :qty_on_hand, 0, 0, 'PASSED', :source_receiving_item_id, 'receiving_item', :source_id, NOW()
                             ) ON DUPLICATE KEY UPDATE
                                 qty_on_hand = qty_on_hand + VALUES(qty_on_hand),
                                 status = 'PASSED',
                                 updated_at = NOW()";
                 $conn->prepare($stockSql)->execute([
                     'item_id' => $itemId,
+                    'site_code' => self::DEFAULT_SITE_CODE,
                     'lot_number' => $receivingItem['lot_number'],
                     'qty_on_hand' => $passedQty,
                     'source_receiving_item_id' => $receivingItemId,
@@ -372,9 +374,10 @@ class QcModel extends BaseModel {
                 ]);
 
                 $conn->prepare("INSERT INTO inventory_balances (item_id, site_code, qty_on_hand, qty_for_inspect)
-                    VALUES (:item_id, 'MAIN', :qty_on_hand, 0)
+                    VALUES (:item_id, :site_code, :qty_on_hand, 0)
                     ON DUPLICATE KEY UPDATE qty_on_hand = qty_on_hand + VALUES(qty_on_hand)")->execute([
                     'item_id' => $itemId,
+                    'site_code' => self::DEFAULT_SITE_CODE,
                     'qty_on_hand' => $passedQty,
                 ]);
             }
@@ -383,7 +386,7 @@ class QcModel extends BaseModel {
                 $stockSql = "INSERT INTO inventory_stock (
                                 item_id, site_code, lot_number, qty_on_hand, qty_blocked, qty_rejected, status, source_receiving_item_id, reference_type, reference_id, updated_at
                             ) VALUES (
-                                :item_id, 'MAIN', :lot_number, 0, :qty_blocked, :qty_rejected, 'REJECTED', :source_receiving_item_id, 'receiving_item', :source_id, NOW()
+                                :item_id, :site_code, :lot_number, 0, :qty_blocked, :qty_rejected, 'REJECTED', :source_receiving_item_id, 'receiving_item', :source_id, NOW()
                             ) ON DUPLICATE KEY UPDATE
                                 qty_blocked = qty_blocked + VALUES(qty_blocked),
                                 qty_rejected = qty_rejected + VALUES(qty_rejected),
@@ -391,6 +394,7 @@ class QcModel extends BaseModel {
                                 updated_at = NOW()";
                 $conn->prepare($stockSql)->execute([
                     'item_id' => $itemId,
+                    'site_code' => self::DEFAULT_SITE_CODE,
                     'lot_number' => $receivingItem['lot_number'],
                     'qty_blocked' => $rejectedQty,
                     'qty_rejected' => $rejectedQty,

@@ -192,7 +192,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             &nbsp;|&nbsp;
             PM/SFG: Target &times; Dosage &times; (1 + Wastage&thinsp;/&thinsp;100)
             &nbsp;|&nbsp;
-            Lacking = max(0, Required &minus; (SOH &minus; Allocated))
+            Lacking = max(0, Required &minus; max(0, SOH &minus; Allocated))
         </div>
     </div>
 </div>
@@ -222,6 +222,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                     <th class="num">Required Qty</th>
                     <th class="num">SOH</th>
                     <th class="num">Allocated</th>
+                    <th class="num">Pending PO / RR</th>
                     <th class="num">Available</th>
                     <th class="num">Lacking Qty</th>
                 </tr>
@@ -235,6 +236,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                     <td class="num"><?= formatQty($row['required_qty']) ?> <?= htmlspecialchars($row['display_uom'] ?? $row['item_uom']) ?></td>
                     <td class="num"><?= formatQty($row['soh']) ?></td>
                     <td class="num"><?= formatQty($row['allocated']) ?></td>
+                    <td class="num <?= floatval($row['pending_po_rr'] ?? 0) > 0 ? 'text-info fw-semibold' : '' ?>"><?= formatQty($row['pending_po_rr'] ?? 0) ?></td>
                     <td class="num <?= $row['available'] >= $row['required_qty'] ? 'text-success' : 'text-danger' ?> fw-bold"><?= formatQty($row['available']) ?></td>
                     <td class="num <?= $row['lacking_qty'] > 0 ? 'text-danger fw-bold' : 'text-success' ?>">
                         <?= formatQty($row['lacking_qty']) ?>

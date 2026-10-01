@@ -267,13 +267,14 @@ class MoModel extends BaseModel {
 
                 $invStmt = $pdo->prepare("
                     INSERT INTO inventory_balances (item_id, site_code, qty_on_hand, qty_allocated)
-                    VALUES (:item_id, 'MAIN', 0, :qty)
+                    VALUES (:item_id, :site_code, 0, :qty)
                     ON DUPLICATE KEY UPDATE
                         qty_allocated = qty_allocated + VALUES(qty_allocated),
                         updated_at = NOW()
                 ");
                 $invStmt->execute([
                     'item_id' => $comp['component_item_id'],
+                    'site_code' => self::DEFAULT_SITE_CODE,
                     'qty' => $requiredQty,
                 ]);
             }
@@ -288,14 +289,17 @@ class MoModel extends BaseModel {
         $allocations = $stmt->fetchAll();
 
         foreach ($allocations as $alloc) {
+            // Mirror allocateMaterials(): release only from the canonical site
+            // row, otherwise every site row for the item gets decremented.
             $invStmt = $pdo->prepare("
                 UPDATE inventory_balances
                 SET qty_allocated = GREATEST(0, qty_allocated - :qty),
                     updated_at = NOW()
-                WHERE item_id = :item_id
+                WHERE item_id = :item_id AND site_code = :site_code
             ");
             $invStmt->execute([
                 'item_id' => $alloc['item_id'],
+                'site_code' => self::DEFAULT_SITE_CODE,
                 'qty' => $alloc['allocated_qty'],
             ]);
         }
@@ -355,8 +359,8 @@ class MoModel extends BaseModel {
                 $requiredQty = $this->computeRequiredQty($qtyOrdered, $bom, $comp);
                 $soh = floatval($comp['soh']);
                 $allocated = floatval($comp['allocated']);
-                $availableStock = floatval($comp['available_stock']);
-                $shortage = max(0, $requiredQty - $availableStock);
+                $availableStock = max(0, $soh - $allocated);
+                $shortage = round(max(0, $requiredQty - max(0, $soh)), 4);
 
                 if ($shortage > 0) $hasShortage = true;
 
@@ -373,7 +377,7 @@ class MoModel extends BaseModel {
                     'soh' => $soh,
                     'allocated' => round($allocated, 4),
                     'net_available' => round($availableStock, 4),
-                    'shortage' => round($shortage, 4),
+                    'shortage' => $shortage,
                     'status' => $shortage > 0 ? 'lacking' : 'available',
                 ];
             }
@@ -425,9 +429,9 @@ class MoModel extends BaseModel {
                     $shortages[] = [
                         'item_code' => $comp['item_code'],
                         'item_description' => $comp['item_description'],
-                        'required' => $comp['required_qty'],
-                        'available' => $comp['net_available'],
-                        'short_by' => $comp['shortage'],
+                    'required' => $comp['required_qty'],
+                    'available' => $comp['soh'],
+                    'short_by' => $comp['shortage'],
                         'uom' => $comp['item_uom'],
                     ];
                 }
@@ -491,8 +495,8 @@ class MoModel extends BaseModel {
             $requiredQty = $this->computeRequiredQty($qty, $bomFull, $comp);
             $soh = floatval($comp['soh']);
             $allocated = floatval($comp['allocated']);
-            $availableStock = floatval($comp['available_stock']);
-            $shortage = max(0, $requiredQty - $availableStock);
+            $availableStock = max(0, $soh - $allocated);
+            $shortage = round(max(0, $requiredQty - max(0, $soh)), 4);
 
             if ($shortage > 0) $hasShortage = true;
 
@@ -509,7 +513,7 @@ class MoModel extends BaseModel {
                 'allocated' => round($allocated, 4),
                 'net_available' => round($availableStock, 4),
                 'status' => $shortage > 0 ? 'lacking' : 'available',
-                'shortage' => round($shortage, 4),
+                'shortage' => $shortage,
             ];
         }
 

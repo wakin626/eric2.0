@@ -38,9 +38,9 @@
                     </td>
                     <td><?= htmlspecialchars($b['fg_name']) ?></td>
                     <td><?= htmlspecialchars($b['fg_code']) ?></td>
-                    <td><?= number_format($b['fill_volume'] ?? $b['batch_qty'] ?? 1, 4) ?></td>
+                    <td><?= formatQty($b['fill_volume'] ?? $b['batch_qty'] ?? 1) ?></td>
                     <td><?= htmlspecialchars($b['uom'] ?? $b['batch_uom'] ?? 'PCS') ?></td>
-                    <td><?= number_format($b['batch_unit_divisor'] ?? 1000, 4) ?></td>
+                    <td><?= formatQty($b['batch_unit_divisor'] ?? 1000) ?></td>
                     <td><?= date('Y-m-d', strtotime($b['created_at'])) ?></td>
                     <td>
                         <a href="?controller=rnd&action=bomEdit&id=<?= $b['id'] ?>" class="btn btn-sm btn-primary"><i class="bi bi-pencil"></i></a>

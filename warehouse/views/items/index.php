@@ -36,6 +36,7 @@
                     <th>Allocated</th>
                     <th>Available</th>
                     <th>Status</th>
+                    <?php if ($canEdit ?? false): ?><th class="text-end">Actions</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody id="itemsTableBody">
@@ -61,12 +62,23 @@
                         ?>
                         <span class="badge bg-<?= $color ?>"><?= $item['inventory_status'] ?></span>
                     </td>
+                    <?php if ($canEdit ?? false): ?>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary adjust-soh-btn"
+                                data-item-id="<?= (int)$item['item_id'] ?>"
+                                data-code="<?= htmlspecialchars($item['item_code']) ?>"
+                                data-description="<?= htmlspecialchars($item['item_description']) ?>"
+                                title="Adjust SOH" aria-label="Adjust SOH">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                    </td>
+                    <?php endif; ?>
                 </tr>
                 <?php endforeach; ?>
                 <?php if (empty($items)): ?>
-                <tr data-empty-row><td colspan="8" class="text-center text-muted py-4">No items found</td></tr>
+                <tr data-empty-row><td colspan="<?= ($canEdit ?? false) ? 9 : 8 ?>" class="text-center text-muted py-4">No items found</td></tr>
 <?php endif; ?>
-                <tr data-no-match-row style="display:none"><td colspan="8" class="text-center text-muted py-4">No items match your search</td></tr>
+                <tr data-no-match-row style="display:none"><td colspan="<?= ($canEdit ?? false) ? 9 : 8 ?>" class="text-center text-muted py-4">No items match your search</td></tr>
             </tbody>
         </table>
     </div>
@@ -153,6 +165,53 @@
         </form>
     </div>
 </div>
+
+<!-- ADJUST SOH MODAL -->
+<div class="modal fade" id="adjustSohModal" tabindex="-1" aria-labelledby="adjustSohModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" method="POST" action="?controller=warehouse&action=adjustItemSoh">
+            <input type="hidden" name="item_id" id="adjustSohItemId" value="">
+            <input type="hidden" name="back_search" value="<?= htmlspecialchars($search ?? '') ?>">
+            <input type="hidden" name="back_type" value="<?= htmlspecialchars($typeFilter ?? '') ?>">
+            <input type="hidden" name="back_page" value="<?= (int)($page ?? 1) ?>">
+            <div class="modal-header">
+                <h5 class="modal-title" id="adjustSohModalLabel"><i class="bi bi-pencil-square me-2"></i>Adjust SOH</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="fw-bold text-primary" id="adjustSohCode">&mdash;</div>
+                    <div class="text-muted small" id="adjustSohDesc"></div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <span class="text-muted small">Total SOH (all sites)</span>
+                        <div class="fw-semibold" id="adjustSohTotal">&mdash;</div>
+                    </div>
+                    <div class="col-6">
+                        <span class="text-muted small">Allocated</span>
+                        <div class="fw-semibold" id="adjustSohAllocated">&mdash;</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="adjustSohSite" class="form-label">Site</label>
+                    <select class="form-select" id="adjustSohSite" name="site_code" required>
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="mb-1">
+                    <label for="adjustSohQty" class="form-label">New SOH for this site <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control" id="adjustSohQty" name="qty_on_hand" step="0.0001" min="0" required>
+                    <small class="text-muted">Sets <code>qty_on_hand</code> for the selected site only &mdash; the item's total SOH is the sum of all sites. Allocated quantity is not changed.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save</button>
+            </div>
+        </form>
+    </div>
+</div>
 <?php endif; ?>
 
 <script>
@@ -210,5 +269,85 @@ document.addEventListener('DOMContentLoaded', function() {
         const len = searchInput.value.length;
         searchInput.setSelectionRange(len, len);
     }
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modalEl = document.getElementById('adjustSohModal');
+    if (!modalEl) return;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const idInput = document.getElementById('adjustSohItemId');
+    const codeEl = document.getElementById('adjustSohCode');
+    const descEl = document.getElementById('adjustSohDesc');
+    const totalEl = document.getElementById('adjustSohTotal');
+    const allocEl = document.getElementById('adjustSohAllocated');
+    const siteSelect = document.getElementById('adjustSohSite');
+    const qtyInput = document.getElementById('adjustSohQty');
+
+    function fmtQty(v) {
+        const n = Number(v || 0);
+        return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    }
+
+    function fillSites(balances) {
+        const sites = {};
+        balances.forEach(function(b) { sites[b.site_code] = Number(b.qty_on_hand); });
+        if (!('001' in sites)) sites['001'] = null;
+
+        siteSelect.innerHTML = '';
+        Object.keys(sites).forEach(function(code) {
+            const qty = sites[code];
+            const opt = document.createElement('option');
+            opt.value = code;
+            if (qty === null) {
+                opt.textContent = code + ' (new)';
+            } else {
+                opt.textContent = code + ' \u2014 ' + fmtQty(qty);
+                opt.dataset.qty = qty;
+            }
+            siteSelect.appendChild(opt);
+        });
+
+        const firstStocked = Array.from(siteSelect.options).find(function(o) { return o.dataset.qty !== undefined; });
+        siteSelect.value = (firstStocked || siteSelect.options[0]).value;
+        const sel = siteSelect.selectedOptions[0];
+        qtyInput.value = sel && sel.dataset.qty !== undefined ? sel.dataset.qty : 0;
+    }
+
+    siteSelect.addEventListener('change', function() {
+        const opt = siteSelect.selectedOptions[0];
+        qtyInput.value = opt && opt.dataset.qty !== undefined ? opt.dataset.qty : 0;
+    });
+
+    document.querySelectorAll('.adjust-soh-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const itemId = btn.dataset.itemId;
+            idInput.value = itemId;
+            codeEl.textContent = btn.dataset.code;
+            descEl.textContent = btn.dataset.description;
+            totalEl.textContent = '\u2014';
+            allocEl.textContent = '\u2014';
+            siteSelect.innerHTML = '<option value="">Loading...</option>';
+            qtyInput.value = '';
+            qtyInput.disabled = true;
+            modal.show();
+
+            fetch('?controller=warehouse&action=getItemBalances&item_id=' + encodeURIComponent(itemId))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) throw new Error(data.message || 'Failed to load item.');
+                    totalEl.textContent = fmtQty(data.total_soh);
+                    allocEl.textContent = fmtQty(data.total_allocated);
+                    fillSites(data.balances || []);
+                    qtyInput.disabled = false;
+                })
+                .catch(function(err) {
+                    siteSelect.innerHTML = '<option value="">Failed to load balances</option>';
+                    console.error(err);
+                });
+        });
+    });
 });
 </script>
