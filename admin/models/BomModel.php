@@ -61,11 +61,30 @@ class BomModel extends BaseModel {
     /**
      * @param bool $isLegacy Import-created BOMs stay on the legacy lot-based
      *                       formula until an operator re-saves with fill volume.
+     *
+     * Multi-BOM: an FG/SFG may hold several formulations. The first active BOM
+     * created for an item becomes its default (fg_boms.is_default = 1,
+     * bom_type = 'Primary'); every later one is an alternative (is_default = 0,
+     * bom_type = 'Alternative') so MRP runs always resolve a formulation.
+     * Formulations are told apart by their BOM code — there is no separate
+     * variant/formulation name.
      */
     public function create($fgItemId, $bomCode, $fillVolume = 1.0, $uom = 'PCS', $batchUnitDivisor = 1000, $isLegacy = false, $customerId = null, $status = 'active') {
         $conn = self::getConnection();
-        $sql = "INSERT INTO {$this->table} (fg_item_id, customer_id, bom_code, batch_qty, batch_uom, batch_unit_divisor, is_legacy_formula, status)
-                VALUES (:fg_item_id, :customer_id, :bom_code, :batch_qty, :batch_uom, :batch_unit_divisor, :is_legacy_formula, :status)";
+
+        $activeStatus = $status === 'inactive' ? 'inactive' : 'active';
+        $isDefault = 0;
+        if ($activeStatus === 'active') {
+            $chk = $conn->prepare(
+                "SELECT COUNT(*) FROM {$this->table} WHERE fg_item_id = :fg AND status = 'active'"
+            );
+            $chk->execute(['fg' => $fgItemId]);
+            $isDefault = ((int) $chk->fetchColumn() === 0) ? 1 : 0;
+        }
+        $bomType = $isDefault ? 'Primary' : 'Alternative';
+
+        $sql = "INSERT INTO {$this->table} (fg_item_id, customer_id, bom_code, batch_qty, batch_uom, batch_unit_divisor, is_legacy_formula, status, is_default, bom_type)
+                VALUES (:fg_item_id, :customer_id, :bom_code, :batch_qty, :batch_uom, :batch_unit_divisor, :is_legacy_formula, :status, :is_default, :bom_type)";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'fg_item_id' => $fgItemId,
@@ -75,9 +94,113 @@ class BomModel extends BaseModel {
             'batch_uom' => $uom ?: 'PCS',
             'batch_unit_divisor' => $batchUnitDivisor > 0 ? $batchUnitDivisor : 1000,
             'is_legacy_formula' => $isLegacy ? 1 : 0,
-            'status' => $status === 'inactive' ? 'inactive' : 'active',
+            'status' => $activeStatus,
+            'is_default' => $isDefault,
+            'bom_type' => $bomType,
         ]);
         return $conn->lastInsertId();
+    }
+
+    /**
+     * Active BOM count per finished good — drives the "Existing BOM" badge in
+     * the Create New BOM item dropdown (complete across list pages, unlike a
+     * slice of the current pagination).
+     *
+     * @return array<int,int> fg_item_id => active BOM count
+     */
+    public function getItemBomCounts() {
+        $sql = "SELECT fg_item_id, COUNT(*) AS c
+                FROM {$this->table}
+                WHERE status = 'active'
+                GROUP BY fg_item_id";
+        $out = [];
+        foreach (self::getConnection()->query($sql)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $out[(int) $row['fg_item_id']] = (int) $row['c'];
+        }
+        return $out;
+    }
+
+    /**
+     * Primary (default) active BOM of an FG/SFG plus its component lines,
+     * shaped for pre-filling the Create New BOM modal when the chosen item
+     * already has a formulation. Also returns a non-conflicting next BOM code
+     * (base_ALT, base_ALT2, …) so the copy can be saved without a clash —
+     * formulations of one item are told apart by bom_code alone.
+     *
+     * @return array{header: array, suggested_bom_code: string, components: array}|false
+     */
+    public function getPrimaryBomDetails($fgItemId) {
+        $header = $this->getBomForItem($fgItemId);
+        if (!$header || ($header['status'] ?? '') !== 'active') {
+            return false;
+        }
+
+        $components = [];
+        foreach ($this->getItemsByBomId($header['id']) as $c) {
+            $components[] = [
+                'item_id' => (int) $c['item_id'],
+                'item_code' => (string) ($c['rm_code'] ?? ''),
+                'item_name' => (string) ($c['rm_name'] ?? ''),
+                'item_type' => (string) ($c['item_type'] ?? ''),
+                'phase_code' => (string) ($c['phase_code'] ?? ''),
+                'dosage_rate' => floatval($c['dosage_rate'] ?? 0),
+                'wastage_pct' => floatval($c['wastage_allowance_pct'] ?? 0),
+                'uom' => (string) ($c['uom'] ?? ''),
+            ];
+        }
+
+        return [
+            'header' => [
+                'bom_id' => (int) $header['id'],
+                'bom_code' => (string) $header['bom_code'],
+                'customer_id' => !empty($header['customer_id']) ? (int) $header['customer_id'] : null,
+                'fill_volume' => floatval($header['fill_volume'] ?? 0),
+                'uom' => (string) ($header['uom'] ?? 'PCS'),
+                'batch_unit_divisor' => floatval($header['batch_unit_divisor'] ?? 1000) ?: 1000,
+                'is_default' => !empty($header['is_default']),
+            ],
+            'suggested_bom_code' => $this->suggestBomCodeForItem((int) $fgItemId, (string) $header['bom_code']),
+            'components' => $components,
+        ];
+    }
+
+    /**
+     * Next free BOM code for this item: BASE_ALT, BASE_ALT2, … truncated so
+     * the result always fits fg_boms.bom_code VARCHAR(50).
+     */
+    private function suggestBomCodeForItem($fgItemId, $base) {
+        $base = trim((string) $base);
+        if ($base === '') $base = 'BOM';
+        for ($i = 1; $i <= 50; $i++) {
+            $suffix = '_ALT' . ($i === 1 ? '' : $i);
+            $candidate = $base . $suffix;
+            if (mb_strlen($candidate) > 50) {
+                $candidate = mb_substr($base, 0, 50 - mb_strlen($suffix)) . $suffix;
+            }
+            if (!$this->bomCodeExistsForItem($fgItemId, $candidate)) {
+                return $candidate;
+            }
+        }
+        // Unreachable in practice; still guarantees a free, ≤50-char code.
+        $suffix = '_ALT' . substr((string) (time() % 100000), 0, 5);
+        return mb_substr($base, 0, 50 - mb_strlen($suffix)) . $suffix;
+    }
+
+    /**
+     * Multi-BOM uniqueness: one bom_code per finished good (several BOMs of the
+     * same FG are allowed as long as their codes differ).
+     */
+    public function bomCodeExistsForItem($fgItemId, $bomCode, $excludeBomId = null) {
+        $sql = "SELECT COUNT(*) FROM {$this->table}
+                WHERE fg_item_id = :fg AND bom_code = :code";
+        $params = ['fg' => intval($fgItemId), 'code' => trim((string) $bomCode)];
+        if (!empty($excludeBomId)) {
+            $sql .= " AND id <> :exclude";
+            $params['exclude'] = intval($excludeBomId);
+        }
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return ((int) $stmt->fetchColumn()) > 0;
     }
 
     /**
@@ -118,10 +241,38 @@ class BomModel extends BaseModel {
         $conn = self::getConnection();
         $conn->beginTransaction();
         try {
+            // Capture the FG before the header goes away: if this was the
+            // default formulation the oldest remaining active BOM takes over,
+            // so the item never ends up without a default.
+            $fgStmt = $conn->prepare("SELECT fg_item_id, is_default FROM {$this->table} WHERE id = :id");
+            $fgStmt->execute(['id' => $id]);
+            $fgRow = $fgStmt->fetch(\PDO::FETCH_ASSOC);
+
             $stmt = $conn->prepare("DELETE FROM fg_bom_items WHERE bom_id = :id");
             $stmt->execute(['id' => $id]);
             $stmt = $conn->prepare("DELETE FROM {$this->table} WHERE id = :id");
             $stmt->execute(['id' => $id]);
+
+            if ($fgRow && !empty($fgRow['is_default'])) {
+                // Keep bom_type in step with is_default while promoting.
+                $promote = $conn->prepare(
+                    "UPDATE {$this->table} SET is_default = 1, bom_type = 'Primary'
+                     WHERE fg_item_id = :fg AND status = 'active'
+                     ORDER BY id ASC LIMIT 1"
+                );
+                $promote->execute(['fg' => $fgRow['fg_item_id']]);
+                if ($promote->rowCount() > 0) {
+                    $clear = $conn->prepare(
+                        "UPDATE {$this->table} SET is_default = 0, bom_type = 'Alternative'
+                         WHERE fg_item_id = :fg AND status = 'active' AND is_default = 1
+                           AND id <> (SELECT id FROM (SELECT id FROM {$this->table}
+                                      WHERE fg_item_id = :fg2 AND status = 'active' AND is_default = 1
+                                      ORDER BY id ASC LIMIT 1) t)"
+                    );
+                    $clear->execute(['fg' => $fgRow['fg_item_id'], 'fg2' => $fgRow['fg_item_id']]);
+                }
+            }
+
             $conn->commit();
             return true;
         } catch (\Exception $e) {
@@ -170,8 +321,16 @@ class BomModel extends BaseModel {
         return $stmt->execute(['id' => $itemId]);
     }
 
+    /**
+     * First BOM of a finished good. Multi-BOM: resolves deterministically to
+     * the active default formulation (oldest active BOM as fallback) so import
+     * and legacy callers never match an arbitrary row.
+     */
     public function getBomForItem($fgItemId) {
-        $sql = "SELECT * FROM {$this->table} WHERE fg_item_id = :fg_item_id LIMIT 1";
+        $sql = "SELECT * FROM {$this->table}
+                WHERE fg_item_id = :fg_item_id
+                ORDER BY (status = 'active') DESC, is_default DESC, id ASC
+                LIMIT 1";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['fg_item_id' => $fgItemId]);
         $row = $stmt->fetch();

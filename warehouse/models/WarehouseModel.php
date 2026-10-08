@@ -563,6 +563,24 @@ class WarehouseModel extends BaseModel {
         return 'PO-' . str_pad($next, 5, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * Supplier options behind the Purchasing PO modals' supplier dropdown.
+     * TEMPORARY static list: when the suppliers table ships, replace the body
+     * with e.g. SELECT supplier_id AS id, supplier_name AS name
+     *          FROM suppliers WHERE `remove` = 0 ORDER BY supplier_name
+     * and nothing else changes — both the purchasingPo view (server-rendered
+     * options) and WarehouseController::getSuppliers() (JSON hook) read this.
+     */
+    public function getSuppliers() {
+        return [
+            ['id' => 1, 'name' => 'Supplier 1'],
+            ['id' => 2, 'name' => 'Supplier 2'],
+            ['id' => 3, 'name' => 'Supplier 3'],
+            ['id' => 4, 'name' => 'Supplier 4'],
+            ['id' => 5, 'name' => 'Supplier 5'],
+        ];
+    }
+
     public function updateProducedQuantity($po_id, $added_quantity, $user_id) {
         $conn = self::getConnection();
         $conn->beginTransaction();
@@ -3043,21 +3061,39 @@ public function searchItems($query) {
     /**
      * FGs and SFGs with an active BOM, optionally filtered to the customer
      * assigned on the BOM header (fg_boms.customer_id).
+     *
+     * An FG may carry several active BOMs (multi-formulation), so the join is
+     * pinned to one row per item — the default BOM when flagged, otherwise the
+     * oldest active one — otherwise the dropdown would list the FG twice.
      */
     public function getFgsWithBomByCustomer($customerId = null) {
+        // Pick one BOM per FG inside the same filter as the outer query, so a
+        // customer-filtered view still resolves to a BOM of that customer.
+        $pickWhere = "status = 'active'";
+        $params = [];
+        if (!empty($customerId)) {
+            $pickWhere .= " AND customer_id = :cid";
+            $params['cid'] = $customerId;
+        }
         $sql = "SELECT i.item_id, i.item_code, i.item_description, i.item_uom, i.customer_id,
                        b.id AS bom_id, b.bom_code,
                        b.batch_qty AS fill_volume, b.batch_uom AS uom,
                        b.batch_unit_divisor, b.is_legacy_formula
                 FROM items i
                 INNER JOIN fg_boms b ON b.fg_item_id = i.item_id
+                INNER JOIN (
+                    SELECT fg_item_id,
+                           SUBSTRING_INDEX(GROUP_CONCAT(id ORDER BY is_default DESC, id ASC), ',', 1) AS pick_id
+                    FROM fg_boms
+                    WHERE {$pickWhere}
+                    GROUP BY fg_item_id
+                ) pick ON pick.pick_id = b.id AND pick.fg_item_id = i.item_id
                 WHERE i.`remove` = 0 AND i.status = 1
                   AND i.item_type IN ('FG', 'SFG')
                   AND b.status = 'active'";
-        $params = [];
         if (!empty($customerId)) {
-            $sql .= " AND b.customer_id = :cid";
-            $params['cid'] = $customerId;
+            $sql .= " AND b.customer_id = :cid2";
+            $params['cid2'] = $customerId;
         }
         $sql .= " ORDER BY i.item_code ASC";
         $stmt = self::getConnection()->prepare($sql);
@@ -3067,23 +3103,83 @@ public function searchItems($query) {
 
     /**
      * Active BOM header + FG identity for one finished good.
+     *
+     * $bomId pins the run to a specific formulation (Switch BOM); it is only
+     * honoured when it belongs to this FG and is active. Without it the BOM
+     * of the selected customer (when given) wins first, then the default BOM
+     * (fg_boms.is_default), falling back to the oldest active BOM.
      */
-    public function getBomForFg($fgItemId) {
-        $sql = "SELECT b.id AS bom_id, b.bom_code,
+    public function getBomForFg($fgItemId, $bomId = null, $customerId = null) {
+        $select = "SELECT b.id AS bom_id, b.bom_code,
                        b.batch_qty AS fill_volume, b.batch_uom AS uom,
-                       b.batch_unit_divisor, b.is_legacy_formula,
+                       b.batch_unit_divisor, b.is_legacy_formula, b.is_default,
+                       b.customer_id AS bom_customer_id,
                        i.item_id AS fg_item_id, i.item_code AS fg_code,
                        i.item_description AS fg_name, i.item_uom,
                        i.customer_id
                 FROM fg_boms b
                 INNER JOIN items i ON i.item_id = b.fg_item_id
                 WHERE b.fg_item_id = :fg_item_id
-                  AND i.`remove` = 0 AND i.status = 1
-                ORDER BY b.id DESC
-                LIMIT 1";
+                  AND b.status = 'active'
+                  AND i.`remove` = 0 AND i.status = 1";
+        $params = ['fg_item_id' => $fgItemId];
+
+        // Explicit choice (Switch BOM): honoured only while it still belongs to
+        // this FG. A stale id (another tab, back button, deleted BOM) must not
+        // blank the calculation — it falls through to the default resolution.
+        if (!empty($bomId)) {
+            $stmt = self::getConnection()->prepare($select . " AND b.id = :bom_id");
+            $params['bom_id'] = intval($bomId);
+            $stmt->execute($params);
+            $row = $stmt->fetch();
+            if ($row) {
+                return $row;
+            }
+            unset($params['bom_id']);
+        }
+
+        if (!empty($customerId)) {
+            $sql = $select . " ORDER BY (b.customer_id = :cid) DESC, b.is_default DESC, b.id ASC
+                    LIMIT 1";
+            $params['cid'] = intval($customerId);
+        } else {
+            $sql = $select . " ORDER BY b.is_default DESC, b.id ASC
+                    LIMIT 1";
+        }
         $stmt = self::getConnection()->prepare($sql);
-        $stmt->execute(['fg_item_id' => $fgItemId]);
+        $stmt->execute($params);
         return $stmt->fetch() ?: false;
+    }
+
+    /**
+     * All active BOMs for one FG/SFG — powers the MRP Sheet "Switch BOM" list.
+     * Ordered exactly like getBomForFg() resolves them (customer match first,
+     * then the default formulation), so boms[0] is what Calculate would use
+     * when no BOM is explicitly chosen.
+     */
+    public function getItemBoms($fgItemId, $customerId = null) {
+        $sql = "SELECT b.id AS bom_id, b.bom_code,
+                       b.batch_qty AS fill_volume, b.batch_uom AS uom,
+                       b.batch_unit_divisor, b.is_default, b.status, b.bom_type,
+                       b.created_at, b.customer_id,
+                       i.item_code AS fg_code, i.item_description AS fg_name,
+                       i.item_uom,
+                       (SELECT COUNT(*) FROM fg_bom_items bi WHERE bi.bom_id = b.id) AS component_count
+                FROM fg_boms b
+                INNER JOIN items i ON i.item_id = b.fg_item_id
+                WHERE b.fg_item_id = :fg_item_id
+                  AND b.status = 'active'
+                  AND i.`remove` = 0 AND i.status = 1";
+        $params = ['fg_item_id' => intval($fgItemId)];
+        if (!empty($customerId)) {
+            $sql .= " ORDER BY (b.customer_id = :cid) DESC, b.is_default DESC, b.id ASC";
+            $params['cid'] = intval($customerId);
+        } else {
+            $sql .= " ORDER BY b.is_default DESC, b.id ASC";
+        }
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
     }
 
     public function getOpenPOsByCustomer($customer_id) {
@@ -3191,12 +3287,18 @@ public function searchItems($query) {
 
     // ─── BOM Lookup ──────────────────────────────────────────────────────────
 
+    /**
+     * BOM header used by MO / production flows. Multi-BOM: resolves to the
+     * active default formulation (oldest active BOM as fallback), matching
+     * what the MRP Sheet picks when no BOM is chosen explicitly.
+     */
     public function hasBOM($item_id) {
         $sql = "SELECT id, bom_code, batch_qty, batch_uom,
                        batch_qty AS fill_volume, batch_uom AS uom,
-                       batch_unit_divisor, is_legacy_formula
+                       batch_unit_divisor, is_legacy_formula, is_default
                 FROM fg_boms
                 WHERE fg_item_id = :item_id
+                ORDER BY (status = 'active') DESC, is_default DESC, id ASC
                 LIMIT 1";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['item_id' => $item_id]);
@@ -3626,13 +3728,123 @@ public function searchItems($query) {
                                  WHERE bi.item_id = so.item_id
                                    AND bi.uom IS NOT NULL AND bi.uom <> ''
                                  ORDER BY bi.id DESC LIMIT 1),
-                                i.item_uom) AS item_uom
+                                i.item_uom) AS item_uom,
+                       u.full_name AS created_by_name,
+                       ru.full_name AS received_by_name
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
+                LEFT JOIN users u ON u.user_id = so.created_by
+                LEFT JOIN users ru ON ru.user_id = so.received_by
                 WHERE so.supplier_order_id = :id AND so.`remove` = 0";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['id' => $id]);
         return $stmt->fetch() ?: false;
+    }
+
+    public function getPoFullDetails($id) {
+        $conn = self::getConnection();
+        $po = $this->getPurchasingPoById($id);
+        if (!$po) {
+            return false;
+        }
+
+        $batchStmt = $conn->prepare(
+            "SELECT ri.id, ri.po_ref, ri.ordered_qty, ri.received_qty, ri.passed_qty, ri.rejected_qty,
+                    ri.lot_number, ri.expiry_date, ri.dr_invoice_no, ri.received_date, ri.received_by,
+                    ru.full_name AS received_by_name,
+                    ri.remarks, ri.qc_status, ri.inspected_by, ri.inspected_at
+             FROM receiving_items ri
+             LEFT JOIN users ru ON ru.user_id = ri.received_by
+             WHERE ri.supplier_order_id = :id
+             ORDER BY ri.received_date DESC, ri.id DESC"
+        );
+        $batchStmt->execute(['id' => $id]);
+        $batches = $batchStmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $inspections = [];
+        if ($batches) {
+            $riIds = array_map('intval', array_column($batches, 'id'));
+            $insStmt = $conn->prepare(
+                "SELECT qi.receiving_item_id, qi.decision, qi.passed_qty, qi.rejected_qty,
+                        qi.inspector_name, qi.remarks, qi.inspected_at
+                 FROM qc_inspections qi
+                 WHERE qi.receiving_item_id IN (" . implode(', ', $riIds) . ")
+                 ORDER BY qi.inspected_at DESC, qi.inspection_id DESC"
+            );
+            $insStmt->execute();
+            foreach ($insStmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                $key = (int) $row['receiving_item_id'];
+                if (!isset($inspections[$key])) {
+                    $inspections[$key] = $row;
+                }
+            }
+        }
+
+        foreach ($batches as &$batch) {
+            $riId = (int) $batch['id'];
+            $qc = $inspections[$riId] ?? null;
+            $batch['qc_decision'] = $qc['decision'] ?? (strtoupper((string) ($batch['qc_status'] ?? '')) ?: null);
+            $batch['inspector_name'] = $qc['inspector_name'] ?? null;
+            $batch['qc_remarks'] = $qc['remarks'] ?? null;
+            $batch['qc_date'] = $qc['inspected_at'] ?? ($batch['inspected_at'] ?? null);
+            $batch['received_date'] = $batch['received_date'] ? date('m/d/Y', strtotime($batch['received_date'])) : null;
+            $batch['qc_date'] = $batch['qc_date'] ? date('m/d/Y H:i', strtotime($batch['qc_date'])) : null;
+            $batch['dr_invoice_no'] = trim((string) ($batch['dr_invoice_no'] ?? ''));
+            $batch['received_qty'] = rtrim(rtrim(number_format(floatval($batch['received_qty'] ?? 0), 4), '0'), '.');
+            $batch['ordered_qty'] = rtrim(rtrim(number_format(floatval($batch['ordered_qty'] ?? 0), 4), '0'), '.');
+            $batch['passed_qty'] = rtrim(rtrim(number_format(floatval($batch['passed_qty'] ?? 0), 4), '0'), '.');
+            $batch['rejected_qty'] = rtrim(rtrim(number_format(floatval($batch['rejected_qty'] ?? 0), 4), '0'), '.');
+        }
+        unset($batch);
+
+        $latest = $batches[0] ?? null;
+        $uom = (string) ($po['item_uom'] ?? '');
+        $qty = floatval($po['quantity'] ?? 0);
+        $recvTotal = floatval($po['received_qty'] ?? 0);
+
+        $receivingNotes = null;
+        if ($latest) {
+            $noteParts = [trim((string) ($latest['remarks'] ?? ''))];
+            // QC inspection overwrites receiving_items.remarks, so rebuild the
+            // lot/expiry staging note when the original receipt note is gone.
+            if ($noteParts[0] === '' && !empty($latest['lot_number'])) {
+                $rebuilt = 'Lot: ' . $latest['lot_number'];
+                if (!empty($latest['expiry_date'])) {
+                    $rebuilt .= ' | Expiry: ' . $latest['expiry_date'];
+                }
+                $noteParts[0] = $rebuilt;
+            }
+            $receivingNotes = $noteParts[0] !== '' ? $noteParts[0] : null;
+        }
+
+        return [
+            'po_ref' => trim((string) ($po['po_ref'] ?? '')) ?: null,
+            'supplier_name' => $po['supplier_name'] ?? null,
+            'item_code' => $po['item_code'] ?? null,
+            'description' => $po['item_description'] ?? null,
+            'quantity' => rtrim(rtrim(number_format($qty, 4), '0'), '.'),
+            'uom' => $uom,
+            'unit_cost' => number_format(floatval($po['unit_cost'] ?? 0), 2),
+            'order_date' => $po['order_date'] ? date('m/d/Y', strtotime($po['order_date'])) : null,
+            'expected_date' => $po['expected_date'] ? date('m/d/Y', strtotime($po['expected_date'])) : null,
+            'status' => $po['status'] ?? null,
+            'order_remarks' => trim((string) ($po['remarks'] ?? '')) ?: null,
+            'created_by' => $po['created_by_name'] ?? null,
+            'received_qty' => rtrim(rtrim(number_format($recvTotal, 4), '0'), '.'),
+            'received_date' => ($latest && $latest['received_date']) ? date('m/d/Y', strtotime($latest['received_date'])) : null,
+            'dr_number' => $latest ? trim((string) ($latest['dr_invoice_no'] ?? '')) : '',
+            'received_by' => $po['received_by_name'] ?? null,
+            'receiving_notes' => $receivingNotes,
+            'lot_number' => $latest['lot_number'] ?? null,
+            'expiry_date' => $latest['expiry_date'] ?? null,
+            'qc_decision' => $latest['qc_decision'] ?? null,
+            'inspector_name' => $latest['inspector_name'] ?? null,
+            'qc_date' => ($latest && $latest['qc_date']) ? date('m/d/Y H:i', strtotime($latest['qc_date'])) : null,
+            'qc_remarks' => $latest['qc_remarks'] ?? null,
+            'passed_qty' => $latest ? rtrim(rtrim(number_format(floatval($latest['passed_qty'] ?? 0), 4), '0'), '.') : null,
+            'rejected_qty' => $latest ? rtrim(rtrim(number_format(floatval($latest['rejected_qty'] ?? 0), 4), '0'), '.') : null,
+            'batches' => $batches,
+        ];
     }
 
     public function createPurchasingPo($data) {
@@ -3986,6 +4198,7 @@ public function searchItems($query) {
                                  ORDER BY bi.id DESC LIMIT 1),
                                 i.item_uom) AS item_uom,
                        u.full_name AS created_by_name,
+                       ru.full_name AS received_by_name,
                        CASE WHEN so.po_ref IS NOT NULL AND TRIM(so.po_ref) <> ''
                             THEN TRIM(so.po_ref)
                             ELSE '-'
@@ -3993,6 +4206,7 @@ public function searchItems($query) {
                 FROM supplier_orders so
                 JOIN items i ON so.item_id = i.item_id
                 JOIN users u ON so.created_by = u.user_id
+                LEFT JOIN users ru ON ru.user_id = so.received_by
                 WHERE {$whereSql}
                 ORDER BY so.date_created DESC";
         $stmt = self::getConnection()->prepare($sql);
@@ -4058,9 +4272,14 @@ public function searchItems($query) {
             // because the queue is driven by receiving_items.qc_status.
             $remainingAfter = max(0, $orderedQty - $newReceivedQty);
             $qcGateStatus = $remainingAfter > 0.0001 ? 'partially_received' : 'For Inspection';
+            // Account that transacted this receipt (WarehouseController passes
+            // $_SESSION['user_id']); kept on the order as the latest receiver and
+            // on each receiving_items batch so multi-batch receipts stay attributable.
+            $receivedBy = !empty($data['received_by']) ? (int) $data['received_by'] : null;
             $sql = "UPDATE supplier_orders 
                     SET received_qty = :received_qty,
                         received_date = :received_date,
+                        received_by = :received_by,
                         status = :status,
                         last_update = NOW()
                     WHERE supplier_order_id = :id";
@@ -4068,6 +4287,7 @@ public function searchItems($query) {
             $stmt->execute([
                 'received_qty' => $newReceivedQty,
                 'received_date' => $data['received_date'],
+                'received_by' => $receivedBy,
                 'status' => $qcGateStatus,
                 'id' => $id
             ]);
@@ -4077,12 +4297,12 @@ public function searchItems($query) {
                 INSERT INTO receiving_items
                     (po_ref, supplier, item_code, item_name, uom,
                      ordered_qty, received_qty, passed_qty, rejected_qty,
-                     lot_number, expiry_date, received_date,
+                     lot_number, expiry_date, received_date, received_by,
                      remarks, qc_status, supplier_order_id)
                 VALUES
                     (:po_ref, :supplier, :item_code, :item_name, :uom,
                      :ordered_qty, :received_qty, 0, 0,
-                     :lot_number, :expiry_date, :received_date,
+                     :lot_number, :expiry_date, :received_date, :received_by,
                      :remarks, 'PENDING_QC', :supplier_order_id)
             ")->execute([
                 'po_ref' => $poRef,
@@ -4095,6 +4315,7 @@ public function searchItems($query) {
                 'lot_number' => $data['lot_number'] ?? null,
                 'expiry_date' => $data['expiry_date'] ?? null,
                 'received_date' => $data['received_date'],
+                'received_by' => $receivedBy,
                 'remarks' => $stagingRemarks,
                 'supplier_order_id' => $id,
             ]);
@@ -4181,7 +4402,53 @@ public function searchItems($query) {
      * $rows    — every BOM component: component_item_id, required, soh, allocated
      * $lacking — [item_id => ['quantity' => float, 'uom' => string]] recomputed by caller
      */
-    public function saveMrpCalculationRun($customerId, $fgItemId, $targetQty, $userId, array $rows, array $lacking, $customRef = null) {
+    /**
+     * Next MRP reference in the MRP#YYYY-XXXX sequence (e.g. MRP#2026-0001).
+     * The sequence restarts every calendar year and only reads refs that
+     * already match the current-year format, so legacy refs (MRP-#<id>, MRP1)
+     * never feed the counter.
+     *
+     * $lockForUpdate serializes concurrent generators by locking the newest
+     * mrp_runs row — call it inside a transaction (saveMrpCalculationRun does)
+     * so two simultaneous saves cannot mint the same number.
+     */
+    public function generateNextMrpRef($conn = null, $lockForUpdate = false) {
+        $conn = $conn ?: self::getConnection();
+        $prefix = 'MRP#' . date('Y') . '-';
+
+        if ($lockForUpdate) {
+            // 1) Serialize generators on the newest row (and the table's
+            //    supremum gap when empty). 2) Locking read of the sequence:
+            //    a plain SELECT here would reuse this transaction's earlier
+            //    snapshot (saveMrpCalculationRun reads items first) and miss
+            //    refs committed after it — FOR UPDATE always sees the latest.
+            $conn->query('SELECT run_id FROM mrp_runs ORDER BY run_id DESC LIMIT 1 FOR UPDATE');
+        }
+
+        $stmt = $conn->prepare(
+            "SELECT mrp_ref FROM mrp_runs WHERE mrp_ref LIKE :prefix" . ($lockForUpdate ? ' FOR UPDATE' : '')
+        );
+        $stmt->execute([':prefix' => $prefix . '%']);
+
+        $maxNum = 0;
+        $existing = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $ref) {
+            $existing[(string) $ref] = true;
+            if (preg_match('/-(\d+)$/', (string) $ref, $m)) {
+                $maxNum = max($maxNum, intval($m[1]));
+            }
+        }
+
+        // Defensive: skip any candidate already taken in this year's sequence.
+        do {
+            $maxNum++;
+            $candidate = $prefix . str_pad($maxNum, 4, '0', STR_PAD_LEFT);
+        } while (isset($existing[$candidate]));
+
+        return $candidate;
+    }
+
+    public function saveMrpCalculationRun($customerId, $fgItemId, $targetQty, $userId, array $rows, array $lacking, $customRef = null, $bomId = null) {
         $conn = self::getConnection();
         $conn->beginTransaction();
         try {
@@ -4192,25 +4459,24 @@ public function searchItems($query) {
                 throw new \RuntimeException('Finished good not found.');
             }
 
-            // Custom reference entered by the user (e.g. MRP-2026-001); the
-            // auto "MRP-#<id>" form is only a fallback for callers that skip it.
-            $mrpRef = trim((string) $customRef) !== '' ? trim((string) $customRef) : null;
+            // Server-assigned sequence (MRP#YYYY-XXXX), generated fresh inside
+            // this transaction under the row lock so the saved ref is unique.
+            // The prompt modal only previews this number — $customRef is ignored.
+            $mrpRef = $this->generateNextMrpRef($conn, true);
 
             $conn->prepare(
-                "INSERT INTO mrp_runs (po_id, customer_id, user_id, fg_item_id, fg_code, target_qty, mrp_ref)
-                 VALUES (NULL, :customer_id, :user_id, :fg_item_id, :fg_code, :target_qty, :mrp_ref)"
+                "INSERT INTO mrp_runs (po_id, customer_id, user_id, fg_item_id, bom_id, fg_code, target_qty, mrp_ref)
+                 VALUES (NULL, :customer_id, :user_id, :fg_item_id, :bom_id, :fg_code, :target_qty, :mrp_ref)"
             )->execute([
                 'customer_id' => $customerId > 0 ? $customerId : null,
                 'user_id' => $userId,
                 'fg_item_id' => $fgItemId,
+                'bom_id' => !empty($bomId) ? intval($bomId) : null,
                 'fg_code' => $fgCode,
                 'target_qty' => $targetQty,
                 'mrp_ref' => $mrpRef,
             ]);
             $runId = (int) $conn->lastInsertId();
-            if ($mrpRef === null) {
-                $mrpRef = 'MRP-#' . $runId;
-            }
 
             $itemStmt = $conn->prepare(
                 "INSERT INTO mrp_run_items
@@ -4303,6 +4569,7 @@ public function searchItems($query) {
                 'run_id' => $runId,
                 'queued' => $queued,
                 'committed' => $committed,
+                'mrp_ref' => $mrpRef,
             ];
         } catch (\Exception $e) {
             $conn->rollBack();

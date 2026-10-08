@@ -175,6 +175,118 @@ class QcModel extends BaseModel {
         return $stmt->fetch();
     }
 
+    public function getInspectionDetail($id) {
+        $conn = self::getConnection();
+        $sql = "SELECT
+                    ri.*,
+                    ri.id AS receiving_item_id,
+                    ri.po_ref,
+                    ri.supplier AS supplier_name,
+                    ri.item_name AS item_description,
+                    ri.uom AS item_uom,
+                    so.quantity AS order_quantity,
+                    so.unit_cost,
+                    so.order_date,
+                    so.expected_date,
+                    so.status AS supplier_order_status,
+                    so.remarks AS order_remarks,
+                    so.created_by,
+                    u.full_name AS created_by_name,
+                    ru.full_name AS received_by_name
+                FROM receiving_items ri
+                LEFT JOIN items i ON ri.item_code = i.item_code
+                LEFT JOIN supplier_orders so ON so.supplier_order_id = ri.supplier_order_id AND so.`remove` = 0
+                LEFT JOIN users u ON u.user_id = so.created_by
+                LEFT JOIN users ru ON ru.user_id = ri.received_by
+                WHERE ri.id = :id";
+        $stmt = $conn->prepare($sql);
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$row) {
+            return false;
+        }
+
+        $insStmt = $conn->prepare(
+            "SELECT decision, passed_qty, rejected_qty, inspector_name, remarks, inspected_at
+             FROM qc_inspections
+             WHERE receiving_item_id = :id
+             ORDER BY inspected_at DESC, inspection_id DESC
+             LIMIT 1"
+        );
+        $insStmt->execute(['id' => (int) $row['receiving_item_id']]);
+        $qc = $insStmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+
+        $uom = (string) ($row['item_uom'] ?? '');
+        $orderQty = $row['order_quantity'] !== null ? floatval($row['order_quantity']) : floatval($row['ordered_qty'] ?? 0);
+        $recvQty = floatval($row['received_qty'] ?? 0);
+
+        $batch = [
+            'id' => (int) $row['receiving_item_id'],
+            'po_ref' => $row['po_ref'] ?? null,
+            'ordered_qty' => $orderQty,
+            'received_qty' => $recvQty,
+            'passed_qty' => floatval($row['passed_qty'] ?? 0),
+            'rejected_qty' => floatval($row['rejected_qty'] ?? 0),
+            'lot_number' => $row['lot_number'] ?? null,
+            'expiry_date' => $row['expiry_date'] ?? null,
+            'dr_invoice_no' => $row['dr_invoice_no'] ?? null,
+            'received_date' => $row['received_date'] ?? null,
+            'received_by' => $row['received_by'] ?? null,
+            'received_by_name' => $row['received_by_name'] ?? null,
+            'remarks' => $row['remarks'] ?? null,
+            'qc_status' => $row['qc_status'] ?? null,
+            'inspected_by' => $row['inspected_by'] ?? null,
+            'inspected_at' => $row['inspected_at'] ?? null,
+            'qc_decision' => $qc['decision'] ?? (strtoupper((string) ($row['qc_status'] ?? '')) ?: null),
+            'inspector_name' => $qc['inspector_name'] ?? null,
+            'qc_remarks' => $qc['remarks'] ?? null,
+            'qc_date' => $qc['inspected_at'] ?? ($row['inspected_at'] ?? null),
+        ];
+        $batch['received_date'] = $batch['received_date'] ? date('m/d/Y', strtotime($batch['received_date'])) : null;
+        $batch['qc_date'] = $batch['qc_date'] ? date('m/d/Y H:i', strtotime($batch['qc_date'])) : null;
+        $batch['dr_invoice_no'] = trim((string) ($batch['dr_invoice_no'] ?? ''));
+        foreach (['ordered_qty', 'received_qty', 'passed_qty', 'rejected_qty'] as $qk) {
+            $batch[$qk] = rtrim(rtrim(number_format(floatval($batch[$qk] ?? 0), 4), '0'), '.');
+        }
+
+        $receivingNotes = trim((string) ($row['remarks'] ?? ''));
+        if ($receivingNotes === '' && !empty($row['lot_number'])) {
+            $receivingNotes = 'Lot: ' . $row['lot_number'];
+            if (!empty($row['expiry_date'])) {
+                $receivingNotes .= ' | Expiry: ' . $row['expiry_date'];
+            }
+        }
+
+        return [
+            'po_ref' => trim((string) ($row['po_ref'] ?? '')) ?: null,
+            'supplier_name' => $row['supplier_name'] ?? null,
+            'item_code' => $row['item_code'] ?? null,
+            'description' => $row['item_description'] ?? null,
+            'quantity' => rtrim(rtrim(number_format($orderQty, 4), '0'), '.'),
+            'uom' => $uom,
+            'unit_cost' => $row['unit_cost'] !== null ? number_format(floatval($row['unit_cost']), 2) : null,
+            'order_date' => $row['order_date'] ? date('m/d/Y', strtotime($row['order_date'])) : null,
+            'expected_date' => $row['expected_date'] ? date('m/d/Y', strtotime($row['expected_date'])) : null,
+            'status' => $row['supplier_order_status'] ?? null,
+            'order_remarks' => trim((string) ($row['order_remarks'] ?? '')) ?: null,
+            'created_by' => $row['created_by_name'] ?? null,
+            'received_qty' => rtrim(rtrim(number_format($recvQty, 4), '0'), '.'),
+            'received_date' => $row['received_date'] ? date('m/d/Y', strtotime($row['received_date'])) : null,
+            'dr_number' => trim((string) ($row['dr_invoice_no'] ?? '')),
+            'received_by' => $row['received_by_name'] ?? null,
+            'receiving_notes' => $receivingNotes ?: null,
+            'lot_number' => $row['lot_number'] ?? null,
+            'expiry_date' => $row['expiry_date'] ?? null,
+            'qc_decision' => $batch['qc_decision'],
+            'inspector_name' => $batch['inspector_name'],
+            'qc_date' => $batch['qc_date'] ? date('m/d/Y H:i', strtotime($batch['qc_date'])) : null,
+            'qc_remarks' => $batch['qc_remarks'],
+            'passed_qty' => rtrim(rtrim(number_format(floatval($row['passed_qty'] ?? 0), 4), '0'), '.'),
+            'rejected_qty' => rtrim(rtrim(number_format(floatval($row['rejected_qty'] ?? 0), 4), '0'), '.'),
+            'batches' => [$batch],
+        ];
+    }
+
     public function createReceivingItem($data) {
         // Duplicate prevention: one pending inspection row per po_ref + item_code.
         $poRef = $data['po_ref'] ?? ($data['po_id'] ?? null);
@@ -196,6 +308,7 @@ class QcModel extends BaseModel {
                          lot_number = :lot_number,
                          expiry_date = :expiry_date,
                          dr_invoice_no = :dr_invoice_no,
+                         received_by = COALESCE(received_by, :received_by),
                          remarks = :remarks
                      WHERE id = :rid"
                 )->execute([
@@ -204,6 +317,7 @@ class QcModel extends BaseModel {
                     'lot_number' => $data['lot_number'] ?? null,
                     'expiry_date' => $data['expiry_date'] ?? null,
                     'dr_invoice_no' => $data['dr_invoice_no'] ?? null,
+                    'received_by' => $data['received_by'] ?? ($data['created_by'] ?? null),
                     'remarks' => $data['remarks'] ?? null,
                     'rid' => $dupRow['id'],
                 ]);
@@ -215,12 +329,12 @@ class QcModel extends BaseModel {
                     po_ref, supplier, item_code, item_name, uom,
                     ordered_qty, received_qty, passed_qty, rejected_qty,
                     lot_number, expiry_date, dr_invoice_no, received_date,
-                    remarks, qc_status
+                    received_by, remarks, qc_status
                 ) VALUES (
                     :po_ref, :supplier, :item_code, :item_name, :uom,
                     :ordered_qty, :received_qty, :passed_qty, :rejected_qty,
                     :lot_number, :expiry_date, :dr_invoice_no, :received_date,
-                    :remarks, :qc_status
+                    :received_by, :remarks, :qc_status
                 )";
 
         $stmt = self::getConnection()->prepare($sql);
@@ -238,6 +352,7 @@ class QcModel extends BaseModel {
             'expiry_date' => $data['expiry_date'] ?? null,
             'dr_invoice_no' => $data['dr_invoice_no'] ?? null,
             'received_date' => $data['received_date'] ?? date('Y-m-d'),
+            'received_by' => $data['received_by'] ?? ($data['created_by'] ?? null),
             'remarks' => $data['remarks'] ?? null,
             'qc_status' => 'PENDING_QC',
         ]);

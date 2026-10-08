@@ -103,12 +103,13 @@ function submitQcDecisionOnce(form) {
                         <th>Date Received</th>
                         <th>Decision</th>
                         <th>Inspector</th>
+                        <th class="text-end">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($completedQcItems)): ?>
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">No approved or rejected inspections have been recorded yet.</td>
+                            <td colspan="9" class="text-center text-muted py-4">No approved or rejected inspections have been recorded yet.</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($completedQcItems as $item): ?>
@@ -124,6 +125,11 @@ function submitQcDecisionOnce(form) {
                                     <span class="badge <?= $decision === 'PASSED' ? 'bg-success' : 'bg-danger' ?>"><?= htmlspecialchars($decision === 'PASSED' ? 'Approved' : 'Rejected') ?></span>
                                 </td>
                                 <td><?= htmlspecialchars($item['inspected_by'] ?? 'QC') ?></td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= (int) ($item['receiving_item_id'] ?? 0) ?>" title="View Details">
+                                        <i class="bi bi-eye"></i> View
+                                    </button>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
@@ -132,3 +138,4 @@ function submitQcDecisionOnce(form) {
         </div>
     </div>
 </div>
+<?php require BASE_PATH . 'app/views/shared/po_view_modal.php'; ?>

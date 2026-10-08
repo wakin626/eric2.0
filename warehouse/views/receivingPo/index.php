@@ -76,6 +76,7 @@
                     <th class="text-end">Qty Ordered</th>
                     <th class="text-end">Received Qty</th>
                     <th>Received Date</th>
+                    <th>Received By</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -83,7 +84,7 @@
             <tbody>
                 <?php if (empty($orders)): ?>
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-4">No purchasing POs ready for receiving.</td>
+                    <td colspan="11" class="text-center text-muted py-4">No purchasing POs ready for receiving.</td>
                 </tr>
                 <?php else: ?>
                 <?php foreach ($orders as $index => $o): ?>
@@ -119,6 +120,7 @@
                         $hasDate = !empty($o['received_date']) && $o['received_date'] !== '0000-00-00' && $o['received_date'] !== '0000-00-00 00:00:00';
                         echo $hasDate ? date('m/d/Y', strtotime($o['received_date'])) : '-';
                     ?></td>
+                    <td><?= !empty($o['received_by_name']) ? htmlspecialchars($o['received_by_name']) : '<span class="text-muted">-</span>' ?></td>
                     <td>
                         <?php if ($status === 'requested'): ?>
                             <span class="badge bg-info">Requested</span>
@@ -144,11 +146,20 @@
                     </td>
                     <td>
                         <?php $isQcUser = (($_SESSION['department'] ?? '') === 'qc'); ?>
+                        <?php
+                        // Completed tab rows (received / approved / rejected / cancelled)
+                        // get a read-only View Details modal.
+                        $isCompletedShipment = in_array($status, ['received', 'approved', 'rejected', 'cancelled']);
+                        ?>
                         <?php if ($isReadOnly): ?>
                             <?php if ($status === 'for inspection' && $isQcUser): ?>
                                 <a class="btn btn-sm btn-primary" href="?controller=qc&action=receivingInspection" title="Open the QC inspection queue">
                                     <i class="bi bi-clipboard-check"></i> Process Inspection
                                 </a>
+                            <?php elseif ($isCompletedShipment): ?>
+                                <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
                             <?php else: ?>
                                 <span class="text-muted">-</span>
                             <?php endif; ?>
@@ -178,10 +189,23 @@
                             <?php endif; ?>
                         <?php elseif (in_array($status, ['approved', 'received'])): ?>
                             <span class="badge bg-success">Received &amp; Approved</span>
+                            <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                <i class="bi bi-eye"></i> View
+                            </button>
                         <?php elseif ($status === 'rejected'): ?>
                             <span class="badge bg-danger">Rejected</span>
+                            <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                <i class="bi bi-eye"></i> View
+                            </button>
                         <?php else: ?>
-                            <span class="text-muted">-</span>
+                            <?php if ($isCompletedShipment): ?>
+                                <span class="badge bg-secondary">Cancelled</span>
+                                <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                            <?php else: ?>
+                                <span class="text-muted">-</span>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -254,6 +278,12 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Received Date <span class="text-danger">*</span></label>
                         <input type="date" name="received_date" id="recvReceivedDate" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Received By</label>
+                        <input type="text" id="recvReceivedBy" class="form-control" readonly
+                               value="<?= htmlspecialchars($_SESSION['full_name'] ?? ($_SESSION['username'] ?? '')) ?>">
+                        <small class="text-muted">The logged-in account recorded for this receipt.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Remarks</label>
@@ -341,3 +371,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <?php endif; ?>
+<?php require BASE_PATH . 'app/views/shared/po_view_modal.php'; ?>

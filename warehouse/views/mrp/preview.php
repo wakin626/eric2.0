@@ -86,11 +86,13 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
 <!-- Selection Bar: Customer + FG + Target Qty -->
 <div class="card data-card mb-4 no-print">
     <div class="card-body">
-        <form method="GET" class="row g-3 align-items-end">
+        <form method="GET" id="mrpSelectionForm" class="row g-2 align-items-end">
             <input type="hidden" name="controller" value="warehouse">
             <input type="hidden" name="action" value="mrp">
+            <!-- Switch BOM: chosen formulation; 0/absent = default BOM for the FG -->
+            <input type="hidden" name="bom_id" id="mrpBomId" value="<?= (int) ($selectedBomId ?? 0) ?>">
 
-            <div class="col-md-3">
+            <div class="col-xl-3 col-md-3">
                 <label class="form-label fw-bold">Select Customer</label>
                 <select name="customer_id" id="mrpCustomer" class="form-select filter-select">
                     <option value="">-- All Customers --</option>
@@ -102,46 +104,58 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                 </select>
             </div>
 
-            <div class="col-md-3">
+            <!-- FG / SFG select + integrated Switch BOM button. The input-group
+                 keeps the button inside this column: toggling d-none resizes the
+                 select only and never bleeds into the Target Quantity field. -->
+            <div class="col-xl-4 col-md-4">
                 <label class="form-label fw-bold">Select Finished Good / SFG</label>
-                <select name="fg_item_id" id="mrpFg" class="form-select filter-select" <?= empty($fgOptions) ? 'disabled' : '' ?>>
-                    <?php if (empty($fgOptions)): ?>
-                    <option value=""><?= !empty($noFgsForCustomer) ? 'No FG/SFG with active BOM for this customer' : 'No FG/SFG with active BOM' ?></option>
-                    <?php else: ?>
-                    <option value="">-- Select Finished Good / SFG --</option>
-                    <?php foreach ($fgOptions as $fg): ?>
-                    <option value="<?= $fg['item_id'] ?>" <?= ($selectedFg == $fg['item_id']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($fg['item_code'] . ' — ' . $fg['item_description']) ?>
-                    </option>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label fw-bold">Target Quantity / To Produce</label>
-                <input type="number" name="target_qty" id="mrpTargetQty" class="form-control"
-                       min="0" step="any" placeholder="e.g. 10000"
-                       value="<?= $targetQty !== null && $targetQty !== '' ? htmlspecialchars($targetQty) : '' ?>">
-            </div>
-
-            <div class="col-md-4">
-                <div class="d-flex gap-2 align-items-stretch">
-                    <button type="submit" name="calculate" value="1" class="btn btn-primary flex-grow-1"
-                            <?= empty($fgOptions) ? 'disabled' : '' ?>>
-                        <i class="bi bi-calculator me-1"></i>Calculate
+                <div class="input-group bom-switch-hidden" id="fgBomInputGroup">
+                    <select name="fg_item_id" id="mrpFg" class="form-select filter-select" <?= empty($fgOptions) ? 'disabled' : '' ?>>
+                        <?php if (empty($fgOptions)): ?>
+                        <option value=""><?= !empty($noFgsForCustomer) ? 'No FG/SFG with active BOM for this customer' : 'No FG/SFG with active BOM' ?></option>
+                        <?php else: ?>
+                        <option value="">-- Select Finished Good / SFG --</option>
+                        <?php foreach ($fgOptions as $fg): ?>
+                        <option value="<?= $fg['item_id'] ?>" <?= ($selectedFg == $fg['item_id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($fg['item_code'] . ' — ' . $fg['item_description']) ?>
+                        </option>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                    <button type="button" id="btnSelectBomModal" class="btn btn-outline-primary d-none"
+                            style="white-space: nowrap; z-index: 1;" title="Select Alternative Formulation">
+                        <i class="bi bi-diagram-3"></i> Switch BOM <span id="bomCountBadge" class="badge bg-primary ms-1"></span>
                     </button>
-                    <?php if ($showSaveBtn): ?>
-                    <button type="button" id="saveMrpCalculationBtn" class="btn btn-success flex-grow-1"
-                            data-lacking="<?= htmlspecialchars(json_encode($mrpLackingRows), ENT_QUOTES) ?>"
-                            <?= empty($mrpLackingRows) ? 'disabled title="Nothing lacking — no purchase requests needed"' : '' ?>>
-                        <i class="bi bi-cart-plus me-1"></i>Save &amp; Transfer Lacking to Purchasing PO
-                    </button>
-                    <?php endif; ?>
-                    <?php if (!empty($selectedCustomer) || !empty($selectedFg)): ?>
-                    <a href="?controller=warehouse&action=mrp" class="btn btn-outline-secondary">Clear</a>
-                    <?php endif; ?>
                 </div>
+            </div>
+
+            <!-- Target quantity with the Clear button nested in its input-group -->
+            <div class="col-xl-2 col-md-2">
+                <label class="form-label fw-bold">Target Quantity / To Produce</label>
+                <div class="input-group">
+                    <input type="number" name="target_qty" id="mrpTargetQty" class="form-control"
+                           min="0" step="any" placeholder="e.g. 10000"
+                           value="<?= $targetQty !== null && $targetQty !== '' ? htmlspecialchars($targetQty) : '' ?>">
+                    <button type="button" id="btnClearMrp" class="btn btn-outline-secondary" title="Clear inputs">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Primary actions, aligned to the same baseline as the inputs -->
+            <div class="col-xl-3 col-md-3 d-flex gap-2">
+                <button type="submit" name="calculate" value="1" id="btnCalculateMrp"
+                        class="btn btn-primary text-nowrap flex-shrink-0"
+                        <?= empty($fgOptions) ? 'disabled' : '' ?>>
+                    <i class="bi bi-calculator me-1"></i>Calculate
+                </button>
+                <?php if ($showSaveBtn): ?>
+                <button type="button" id="saveMrpCalculationBtn" class="btn btn-success w-100"
+                        data-lacking="<?= htmlspecialchars(json_encode($mrpLackingRows), ENT_QUOTES) ?>"
+                        <?= empty($mrpLackingRows) ? 'disabled title="Nothing lacking — no purchase requests needed"' : '' ?>>
+                    <i class="bi bi-cart-plus me-1"></i>Save &amp; Transfer Lacking to Purchasing PO
+                </button>
+                <?php endif; ?>
             </div>
         </form>
     </div>
@@ -178,7 +192,13 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             <div class="col-md-3"><strong>FG Code:</strong> <code><?= htmlspecialchars($fgHeader['fg_code']) ?></code></div>
             <div class="col-md-4"><strong>Description:</strong> <?= htmlspecialchars($fgHeader['fg_name']) ?></div>
             <div class="col-md-2"><strong>Target Qty:</strong> <?= formatQty($fgHeader['target_qty']) ?> Pcs</div>
-            <div class="col-md-3"><strong>BOM:</strong> <?= htmlspecialchars($fgHeader['bom_code']) ?></div>
+            <div class="col-md-3"><strong>BOM:</strong> <?= htmlspecialchars($fgHeader['bom_code']) ?>
+                <?php if (!empty($fgHeader['is_default'])): ?>
+                <span class="badge bg-success">Default</span>
+                <?php else: ?>
+                <span class="badge bg-info text-dark">Switched</span>
+                <?php endif; ?>
+            </div>
         </div>
         <div class="row mt-2">
             <div class="col-md-3"><strong>Fill Volume:</strong> <?= formatQty($fgHeader['fill_volume']) ?> <?= htmlspecialchars($fgHeader['uom']) ?></div>
@@ -281,9 +301,10 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             </div>
             <div class="modal-body">
                 <p class="mb-2 text-muted" id="mrpRefModalSummary">Queue lacking material(s) as Purchase Requests for Procurement.</p>
-                <label class="form-label fw-bold" for="mrpRefInput">Enter Custom MRP Reference Number (e.g., MRP-2026-001):</label>
+                <label class="form-label fw-bold" for="mrpRefInput">MRP Reference Number (auto-generated):</label>
                 <input type="text" class="form-control" id="mrpRefInput" maxlength="30"
-                       placeholder="MRP-2026-001" autocomplete="off" spellcheck="false">
+                       placeholder="MRP#<?= date('Y') ?>-0001" autocomplete="off" spellcheck="false" readonly>
+                <div class="text-muted small mt-1">Format: MRP#YYYY-XXXX — the sequence increments with every saved run.</div>
                 <div class="text-danger small mt-1 d-none" id="mrpRefError"></div>
             </div>
             <div class="modal-footer">
@@ -291,6 +312,69 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                 <button type="button" class="btn btn-success" id="mrpRefConfirmBtn">
                     <i class="bi bi-cart-plus me-1"></i>Save &amp; Transfer
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Select / Switch BOM modal (multi-formulation) -->
+<div class="modal fade" id="bomSelectModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-diagram-3 me-2"></i>Select BOM — <span id="bomModalItemCode">-</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="bomModalLoading" class="text-center py-3 d-none">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <div class="text-muted small mt-2">Loading BOMs…</div>
+                </div>
+                <div id="bomModalError" class="alert alert-danger d-none"></div>
+
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>BOM Code</th>
+                                <th>Description / Supplier Variant</th>
+                                <th>Status</th>
+                                <th style="width: 210px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bomListRows">
+                            <tr><td colspan="4" class="text-center text-muted py-3">Select a finished good first.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="bomPreviewPanel" class="d-none">
+                    <h6 class="fw-bold text-primary mb-2">
+                        <i class="bi bi-eye me-1"></i>Components — <span id="bomPreviewTitle">-</span>
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Component Code</th>
+                                    <th>Description</th>
+                                    <th>Category</th>
+                                    <th>Phase</th>
+                                    <th class="text-end">Dosage Rate</th>
+                                    <th class="text-end">Wastage %</th>
+                                    <th>UOM</th>
+                                    <th class="text-end">SOH</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bomPreviewRows"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -313,6 +397,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             params.delete('fg_item_id');
             params.delete('target_qty');
             params.delete('calculate');
+            params.delete('bom_id');
             window.location.search = params.toString();
         });
     }
@@ -323,9 +408,11 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
         window.refreshSearchableDropdown(customer);
     }
 
-    // Save & Transfer Lacking → prompt for a custom MRP reference, then build
-    // a POST form (cannot nest inside the GET form). Cancelling or submitting
-    // an empty reference aborts the save entirely.
+    // Save & Transfer Lacking → preview the next auto-generated MRP reference
+    // (MRP#YYYY-XXXX), then build a POST form (cannot nest inside the GET form).
+    // The reference shown here is only a preview: the save endpoint regenerates
+    // the sequence server-side inside its transaction, so the stored number is
+    // always unique. Cancelling or submitting before the fetch lands aborts.
     //
     // Wired on DOMContentLoaded: this view is rendered from $content BEFORE the
     // layout loads public/js/bootstrap.bundle.min.js, so touching `bootstrap`
@@ -338,6 +425,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
         var refModal = bootstrap.Modal.getOrCreateInstance(refModalEl);
         var refInput = document.getElementById('mrpRefInput');
         var refError = document.getElementById('mrpRefError');
+        var refConfirmBtn = document.getElementById('mrpRefConfirmBtn');
         var pendingRows = [];
 
         var showRefError = function (msg) {
@@ -348,11 +436,29 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             refError.textContent = '';
             refError.classList.add('d-none');
         };
+        // Fetch the next sequence number for display; the value is readonly.
+        var loadNextMrpRef = function () {
+            refInput.value = '';
+            refConfirmBtn.disabled = true;
+            fetch('?controller=warehouse&action=getNextMrpRef', { credentials: 'same-origin' })
+                .then(function (res) { return res.json(); })
+                .then(function (res) {
+                    if (!res.success || !res.next_mrp_number) {
+                        throw new Error(res.error || 'No number returned.');
+                    }
+                    refInput.value = res.next_mrp_number;
+                    refConfirmBtn.disabled = false;
+                })
+                .catch(function () {
+                    showRefError('Could not generate the next MRP number. Reopen the dialog to retry.');
+                });
+        };
         // Runs whenever the modal closes (Cancel, Esc, backdrop) — unless the
         // save has already been committed and the page is navigating away.
         var resetRefPrompt = function () {
             pendingRows = [];
             refInput.value = '';
+            refConfirmBtn.disabled = false;
             clearRefError();
             if (!saveBtn.dataset.saving) saveBtn.disabled = false;
         };
@@ -366,9 +472,9 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             pendingRows = rows;
             document.getElementById('mrpRefModalSummary').textContent =
                 'Queue ' + rows.length + ' lacking material(s) as Purchase Requests for Procurement?';
-            refInput.value = '';
             clearRefError();
             refModal.show();
+            loadNextMrpRef();
         });
 
         refModalEl.addEventListener('shown.bs.modal', function () { refInput.focus(); });
@@ -376,7 +482,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
         var commitRefPrompt = function () {
             var ref = (refInput.value || '').trim();
             if (!ref) {
-                showRefError('Enter a custom MRP reference number before saving.');
+                showRefError('The next MRP number has not loaded yet — wait a moment and try again.');
                 refInput.focus();
                 return;                       // abort: nothing is saved
             }
@@ -401,6 +507,9 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                 customer_id: <?= (int)($selectedCustomer ?? 0) ?>,
                 fg_item_id: <?= (int)($selectedFg ?? 0) ?>,
                 target_qty: <?= json_encode((string)($targetQty ?? '')) ?>,
+                // BOM the on-screen calculation actually used (server-resolved
+                // at render: explicit Switch BOM choice or the default).
+                bom_id: <?= (int)($selectedBomId ?? 0) ?>,
                 calculate: '1',
                 lacking_json: JSON.stringify(pendingRows),
                 custom_mrp_ref: ref
@@ -424,4 +533,285 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
         refModalEl.addEventListener('hidden.bs.modal', resetRefPrompt);
     });
 })();
+</script>
+
+<script>
+// ─── Switch BOM (multi-formulation) ──────────────────────────────────────────
+// An FG/SFG may carry several active BOMs. The calculation always has a BOM:
+// when #mrpBomId is empty the server resolves the default (is_default = 1,
+// customer match first). This block only reveals the switcher when there is
+// more than one formulation, and lets the user inspect and pick one.
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var fgSelect = document.getElementById('mrpFg');
+        var switchBtn = document.getElementById('btnSelectBomModal');
+        var countBadge = document.getElementById('bomCountBadge');
+        var bomIdInput = document.getElementById('mrpBomId');
+        var modalEl = document.getElementById('bomSelectModal');
+        if (!fgSelect || !switchBtn || !bomIdInput || !modalEl) return;
+
+        var modal = null;
+        var boms = [];
+        var activeFgId = 0;
+        var activeFgLabel = '';
+        var previewToken = 0;   // guards against a stale eye-button response
+
+        var escapeHtml = function (value) {
+            return String(value === null || value === undefined ? '' : value)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+
+        var fmtQty = function (n) {
+            return String(parseFloat(Number(n || 0).toFixed(4)));
+        };
+
+        var formatDate = function (value) {
+            if (!value) return '';
+            var d = new Date(String(value).replace(' ', 'T'));
+            if (isNaN(d.getTime())) return String(value);
+            var mm = String(d.getMonth() + 1);
+            var dd = String(d.getDate());
+            return (mm.length < 2 ? '0' + mm : mm) + '/' +
+                   (dd.length < 2 ? '0' + dd : dd) + '/' + d.getFullYear();
+        };
+
+        // ── Dynamic visibility of the Switch BOM button ───────────────────────
+        // The button lives inside the FG select's input-group (#fgBomInputGroup),
+        // so toggling d-none only changes the select's share of that group —
+        // neighbouring grid columns (Target Quantity) never move. The group
+        // class keeps the rounded end on the select while the button is hidden.
+        var switchGroup = document.getElementById('fgBomInputGroup');
+
+        var hideSwitchButton = function () {
+            switchBtn.classList.add('d-none');
+            countBadge.textContent = '';
+            if (switchGroup) switchGroup.classList.add('bom-switch-hidden');
+        };
+
+        var updateBomSwitchButton = function (list) {
+            if (!list || list.length <= 1) {
+                hideSwitchButton();
+                return;
+            }
+            countBadge.textContent = list.length + ' BOMs';
+            switchBtn.classList.remove('d-none');
+            if (switchGroup) switchGroup.classList.remove('bom-switch-hidden');
+        };
+
+        // The row Calculate would use when no BOM is explicitly chosen:
+        // the server orders the list the same way getBomForFg() resolves it.
+        var effectiveBomId = function () {
+            var chosen = parseInt(bomIdInput.value, 10) || 0;
+            if (chosen) return chosen;
+            return boms.length ? boms[0].bom_id : 0;
+        };
+
+        var renderBomList = function () {
+            var tbody = document.getElementById('bomListRows');
+            if (!tbody) return;
+            if (!boms.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">' +
+                    'No active BOM found for this finished good.</td></tr>';
+                return;
+            }
+            var inUse = effectiveBomId();
+            var html = '';
+            boms.forEach(function (bom) {
+                var isDefault = parseInt(bom.is_default, 10) === 1;
+                var isInUse = parseInt(bom.bom_id, 10) === inUse;
+                var status = isDefault
+                    ? '<span class="badge bg-success">Default</span>'
+                    : '<span class="badge bg-secondary">Alternative</span>';
+                if (isInUse) status += ' <span class="badge bg-info text-dark">In Use</span>';
+
+                var variant = [];
+                if (bom.fg_name) variant.push(bom.fg_name);
+                variant.push('Fill volume: ' + fmtQty(bom.fill_volume) + ' ' + (bom.uom || ''));
+                if (bom.component_count !== undefined && bom.component_count !== null) {
+                    variant.push(bom.component_count + ' component(s)');
+                }
+                if (bom.created_at) variant.push('Created ' + formatDate(bom.created_at));
+
+                html += '<tr>';
+                html += '<td><code>' + escapeHtml(bom.bom_code) + '</code></td>';
+                html += '<td>' + escapeHtml(variant.join(' · ')) + '</td>';
+                html += '<td>' + status + '</td>';
+                html += '<td class="text-nowrap">';
+                html += '<button type="button" class="btn btn-sm btn-info btn-preview-bom" data-bom="' +
+                    escapeHtml(bom.bom_id) + '" title="View components"><i class="bi bi-eye"></i> View</button> ';
+                if (isInUse) {
+                    html += '<button type="button" class="btn btn-sm btn-outline-success" disabled>In Use</button>';
+                } else {
+                    html += '<button type="button" class="btn btn-sm btn-success btn-use-bom" data-bom="' +
+                        escapeHtml(bom.bom_id) + '">Use This BOM</button>';
+                }
+                html += '</td>';
+                html += '</tr>';
+            });
+            tbody.innerHTML = html;
+        };
+
+        var loadBomList = function () {
+            var fgId = parseInt(fgSelect.value, 10) || 0;
+            activeFgId = fgId;
+            activeFgLabel = '';
+            var option = fgSelect.options[fgSelect.selectedIndex];
+            if (fgId && option) {
+                activeFgLabel = option.textContent.replace(/\s+/g, ' ').trim();
+            }
+            if (!fgId) {
+                boms = [];
+                hideSwitchButton();
+                renderBomList();
+                return;
+            }
+
+            var customerId = document.getElementById('mrpCustomer');
+            var url = '?controller=warehouse&action=getItemBoms&fg_item_id=' + encodeURIComponent(fgId);
+            if (customerId && customerId.value) {
+                url += '&customer_id=' + encodeURIComponent(customerId.value);
+            }
+
+            fetch(url, { credentials: 'same-origin' })
+                .then(function (res) { return res.json(); })
+                .then(function (res) {
+                    // FG may have changed while the request was in flight.
+                    if (activeFgId !== fgId) return;
+                    if (!res.success) {
+                        boms = [];
+                        hideSwitchButton();
+                        return;
+                    }
+                    boms = res.boms || [];
+                    updateBomSwitchButton(boms);
+                })
+                .catch(function () {
+                    boms = [];
+                    hideSwitchButton();
+                });
+        };
+
+        // FG switched → the previous formulation no longer applies; the server
+        // falls back to the default BOM of the new item until the user picks one.
+        fgSelect.addEventListener('change', function () {
+            bomIdInput.value = '';
+            hideSwitchButton();
+            loadBomList();
+        });
+        loadBomList();
+
+        // ── Modal open ────────────────────────────────────────────────────────
+        switchBtn.addEventListener('click', function () {
+            var label = document.getElementById('bomModalItemCode');
+            label.textContent = activeFgLabel || '-';
+            renderBomList();
+            document.getElementById('bomPreviewPanel').classList.add('d-none');
+            document.getElementById('bomModalError').classList.add('d-none');
+            if (!modal) modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        });
+
+        // ── Eye button: preview the components of one BOM ─────────────────────
+        var loadBomPreview = function (bomId, bomCode) {
+            var panel = document.getElementById('bomPreviewPanel');
+            var rows = document.getElementById('bomPreviewRows');
+            var errorBox = document.getElementById('bomModalError');
+            var token = ++previewToken;
+
+            errorBox.classList.add('d-none');
+            panel.classList.remove('d-none');
+            document.getElementById('bomPreviewTitle').textContent = bomCode || '-';
+            rows.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">' +
+                '<span class="spinner-border spinner-border-sm me-1"></span>Loading components…</td></tr>';
+
+            fetch('?controller=warehouse&action=getBomComponents&bom_id=' + encodeURIComponent(bomId),
+                  { credentials: 'same-origin' })
+                .then(function (res) { return res.json(); })
+                .then(function (res) {
+                    if (token !== previewToken) return;   // superseded by a newer click
+                    if (!res.success) {
+                        throw new Error(res.error || 'Could not load components.');
+                    }
+                    var components = res.components || [];
+                    if (!components.length) {
+                        rows.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">' +
+                            'This BOM has no components yet.</td></tr>';
+                        return;
+                    }
+                    var html = '';
+                    components.forEach(function (c) {
+                        html += '<tr>';
+                        html += '<td><code>' + escapeHtml(c.component_code) + '</code></td>';
+                        html += '<td>' + escapeHtml(c.description) + '</td>';
+                        html += '<td><span class="badge bg-light text-dark border">' +
+                            escapeHtml(c.category) + '</span></td>';
+                        html += '<td>' + escapeHtml(c.phase_code) + '</td>';
+                        html += '<td class="text-end">' + fmtQty(c.dosage_rate) + '</td>';
+                        html += '<td class="text-end">' + fmtQty(c.wastage_allowance_pct) + '</td>';
+                        html += '<td>' + escapeHtml(c.uom) + '</td>';
+                        html += '<td class="text-end">' + fmtQty(c.soh) + '</td>';
+                        html += '</tr>';
+                    });
+                    rows.innerHTML = html;
+                })
+                .catch(function (err) {
+                    if (token !== previewToken) return;
+                    rows.innerHTML = '';
+                    errorBox.textContent = err.message || 'Could not load components.';
+                    errorBox.classList.remove('d-none');
+                });
+        };
+
+        // ── Use This BOM: pin the choice, then recalculate ────────────────────
+        var useBom = function (bomId) {
+            bomIdInput.value = String(bomId);
+            renderBomList();
+            if (modal) modal.hide();
+
+            var target = document.getElementById('mrpTargetQty');
+            var qty = target ? parseFloat(target.value) : 0;
+            if (qty > 0) {
+                // Target already entered → re-run the calculation right away so
+                // the results reflect the newly chosen formulation.
+                var calcBtn = document.querySelector('button[name="calculate"]');
+                if (calcBtn) {
+                    calcBtn.click();
+                    return;
+                }
+            }
+            // Otherwise the choice is kept for the next Calculate click.
+        };
+
+        document.getElementById('bomListRows').addEventListener('click', function (e) {
+            var previewBtn = e.target.closest ? e.target.closest('.btn-preview-bom') : null;
+            if (previewBtn) {
+                var previewId = parseInt(previewBtn.getAttribute('data-bom'), 10) || 0;
+                var previewCode = '';
+                boms.forEach(function (bom) {
+                    if (parseInt(bom.bom_id, 10) === previewId) previewCode = bom.bom_code;
+                });
+                loadBomPreview(previewId, previewCode);
+                return;
+            }
+            var useBtn = e.target.closest ? e.target.closest('.btn-use-bom') : null;
+            if (useBtn) {
+                var useId = parseInt(useBtn.getAttribute('data-bom'), 10) || 0;
+                if (useId) useBom(useId);
+            }
+        });
+    });
+})();
+
+// Clear button nested in the Target Quantity input-group: resets the whole
+// selection and any on-screen results (same target as the old Clear link).
+document.addEventListener('DOMContentLoaded', function () {
+    var clearBtn = document.getElementById('btnClearMrp');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            window.location.href = '?controller=warehouse&action=mrp';
+        });
+    }
+});
 </script>

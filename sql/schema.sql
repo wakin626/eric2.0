@@ -1,5 +1,5 @@
 -- Manufacturing Management System Database Schema
--- Generated from the live `manufacturing_mgmt` database on 2026-10-01 (MariaDB 10.4.32).
+-- Generated from the live `manufacturing_mgmt` database on 2026-10-08 (MariaDB 10.4.32).
 -- Regenerate with:
 --   mysqldump -u root --no-data --skip-add-drop-table --routines=FALSE --triggers=FALSE manufacturing_mgmt
 -- Normalized for repo use: CREATE TABLE IF NOT EXISTS, AUTO_INCREMENT counters stripped,
@@ -296,6 +296,8 @@ CREATE TABLE IF NOT EXISTS `fg_boms` (
   `batch_unit_divisor` decimal(15,4) NOT NULL DEFAULT 1000.0000,
   `is_legacy_formula` tinyint(1) NOT NULL DEFAULT 0,
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `bom_type` varchar(50) DEFAULT 'Alternative',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `fg_item_id` (`fg_item_id`),
@@ -504,6 +506,7 @@ CREATE TABLE IF NOT EXISTS `mrp_runs` (
   `user_id` int(11) NOT NULL,
   `date_created` datetime DEFAULT current_timestamp(),
   `fg_item_id` int(11) DEFAULT NULL,
+  `bom_id` int(11) DEFAULT NULL,
   `fg_code` varchar(50) DEFAULT NULL,
   `target_qty` decimal(15,4) DEFAULT NULL,
   `mrp_ref` varchar(30) DEFAULT NULL,
@@ -511,6 +514,7 @@ CREATE TABLE IF NOT EXISTS `mrp_runs` (
   KEY `po_id` (`po_id`),
   KEY `customer_id` (`customer_id`),
   KEY `user_id` (`user_id`),
+  KEY `bom_id` (`bom_id`),
   CONSTRAINT `mrp_runs_ibfk_1` FOREIGN KEY (`po_id`) REFERENCES `purchase_orders` (`po_id`),
   CONSTRAINT `mrp_runs_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
   CONSTRAINT `mrp_runs_ibfk_3` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
@@ -817,13 +821,15 @@ CREATE TABLE IF NOT EXISTS `receiving_items` (
   `dr_invoice_no` varchar(100) DEFAULT NULL,
   `supplier_order_id` int(11) DEFAULT NULL,
   `received_date` date NOT NULL,
+  `received_by` int(11) DEFAULT NULL,
   `remarks` text DEFAULT NULL,
   `qc_status` enum('PENDING_QC','PASSED','REJECTED','CANCELLED') NOT NULL DEFAULT 'PENDING_QC',
   `inspected_by` int(11) DEFAULT NULL,
   `inspected_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  KEY `idx_supplier_order_id` (`supplier_order_id`)
+  KEY `idx_supplier_order_id` (`supplier_order_id`),
+  KEY `idx_receiving_items_received_by` (`received_by`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -882,6 +888,7 @@ CREATE TABLE IF NOT EXISTS `supplier_orders` (
   `status` varchar(50) DEFAULT 'pending',
   `received_qty` decimal(15,4) DEFAULT 0.0000,
   `received_date` date DEFAULT NULL,
+  `received_by` int(11) DEFAULT NULL,
   `remarks` text DEFAULT NULL,
   `po_ref` varchar(50) DEFAULT NULL,
   `created_by` int(11) NOT NULL,
@@ -895,8 +902,10 @@ CREATE TABLE IF NOT EXISTS `supplier_orders` (
   KEY `item_id` (`item_id`),
   KEY `created_by` (`created_by`),
   KEY `idx_supplier_orders_mrp_run` (`mrp_run_id`),
+  KEY `received_by` (`received_by`),
   CONSTRAINT `supplier_orders_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`),
-  CONSTRAINT `supplier_orders_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`)
+  CONSTRAINT `supplier_orders_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `supplier_orders_ibfk_3` FOREIGN KEY (`received_by`) REFERENCES `users` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -970,4 +979,4 @@ CREATE TABLE IF NOT EXISTS `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-01  9:43:03
+-- Dump completed on 2026-10-08 13:11:26

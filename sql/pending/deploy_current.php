@@ -41,6 +41,16 @@ function indexExists(PDO $pdo, string $table, string $index): bool
     return (bool) $stmt->fetchColumn();
 }
 
+function fkExists(PDO $pdo, string $table, string $constraint): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
+         WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?'
+    );
+    $stmt->execute([$table, $constraint]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function addColumn(PDO $pdo, string $table, string $column, string $definition, ?string $after = null): void
 {
     if (columnExists($pdo, $table, $column)) {
@@ -586,6 +596,93 @@ $record9 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (
     ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP');
 $record9->execute(['supplier-orders-uom-v1']);
 
-// ─── End Phase 9 ──────────────────────────────────────────────────────
+// Phase 10: Receiving PO received_by (account that transacted the receipt)
+
+echo "\n--- Phase 10: Receiving PO received_by ---\n";
+
+addColumn($pdo, 'supplier_orders', 'received_by', 'INT NULL', 'received_date');
+if (!indexExists($pdo, 'supplier_orders', 'received_by')) {
+    $pdo->exec('ALTER TABLE supplier_orders ADD KEY received_by (received_by)');
+    echo "Added index: supplier_orders.received_by\n";
+}
+if (!fkExists($pdo, 'supplier_orders', 'supplier_orders_ibfk_3')) {
+    $pdo->exec('ALTER TABLE supplier_orders ADD CONSTRAINT supplier_orders_ibfk_3
+        FOREIGN KEY (received_by) REFERENCES users (user_id)');
+    echo "Added FK: supplier_orders.received_by -> users.user_id\n";
+}
+addColumn($pdo, 'receiving_items', 'received_by', 'INT NULL', 'received_date');
+if (!indexExists($pdo, 'receiving_items', 'idx_receiving_items_received_by')) {
+    $pdo->exec('ALTER TABLE receiving_items ADD KEY idx_receiving_items_received_by (received_by)');
+    echo "Added index: receiving_items.received_by\n";
+}
+
+$record10 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (?)
+    ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP');
+$record10->execute(['supplier-orders-received-by-v1']);
+
+// ─── End Phase 10 ─────────────────────────────────────────────────────────────
+
+// ─── Phase 11: Multi-BOM (default flag on fg_boms, bom_id on mrp_runs) ───────
+
+echo "\n--- Phase 11: Multi-BOM default flag + mrp_runs.bom_id ---\n";
+
+addColumn($pdo, 'fg_boms', 'is_default', 'TINYINT(1) NOT NULL DEFAULT 0', 'status');
+$pdo->exec(
+    "UPDATE fg_boms b
+     JOIN (SELECT MIN(id) AS min_id FROM fg_boms WHERE status = 'active' GROUP BY fg_item_id) pick
+       ON pick.min_id = b.id
+     SET b.is_default = 1
+     WHERE b.is_default = 0"
+);
+echo "Backfilled default BOM flags (oldest active BOM per FG/SFG)\n";
+
+addColumn($pdo, 'mrp_runs', 'bom_id', 'INT NULL', 'fg_item_id');
+if (!indexExists($pdo, 'mrp_runs', 'bom_id')) {
+    $pdo->exec('ALTER TABLE mrp_runs ADD KEY bom_id (bom_id)');
+    echo "Added index: mrp_runs.bom_id\n";
+}
+
+$record11 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (?)
+    ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP');
+$record11->execute(['fg-boms-is-default-v1']);
+
+// ─── End Phase 11 ─────────────────────────────────────────────────────────────
+
+// ─── Phase 12: R&D multi-BOM creation (bom_type + variant_name) ──────────────
+
+echo "\n--- Phase 12: fg_boms.bom_type + variant_name ---\n";
+
+addColumn($pdo, 'fg_boms', 'bom_type', "VARCHAR(50) DEFAULT 'Alternative'", 'is_default');
+addColumn($pdo, 'fg_boms', 'variant_name', 'VARCHAR(100) NULL', 'bom_type');
+$pdo->exec("UPDATE fg_boms SET bom_type = 'Primary'
+            WHERE is_default = 1 AND (bom_type IS NULL OR bom_type <> 'Primary')");
+$pdo->exec("UPDATE fg_boms SET bom_type = 'Alternative'
+            WHERE is_default = 0 AND (bom_type IS NULL OR bom_type <> 'Alternative')");
+echo "Synced bom_type with is_default\n";
+
+$record12 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (?)
+    ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP');
+$record12->execute(['fg-boms-bom-type-variant-v1']);
+
+// ─── End Phase 12 ─────────────────────────────────────────────────────────────
+
+// ─── Phase 13: Drop fg_boms.variant_name (removed Create BOM input) ──────────
+// The VARIANT / FORMULATION NAME field is gone; formulations are told apart by
+// bom_code. Phase 12 added the column, this phase retires it everywhere.
+
+echo "\n--- Phase 13: drop fg_boms.variant_name ---\n";
+
+if (columnExists($pdo, 'fg_boms', 'variant_name')) {
+    $pdo->exec('ALTER TABLE fg_boms DROP COLUMN variant_name');
+    echo "Dropped: fg_boms.variant_name\n";
+} else {
+    echo "Already absent: fg_boms.variant_name\n";
+}
+
+$record13 = $pdo->prepare('INSERT INTO schema_migrations (migration_key) VALUES (?)
+    ON DUPLICATE KEY UPDATE applied_at = CURRENT_TIMESTAMP');
+$record13->execute(['fg-boms-drop-variant-name-v1']);
+
+// ─── End Phase 13 ─────────────────────────────────────────────────────────────
 
 echo "\nSchema deployment complete.\n";

@@ -951,3 +951,42 @@ li.has-excess:hover {
   max-height: 220px;
   overflow-y: auto !important;
 }
+
+/* ── MRP sheet: Switch BOM button inside a Bootstrap input-group ─────────────
+   app.js replaces select.filter-select with a .searchable-dropdown wrapper,
+   so Bootstrap's own input-group rules (.input-group > .form-select) never
+   reach it. Mirror that sizing here: the wrapper flexes with the group, the
+   inner toggle matches the group height, and the Switch BOM button takes the
+   right end — toggling d-none shrinks/expands the select only, never the grid. */
+.input-group > .searchable-dropdown {
+  flex: 1 1 auto;
+  width: 1% !important; /* beats the wrapper's inline width:100% */
+  min-width: 0;
+}
+.input-group > .searchable-dropdown > .searchable-dropdown-toggle {
+  height: 100%;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.input-group > #btnSelectBomModal {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+/* Button hidden (.bom-switch-hidden): the select is the group's right end again. */
+.input-group.bom-switch-hidden > .searchable-dropdown > .searchable-dropdown-toggle {
+  border-top-right-radius: 0.375rem;
+  border-bottom-right-radius: 0.375rem;
+}
+
+/* ── MRP sheet header row: labels and controls on one baseline ───────────────
+   Scoped to the selection form so the rest of the app keeps Bootstrap's
+   default .form-label spacing (0.5rem). */
+#mrpSelectionForm .form-label {
+  margin-bottom: 0.35rem;
+}
+/* Icon + label pairs inside input-group buttons (Switch BOM, Clear) stay
+   vertically centered on the same line as the field they sit next to. */
+.input-group .btn {
+  display: flex;
+  align-items: center;
+}

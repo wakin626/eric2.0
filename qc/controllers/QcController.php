@@ -9,7 +9,7 @@ class QcController {
 
     public function __construct() {
         $action = $_GET['action'] ?? '';
-        $isApiAction = in_array($action, ['apiGetPending', 'apiInspect'], true);
+        $isApiAction = in_array($action, ['apiGetPending', 'apiInspect', 'getInspectionDetails'], true);
 
         if (!isset($_SESSION['user_id'])) {
             if ($isApiAction) {
@@ -101,6 +101,24 @@ class QcController {
         header('Content-Type: application/json');
         try {
             echo json_encode(['success' => true, 'items' => $this->qcModel->getPendingQcItems()]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // Read-only JSON payload for the "View Details" modal (QC Inspection Record).
+    public function getInspectionDetails() {
+        header('Content-Type: application/json');
+        $id = intval($_GET['id'] ?? 0);
+        try {
+            $data = $id > 0 ? $this->qcModel->getInspectionDetail($id) : false;
+            if (!$data) {
+                echo json_encode(['success' => false, 'error' => 'Inspection record not found.']);
+            } else {
+                echo json_encode(['success' => true, 'data' => $data]);
+            }
         } catch (\Exception $e) {
             http_response_code(500);
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);

@@ -26,7 +26,15 @@
 
     function snapshotOptions(sel) {
         return Array.prototype.slice.call(sel.options).map(function (o) {
-            return { value: o.value, text: o.textContent, disabled: !!o.disabled };
+            return {
+                value: o.value,
+                text: o.textContent,
+                disabled: !!o.disabled,
+                // Multi-BOM badge: only options that opt in via data-has-bom="1"
+                // (the R&D / Admin "Create New BOM" FG dropdown) get the
+                // highlighted treatment — every other select is unaffected.
+                hasBom: o.getAttribute('data-has-bom') === '1'
+            };
         });
     }
 
@@ -172,10 +180,24 @@
             return placeholder;
         }
 
+        /**
+         * Trigger label (templateSelection-style): mirrors the native selected
+         * option and, when that option is an existing-BOM item, tints the
+         * button and appends the same "Existing BOM" badge shown in the list.
+         */
         function updateButtonLabel() {
-            btn.textContent = sel.selectedIndex >= 0 && sel.options[sel.selectedIndex]
-                ? sel.options[sel.selectedIndex].textContent
-                : placeholder;
+            var opt = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+            var hasBom = !!opt && opt.getAttribute('data-has-bom') === '1';
+            btn.textContent = opt ? opt.textContent : placeholder;
+            btn.style.color = hasBom ? '#92400e' : '';
+            btn.style.fontWeight = hasBom ? '500' : '';
+            if (hasBom) {
+                var badge = document.createElement('span');
+                badge.textContent = 'Existing BOM';
+                badge.style.cssText = 'background:#f59e0b;color:#fff;font-size:11px;font-weight:600;' +
+                    'padding:1px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-left:8px;';
+                btn.appendChild(badge);
+            }
         }
 
         function resnapshot() {
@@ -193,25 +215,53 @@
                 if (q && opt.text.toLowerCase().indexOf(q) === -1) return;
                 var item = document.createElement('div');
                 item.className = 'dropdown-item-custom';
-                item.textContent = opt.text;
+
+                // Existing-BOM options render as a highlighted row with a badge
+                // (templateResult-style), instead of plain text.
+                var hasBom = !!opt.hasBom;
+                if (hasBom) {
+                    var label = document.createElement('span');
+                    label.textContent = opt.text;
+                    label.style.cssText = 'color:#92400e;';
+                    var badge = document.createElement('span');
+                    badge.textContent = 'Existing BOM';
+                    badge.style.cssText = 'background:#f59e0b;color:#fff;font-size:11px;font-weight:600;' +
+                        'padding:1px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0;';
+                    item.appendChild(label);
+                    item.appendChild(badge);
+                } else {
+                    item.textContent = opt.text;
+                }
+
                 if (opt.disabled) {
                     item.style.cssText = 'padding:6px 10px;cursor:not-allowed;font-size:13px;color:#adb5bd;';
                     listWrap.appendChild(item);
                     return;
                 }
-                item.style.cssText = 'padding:6px 10px;cursor:pointer;font-size:13px;';
+
+                // Amber highlight for existing-BOM rows; plain rows keep the
+                // original look exactly as before.
+                var baseBg = hasBom ? '#fff7ed' : '';
+                var hoverBg = hasBom ? '#ffedd5' : '#f0f0f0';
+                var selectedBg = hasBom ? '#fed7aa' : '#e9ecef';
+                item.style.cssText = 'padding:6px 10px;cursor:pointer;font-size:13px;' +
+                    (hasBom
+                        ? 'display:flex;align-items:center;justify-content:space-between;gap:8px;' +
+                          'font-weight:500;background:' + baseBg + ';border-left:4px solid #f59e0b;' +
+                          'border-radius:4px;box-sizing:border-box;'
+                        : '');
                 if (opt.value === sel.value) {
-                    item.style.background = '#e9ecef';
+                    item.style.background = selectedBg;
                     item.style.fontWeight = '600';
                 }
-                item.addEventListener('mouseenter', function () { item.style.background = '#f0f0f0'; });
+                item.addEventListener('mouseenter', function () { item.style.background = hoverBg; });
                 item.addEventListener('mouseleave', function () {
-                    item.style.background = opt.value === sel.value ? '#e9ecef' : '';
+                    item.style.background = opt.value === sel.value ? selectedBg : baseBg;
                 });
                 item.addEventListener('click', function (e) {
                     e.stopPropagation();
                     sel.value = opt.value;
-                    btn.textContent = opt.text;
+                    updateButtonLabel();
                     btn.classList.remove('is-invalid');
                     closePanel();
                     sel.dispatchEvent(new Event('change'));

@@ -46,7 +46,7 @@ class MoController {
             'page_title' => 'Create MO',
             'customers' => $this->catalogModel->getCustomers(),
             'items' => [],
-            'allItems' => $this->catalogModel->getItems(),
+            'allItems' => $this->catalogModel->getMoProductItems(),
         ];
 
         $this->render('mo_entry', $data);
@@ -288,7 +288,7 @@ class MoController {
             'mo' => $order,
             'items' => $this->moModel->getItemsByMoId($id),
             'customers' => $this->catalogModel->getCustomers(),
-            'allItems' => $this->catalogModel->getItems(),
+            'allItems' => $this->catalogModel->getMoProductItems(),
         ];
 
         $this->render('mo_entry', $data);

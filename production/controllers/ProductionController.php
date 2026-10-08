@@ -278,7 +278,7 @@ class ProductionController {
     public function moEntry() {
         $data['page_title'] = 'MO Entry';
         $data['customers'] = $this->catalogModel->getCustomers();
-        $data['items'] = $this->catalogModel->getItems();
+        $data['items'] = $this->catalogModel->getMoProductItems();
         $this->render('production/mo_entry', $data);
     }
 

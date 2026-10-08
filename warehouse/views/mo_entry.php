@@ -607,6 +607,23 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        var hasShortage = false;
+        var shortItems = [];
+        Array.from(bomComponentBody.querySelectorAll('tr')).forEach(function (tr) {
+            var badge = tr.querySelector('.badge');
+            if (badge && (badge.classList.contains('bg-danger') || badge.textContent.indexOf('Shortage') !== -1)) {
+                hasShortage = true;
+                var cell = tr.querySelector('td');
+                shortItems.push(cell ? cell.textContent.trim() : '');
+            }
+        });
+        if (hasShortage) {
+            alert('Cannot proceed with saving this production line because stock shortages exist for:\n'
+                + shortItems.join(', ')
+                + '.\n\nAll component items must be In Stock before adding to the MO.');
+            return;
+        }
+
         var existingEmptyRow = linesTable.querySelector('.empty-state-row');
         if (existingEmptyRow) {
             existingEmptyRow.remove();

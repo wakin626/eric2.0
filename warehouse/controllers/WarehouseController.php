@@ -24,11 +24,12 @@ class WarehouseController {
         }
         $action = $_GET['action'] ?? '';
         $dept = $_SESSION['department'] ?? '';
-        $mrpAllowed = in_array($action, ['mrp', 'mrpPDF', 'saveMrpCalculation']) && in_array($dept, ['warehouse', 'rnd', 'admin']);
+        $mrpAllowed = in_array($action, ['mrp', 'mrpPDF', 'saveMrpCalculation', 'getNextMrpRef']) && in_array($dept, ['warehouse', 'rnd', 'admin']);
         $apiActions = ['getPODetails', 'getItemsByCustomer', 'backloadDelivery', 'getDeliveryLotsForBackload',
             'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
             'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery', 'searchItems',
-            'mrpRunDetail', 'purchasingPo', 'receivingPo', 'moEntry', 'getCustomerPOs', 'getItemBomInfo', 'getItemBalances'];
+            'mrpRunDetail', 'purchasingPo', 'receivingPo', 'moEntry', 'getCustomerPOs', 'getItemBomInfo', 'getItemBalances',
+            'getPoFullDetails', 'getSuppliers', 'getItemBoms', 'getBomComponents'];
         // Item Master List is viewable read-only by rnd/admin; only warehouse can create/import items
         $itemListReadOnly = $action === 'items' && in_array($dept, ['warehouse', 'rnd', 'admin']);
         if (!$itemListReadOnly && !$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
@@ -78,7 +79,7 @@ class WarehouseController {
         $data['page_title'] = 'MO Entry';
         $data['customers'] = $this->catalogModel->getCustomers();
         $data['items'] = [];
-        $data['allItems'] = $this->catalogModel->getItems();
+        $data['allItems'] = $this->catalogModel->getMoProductItems();
         $this->render('mo_entry', $data);
     }
 
@@ -1881,6 +1882,8 @@ class WarehouseController {
         $customerId = isset($_GET['customer_id']) && $_GET['customer_id'] !== '' ? intval($_GET['customer_id']) : null;
         $fgItemId = isset($_GET['fg_item_id']) && $_GET['fg_item_id'] !== '' ? intval($_GET['fg_item_id']) : null;
         $targetQty = isset($_GET['target_qty']) && $_GET['target_qty'] !== '' ? floatval($_GET['target_qty']) : null;
+        // Switch BOM: 0/absent = default formulation for this FG/customer.
+        $selectedBomId = isset($_GET['bom_id']) && $_GET['bom_id'] !== '' ? intval($_GET['bom_id']) : 0;
         $calculate = !empty($_GET['calculate']);
         $noFgsForCustomer = false;
 
@@ -1891,8 +1894,11 @@ class WarehouseController {
         }
 
         if ($calculate && $fgItemId && $targetQty !== null && $targetQty > 0) {
-            $bom = $this->warehouseModel->getBomForFg($fgItemId);
+            $bom = $this->warehouseModel->getBomForFg($fgItemId, $selectedBomId ?: null, $customerId);
             if ($bom) {
+                // Keep the resolved formulation in the URL so Calculate / Save /
+                // Clear round-trip the same BOM (falls back to the default).
+                $selectedBomId = (int) $bom['bom_id'];
                 $components = $this->warehouseModel->getBOMComponentsWithStock([$bom['bom_id']]);
                 $componentIds = array_map(function ($c) {
                     return $c['component_item_id'];
@@ -1942,6 +1948,7 @@ class WarehouseController {
                     'fg_name' => $bom['fg_name'],
                     'item_uom' => $bom['item_uom'],
                     'bom_code' => $bom['bom_code'],
+                    'is_default' => !empty($bom['is_default']),
                     'fill_volume' => $meta['fill_volume'],
                     'uom' => $meta['uom'],
                     'batch_unit_divisor' => $meta['batch_unit_divisor'],
@@ -1970,6 +1977,7 @@ class WarehouseController {
             'mrpSection' => $mrpSection,
             'selectedCustomer' => $customerId,
             'selectedFg' => $fgItemId,
+            'selectedBomId' => $selectedBomId ?: null,
             'targetQty' => $targetQty,
             'didCalculate' => $calculate,
             'noFgsForCustomer' => $noFgsForCustomer,
@@ -1987,6 +1995,77 @@ class WarehouseController {
      * (supplier_orders.status = 'requested') so Procurement can process them
      * directly from the Purchasing PO screen.
      */
+    // JSON: every active BOM formulation for one FG/SFG. Powers the MRP Sheet
+    // "Switch BOM" modal; the default formulation always comes back first.
+    public function getItemBoms() {
+        header('Content-Type: application/json');
+        try {
+            $fgItemId = intval($_GET['fg_item_id'] ?? 0);
+            if ($fgItemId <= 0) {
+                throw new \RuntimeException('Finished good is required.');
+            }
+            $customerId = intval($_GET['customer_id'] ?? 0);
+            $boms = $this->warehouseModel->getItemBoms($fgItemId, $customerId ?: null);
+            echo json_encode([
+                'success' => true,
+                'count' => count($boms),
+                'boms' => $boms,
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // JSON: component rows of one BOM — the eye-button preview so users can
+    // compare raw materials before switching formulations.
+    public function getBomComponents() {
+        header('Content-Type: application/json');
+        try {
+            $bomId = intval($_GET['bom_id'] ?? 0);
+            if ($bomId <= 0) {
+                throw new \RuntimeException('BOM is required.');
+            }
+            $components = $this->warehouseModel->getBOMComponentsWithStock([$bomId]);
+            $out = [];
+            foreach ($components as $c) {
+                $out[] = [
+                    'component_code' => $c['item_code'],
+                    'description' => $c['item_description'],
+                    'category' => $c['item_type'] ?? '-',
+                    'phase_code' => $c['phase_code'] ?? '101',
+                    'dosage_rate' => floatval($c['dosage_rate'] ?? 0),
+                    'wastage_allowance_pct' => floatval($c['wastage_allowance_pct'] ?? 0),
+                    'uom' => $c['display_uom'] ?? ($c['item_uom'] ?? ''),
+                    'soh' => floatval($c['soh'] ?? 0),
+                    'available' => floatval($c['available_stock'] ?? 0),
+                ];
+            }
+            echo json_encode(['success' => true, 'components' => $out]);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // JSON: next auto-generated MRP reference (MRP#YYYY-XXXX) for the prompt
+    // modal. Preview only — saveMrpCalculationRun assigns the final unique ref.
+    public function getNextMrpRef() {
+        header('Content-Type: application/json');
+        try {
+            echo json_encode([
+                'success' => true,
+                'next_mrp_number' => $this->warehouseModel->generateNextMrpRef(),
+            ]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
     public function saveMrpCalculation() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ?controller=warehouse&action=mrp');
@@ -1996,8 +2075,8 @@ class WarehouseController {
         $customerId = intval($_POST['customer_id'] ?? 0);
         $fgItemId = intval($_POST['fg_item_id'] ?? 0);
         $targetQty = floatval($_POST['target_qty'] ?? 0);
+        $bomId = intval($_POST['bom_id'] ?? 0);
         $postedLacking = json_decode($_POST['lacking_json'] ?? '[]', true);
-        $customRef = trim($_POST['custom_mrp_ref'] ?? '');
 
         try {
             if ($fgItemId <= 0 || $targetQty <= 0) {
@@ -2006,15 +2085,10 @@ class WarehouseController {
             if (!is_array($postedLacking) || empty($postedLacking)) {
                 throw new \RuntimeException('No lacking items to transfer.');
             }
-            // Mirrors the prompt modal: a run is only saved with a reference.
-            if ($customRef === '') {
-                throw new \RuntimeException('A custom MRP reference number is required to save this run.');
-            }
-            if (mb_strlen($customRef) > 30) {
-                throw new \RuntimeException('The MRP reference may be at most 30 characters.');
-            }
+            // The MRP reference is generated server-side (MRP#YYYY-XXXX) inside
+            // the save transaction — no user input to validate here.
 
-            $bom = $this->warehouseModel->getBomForFg($fgItemId);
+            $bom = $this->warehouseModel->getBomForFg($fgItemId, $bomId ?: null, $customerId ?: null);
             if (!$bom) {
                 throw new \RuntimeException('No active BOM found for this finished good.');
             }
@@ -2085,10 +2159,11 @@ class WarehouseController {
                 $_SESSION['user_id'],
                 $rows,
                 $targets,
-                $customRef
+                null,
+                $bom['bom_id']
             );
 
-            $_SESSION['success'] = "MRP Run #{$result['run_id']} saved — stock committed for {$result['committed']} component(s); "
+            $_SESSION['success'] = "MRP Run {$result['mrp_ref']} (#{$result['run_id']}) saved — stock committed for {$result['committed']} component(s); "
                 . "{$result['queued']} purchase request(s) queued for Procurement.";
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
@@ -2098,6 +2173,10 @@ class WarehouseController {
         if ($customerId > 0) $params[] = 'customer_id=' . $customerId;
         if ($fgItemId > 0) $params[] = 'fg_item_id=' . $fgItemId;
         if ($targetQty > 0) $params[] = 'target_qty=' . rawurlencode($targetQty);
+        // Carry the formulation used (resolved BOM, else the posted choice) so
+        // the redirect keeps showing the same results after a save or failure.
+        $redirectBomId = (!empty($bom) && !empty($bom['bom_id'])) ? (int) $bom['bom_id'] : $bomId;
+        if ($redirectBomId > 0) $params[] = 'bom_id=' . $redirectBomId;
         $params[] = 'calculate=1';
         header('Location: ?' . implode('&', $params));
         exit;
@@ -2244,8 +2323,22 @@ class WarehouseController {
         $data['orders'] = $orders;
         $data['filters'] = $filters;
         $data['tabCounts'] = $this->warehouseModel->getPurchasingTabCounts();
+        $data['suppliers'] = $this->warehouseModel->getSuppliers();
         $data['readOnly'] = (($_SESSION['department'] ?? '') !== 'warehouse');
         $this->render('purchasingPo/index', $data);
+    }
+
+    // JSON hook for the supplier dropdown — reads WarehouseModel::getSuppliers(),
+    // so switching to the suppliers table later means editing only that method.
+    public function getSuppliers() {
+        header('Content-Type: application/json');
+        try {
+            echo json_encode(['success' => true, 'suppliers' => $this->warehouseModel->getSuppliers()]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
     }
 
     public function createPurchasingPo() {
@@ -2382,6 +2475,19 @@ class WarehouseController {
             $_SESSION['error'] = 'Failed to delete purchasing PO.';
         }
         header('Location: ?controller=warehouse&action=purchasingPo');
+        exit;
+    }
+
+    // Read-only JSON payload for the "View Details" modal (Purchasing / Receiving).
+    public function getPoFullDetails() {
+        header('Content-Type: application/json');
+        $id = intval($_GET['id'] ?? 0);
+        $data = $id > 0 ? $this->warehouseModel->getPoFullDetails($id) : false;
+        if (!$data) {
+            echo json_encode(['success' => false, 'error' => 'Purchasing PO not found.']);
+            exit;
+        }
+        echo json_encode(['success' => true, 'data' => $data]);
         exit;
     }
 

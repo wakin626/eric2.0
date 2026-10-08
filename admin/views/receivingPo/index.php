@@ -72,6 +72,7 @@
                     <th class="text-end">Qty Ordered</th>
                     <th class="text-end">Received Qty</th>
                     <th>Received Date</th>
+                    <th>Received By</th>
                     <th>Status</th>
                     <th>Access</th>
                 </tr>
@@ -79,7 +80,7 @@
             <tbody>
                 <?php if (empty($orders)): ?>
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-4">No purchasing POs ready for receiving.</td>
+                    <td colspan="11" class="text-center text-muted py-4">No purchasing POs ready for receiving.</td>
                 </tr>
                 <?php else: ?>
                 <?php foreach ($orders as $index => $o): ?>
@@ -113,6 +114,7 @@
                         $hasDate = !empty($o['received_date']) && $o['received_date'] !== '0000-00-00' && $o['received_date'] !== '0000-00-00 00:00:00';
                         echo $hasDate ? date('m/d/Y', strtotime($o['received_date'])) : '-';
                     ?></td>
+                    <td><?= !empty($o['received_by_name']) ? htmlspecialchars($o['received_by_name']) : '<span class="text-muted">-</span>' ?></td>
                     <td>
                         <?php if ($o['status'] === 'requested'): ?>
                             <span class="badge bg-info">Requested</span>

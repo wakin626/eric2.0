@@ -1347,11 +1347,37 @@ public function deleteProductionHistory() {
         }
         $data['search'] = $search;
         $data['allItems'] = $this->itemModel->getAll(false);
+        // Active BOM count per FG/SFG — drives the "Existing BOM" badge in the
+        // Create New BOM dropdown (complete, unlike a page slice of $boms).
+        $data['itemBomCounts'] = $this->bomModel->getItemBomCounts();
         $data['deliveryReportsCount'] = $this->warehouseModel->getDeliveryReportsCount();
         $data['reportsCount'] = $this->warehouseModel->getProductionReportsCount();
         $data['customers'] = $this->customerModel->getAll();
         $data['page_title'] = 'BOM Components';
         $this->render('boms/index', $data);
+    }
+
+    // JSON: primary (default) active BOM of an FG/SFG + its components, used by
+    // the Create New BOM modal to pre-fill header fields and ingredient rows
+    // when the selected item already has a formulation.
+    public function getPrimaryBomDetails() {
+        header('Content-Type: application/json');
+        try {
+            $fgItemId = intval($_GET['fg_item_id'] ?? 0);
+            if ($fgItemId <= 0) {
+                throw new \Exception('Finished good is required.');
+            }
+            $details = $this->bomModel->getPrimaryBomDetails($fgItemId);
+            if (!$details) {
+                echo json_encode(['success' => false, 'error' => 'No active BOM found for this item.']);
+                exit;
+            }
+            echo json_encode(['success' => true] + $details);
+        } catch (\Exception $e) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
     }
 
     public function bomCreate() {
@@ -1383,9 +1409,10 @@ public function deleteProductionHistory() {
                 if ($batchUnitDivisor <= 0) {
                     $batchUnitDivisor = 1000;
                 }
-                $existing = $this->bomModel->getBomForItem($fgItemId);
-                if ($existing) {
-                    throw new \Exception("A BOM already exists for this finished good. Edit the existing one.");
+                // Multi-BOM: several formulations per FG are allowed; only the
+                // BOM code itself must stay unique for that finished good.
+                if ($this->bomModel->bomCodeExistsForItem($fgItemId, $bomCode)) {
+                    throw new \Exception("BOM code \"{$bomCode}\" already exists for this finished good. Use a different BOM code.");
                 }
                 $result = $this->bomModel->create($fgItemId, $bomCode, $fillVolume, $uom ?: 'PCS', $batchUnitDivisor, false, $customerId, 'active');
                 if ($result) {

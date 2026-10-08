@@ -149,8 +149,18 @@
                     <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
                     <td><?= htmlspecialchars($o['created_by_name'] ?? '') ?></td>
                     <td>
+                        <?php
+                        // Completed / terminal rows get a read-only View Details modal.
+                        $isCompletedPo = in_array($o['status'], ['received', 'cancelled', 'rejected', 'completed', 'PO_Created']);
+                        ?>
                         <?php if ($isReadOnly): ?>
-                            <span class="text-muted">-</span>
+                            <?php if ($isCompletedPo): ?>
+                                <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                            <?php else: ?>
+                                <span class="text-muted">-</span>
+                            <?php endif; ?>
                         <?php elseif ($o['status'] === 'requested'): ?>
                             <button class="btn btn-outline-primary btn-sm process-order-btn"
                                     data-id="<?= $o['supplier_order_id'] ?>"
@@ -176,7 +186,13 @@
                                 <i class="bi bi-x-circle"></i> Cancel
                             </a>
                         <?php else: ?>
-                            <span class="text-muted">-</span>
+                            <?php if ($isCompletedPo): ?>
+                                <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                            <?php else: ?>
+                                <span class="text-muted">-</span>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -199,8 +215,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Supplier Name <span class="text-danger">*</span></label>
-                        <input type="text" name="supplier_name" class="form-control" required placeholder="e.g. ABC Chemical Corp.">
+                        <label for="supplierSelect" class="form-label fw-bold">Supplier Name <span class="text-danger">*</span></label>
+                        <select class="form-select supplier-select" id="supplierSelect" name="supplier_name" required>
+                            <option value="" selected disabled>-- Select Supplier --</option>
+                            <?php foreach (($suppliers ?? []) as $s): ?>
+                            <option value="<?= htmlspecialchars($s['name']) ?>"><?= htmlspecialchars($s['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="text-danger small mt-1 d-none supplier-error">Please select a supplier from the list before generating the Purchase Order.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Item <span class="text-danger">*</span></label>
@@ -269,8 +291,14 @@
                         <i class="bi bi-info-circle me-1"></i>Convert this requested item into a processed procurement PO by selecting a supplier and confirming quantities.
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Supplier Name <span class="text-danger">*</span></label>
-                        <input type="text" name="supplier_name" id="procSupplierName" class="form-control" required placeholder="e.g. ABC Chemical Corp.">
+                        <label for="procSupplierSelect" class="form-label fw-bold">Supplier Name <span class="text-danger">*</span></label>
+                        <select class="form-select supplier-select" id="procSupplierSelect" name="supplier_name" required>
+                            <option value="" selected disabled>-- Select Supplier --</option>
+                            <?php foreach (($suppliers ?? []) as $s): ?>
+                            <option value="<?= htmlspecialchars($s['name']) ?>"><?= htmlspecialchars($s['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="text-danger small mt-1 d-none supplier-error">Please select a supplier from the list before generating the Purchase Order.</div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-6">
@@ -353,8 +381,14 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Supplier Name <span class="text-danger">*</span></label>
-                        <input type="text" name="supplier_name" class="form-control" required placeholder="e.g. ABC Chemical Corp.">
+                        <label for="batchSupplierSelect" class="form-label fw-bold">Supplier Name <span class="text-danger">*</span></label>
+                        <select class="form-select supplier-select" id="batchSupplierSelect" name="supplier_name" required>
+                            <option value="" selected disabled>-- Select Supplier --</option>
+                            <?php foreach (($suppliers ?? []) as $s): ?>
+                            <option value="<?= htmlspecialchars($s['name']) ?>"><?= htmlspecialchars($s['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="text-danger small mt-1 d-none supplier-error">Please select a supplier from the list before generating the Purchase Order.</div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-6">
@@ -404,6 +438,48 @@ document.addEventListener('DOMContentLoaded', function() {
     var selectedName = document.getElementById('soSelectedItem');
     var timeout = null;
 
+    // ─── Supplier dropdown (create / process / batch forms) ─────────────
+    // The supplier field is a select of fixed options; guard submission so an
+    // unselected dropdown can never generate a Purchase Order (native
+    // `required` blocks it too — these listeners also surface our own message).
+    function supplierErrorFor(sel) {
+        var form = sel.closest('form');
+        return form ? form.querySelector('.supplier-error') : null;
+    }
+    function hideSupplierError(sel) {
+        var err = supplierErrorFor(sel);
+        if (err) err.classList.add('d-none');
+    }
+    // `invalid` does not bubble — capture it to show the inline message.
+    document.addEventListener('invalid', function(e) {
+        if (e.target.classList && e.target.classList.contains('supplier-select')) {
+            var err = supplierErrorFor(e.target);
+            if (err) err.classList.remove('d-none');
+        }
+    }, true);
+    document.addEventListener('submit', function(e) {
+        var sel = e.target.querySelector ? e.target.querySelector('select.supplier-select') : null;
+        if (!sel) return;
+        if (!sel.value) {
+            e.preventDefault();
+            e.stopPropagation();
+            var err = supplierErrorFor(sel);
+            if (err) err.classList.remove('d-none');
+            sel.focus();
+            return;
+        }
+        hideSupplierError(sel);
+    });
+    document.addEventListener('change', function(e) {
+        if (e.target.classList && e.target.classList.contains('supplier-select') && e.target.value) {
+            hideSupplierError(e.target);
+        }
+    });
+    document.addEventListener('reset', function(e) {
+        var sel = e.target.querySelector ? e.target.querySelector('select.supplier-select') : null;
+        if (sel) hideSupplierError(sel);
+    });
+
     searchInput.addEventListener('input', function() {
         var q = this.value.trim();
         clearTimeout(timeout);
@@ -451,7 +527,13 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             document.getElementById('procOrderId').value = this.dataset.id;
             document.getElementById('procPoId').value = this.dataset.poId || '';
-            document.getElementById('procSupplierName').value = this.dataset.supplier === 'Pending Selection' ? '' : this.dataset.supplier;
+            // Supplier is a dropdown now: prefill only when the row's supplier
+            // matches one of the listed options, otherwise reset to the placeholder.
+            var procSupplier = document.getElementById('procSupplierSelect');
+            var supplier = this.dataset.supplier === 'Pending Selection' ? '' : (this.dataset.supplier || '');
+            procSupplier.value = supplier;
+            if (procSupplier.selectedIndex < 0) procSupplier.selectedIndex = 0;
+            hideSupplierError(procSupplier);
             var qty = parseFloat(this.dataset.qty);
             document.getElementById('procQuantity').value = isNaN(qty) ? '' : qty;
             document.getElementById('procQuantityUom').textContent = this.dataset.uom || '-';
@@ -549,3 +631,4 @@ function openBatchProcessModal() {
 }
 </script>
 <?php endif; ?>
+<?php require BASE_PATH . 'app/views/shared/po_view_modal.php'; ?>

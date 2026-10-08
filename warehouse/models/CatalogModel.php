@@ -28,6 +28,20 @@ class CatalogModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    public function getMoProductItems() {
+        $sql = "SELECT DISTINCT i.*
+                FROM items i
+                INNER JOIN fg_boms b
+                        ON b.fg_item_id = i.item_id
+                       AND b.status = 'active'
+                WHERE i.`remove` = 0 AND i.status = 1
+                  AND i.item_type IN ('FG','SFG')
+                ORDER BY i.item_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
     public function getItemsByCustomer($customer_id) {
         $sql = "SELECT item_id, item_code, item_description, customer_id, item_uom, uom_conversion
                 FROM customer_finished_goods
