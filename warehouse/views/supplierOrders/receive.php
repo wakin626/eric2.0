@@ -13,7 +13,7 @@
                 </div>
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <strong>Ordered Qty:</strong> <?= number_format($order['quantity'], 4) ?> <?= htmlspecialchars($order['item_uom']) ?>
+                        <strong>Ordered Qty:</strong> <?= formatQty($order['quantity']) ?> <?= htmlspecialchars($order['item_uom']) ?>
                     </div>
                     <div class="col-md-4">
                         <strong>Order Date:</strong> <?= $order['order_date'] ? date('m/d/Y', strtotime($order['order_date'])) : '-' ?>
@@ -31,7 +31,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Received Quantity <span class="text-danger">*</span></label>
                         <input type="number" name="received_qty" class="form-control" min="0.01" step="0.0001"
-                               value="<?= $order['quantity'] ?>" required>
+                               value="<?= formatQty($order['quantity']) ?>" required>
                         <small class="text-muted">Enter the quantity actually received (may differ from ordered).</small>
                     </div>
                     <div class="d-flex gap-2">

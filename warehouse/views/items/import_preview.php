@@ -87,8 +87,8 @@
                     </td>
                     <td><?= htmlspecialchars($r['uom']) ?></td>
                     <td><?= htmlspecialchars($r['site']) ?></td>
-                    <td><?= number_format($r['qty_on_hand'], 4) ?></td>
-                    <td><?= number_format($r['qty_for_inspect'], 4) ?></td>
+                    <td><?= formatQty($r['qty_on_hand']) ?></td>
+                    <td><?= formatQty($r['qty_for_inspect']) ?></td>
                     <td>
                         <?php if (!empty($r['errors'])): ?>
                             <small class="text-danger"><?= implode('; ', $r['errors']) ?></small>

@@ -1,12 +1,12 @@
 <style>
-    .mo-card {
+    .lmr-card {
         border: 1px solid #e2e8f0;
         border-radius: 16px;
         background: #ffffff;
         box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
     }
 
-    .mo-section-title {
+    .lmr-section-title {
         font-size: 0.78rem;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -14,7 +14,7 @@
         font-weight: 700;
     }
 
-    .mo-toolbar {
+    .lmr-toolbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -58,41 +58,41 @@
     }
 </style>
 
-<div class="mo-toolbar sticky-toolbar pb-2">
+<div class="lmr-toolbar sticky-toolbar pb-2">
     <div>
-        <h5 class="mb-1"><i class="bi bi-clipboard-check me-2 text-primary"></i>Manufacturing Order Entry</h5>
-        <small class="text-muted">Standardized MO record creation and item line tracking</small>
+        <h5 class="mb-1"><i class="bi bi-clipboard-check me-2 text-primary"></i>LMR Entry</h5>
+        <small class="text-muted">Standardized LMR record creation and item line tracking</small>
     </div>
     <div class="d-flex align-items-center gap-2">
         <button type="button" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-file-earmark-text me-1"></i>Draft
         </button>
         <button type="button" class="btn btn-primary btn-sm">
-            <i class="bi bi-check2-circle me-1"></i>Save MO
+            <i class="bi bi-check2-circle me-1"></i>Save LMR
         </button>
     </div>
 </div>
 
-<form id="moEntryForm" class="mo-card p-4">
+<form id="lmrEntryForm" class="lmr-card p-4">
     <div class="row g-4 mb-4">
         <div class="col-lg-6">
-            <div class="mo-section-title mb-3">Header Meta & Schedule</div>
+            <div class="lmr-section-title mb-3">Header Meta & Schedule</div>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Number <span class="text-danger">*</span></label>
-                    <input type="text" name="mo_number" class="form-control" placeholder="Enter MO number" required>
+                    <label class="form-label fw-semibold">LMR Number <span class="text-danger">*</span></label>
+                    <input type="text" name="lmr_number" class="form-control" placeholder="Enter LMR number" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Type</label>
-                    <select name="mo_type" class="form-select filter-select">
+                    <label class="form-label fw-semibold">LMR Type</label>
+                    <select name="lmr_type" class="form-select filter-select">
                         <option value="Standard" selected>Standard</option>
                         <option value="Rework">Rework</option>
                         <option value="Trial">Trial</option>
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Site</label>
-                    <select name="mo_site" class="form-select filter-select">
+                    <label class="form-label fw-semibold">LMR Site</label>
+                    <select name="lmr_site" class="form-select filter-select">
                         <option value="001 - Sterling Technopark" selected>001 - Sterling Technopark</option>
                     </select>
                 </div>
@@ -120,11 +120,11 @@
         </div>
 
         <div class="col-lg-6">
-            <div class="mo-section-title mb-3">Customer & Order Tracking</div>
+            <div class="lmr-section-title mb-3">Customer & Order Tracking</div>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Status</label>
-                    <select name="mo_status" class="form-select filter-select">
+                    <label class="form-label fw-semibold">LMR Status</label>
+                    <select name="lmr_status" class="form-select filter-select">
                         <option value="Planned" selected>Planned</option>
                         <option value="Released">Released</option>
                         <option value="Completed">Completed</option>
@@ -161,8 +161,8 @@
     </div>
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="mo-section-title mb-0">Item / Material Lines</div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#moItemModal">
+        <div class="lmr-section-title mb-0">Item / Material Lines</div>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#lmrItemModal">
             <i class="bi bi-plus-circle me-1"></i>Add Line Item
         </button>
     </div>
@@ -183,10 +183,10 @@
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
-            <tbody id="moLinesTableBody">
+            <tbody id="lmrLinesTableBody">
                 <tr class="empty-state-row">
                     <td colspan="10" class="text-center text-muted py-4">
-                        No line items added yet. Use “Add Line Item” to begin the MO.
+                        No line items added yet. Use “Add Line Item” to begin the LMR.
                     </td>
                 </tr>
             </tbody>
@@ -194,11 +194,11 @@
     </div>
 </form>
 
-<div class="modal fade" id="moItemModal" tabindex="-1" aria-labelledby="moItemModalLabel" aria-hidden="true">
+<div class="modal fade" id="lmrItemModal" tabindex="-1" aria-labelledby="lmrItemModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header">
-                <h5 class="modal-title" id="moItemModalLabel"><i class="bi bi-plus-circle me-2"></i>Add MO Product Item</h5>
+                <h5 class="modal-title" id="lmrItemModalLabel"><i class="bi bi-plus-circle me-2"></i>Add LMR Product Item</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -271,7 +271,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const lineBomCode = document.getElementById('lineBomCode');
     const lineQtyOrdered = document.getElementById('lineQtyOrdered');
     const lineType = document.getElementById('lineType');
-    const linesTable = document.getElementById('moLinesTableBody');
+    const linesTable = document.getElementById('lmrLinesTableBody');
     const emptyRow = linesTable.querySelector('.empty-state-row');
 
     function populateCustomerName() {
@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded', function () {
         lineBomCode.value = '';
         lineType.value = 'FG';
 
-        const modal = bootstrap.Modal.getInstance(document.getElementById('moItemModal'));
+        const modal = bootstrap.Modal.getInstance(document.getElementById('lmrItemModal'));
         if (modal) {
             modal.hide();
         }
@@ -400,11 +400,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const row = removeButton.closest('tr');
         if (row) {
             row.remove();
-            if (!linesTable.querySelector('tr') && !document.querySelector('#moLinesTableBody .empty-state-row')) {
+            if (!linesTable.querySelector('tr') && !document.querySelector('#lmrLinesTableBody .empty-state-row')) {
                 linesTable.innerHTML = `
                     <tr class="empty-state-row">
                         <td colspan="10" class="text-center text-muted py-4">
-                            No line items added yet. Use “Add Line Item” to begin the MO.
+                            No line items added yet. Use “Add Line Item” to begin the LMR.
                         </td>
                     </tr>
                 `;

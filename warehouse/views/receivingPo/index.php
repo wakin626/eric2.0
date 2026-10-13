@@ -112,9 +112,9 @@
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= rtrim(rtrim(number_format(floatval($o['quantity']), 4), '0'), '.') ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
+                    <td class="text-end"><?= formatQty($o['quantity']) ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
                     <td class="text-end"><?= $o['received_qty'] > 0
-                        ? rtrim(rtrim(number_format(floatval($o['received_qty']), 4), '0'), '.') . ' ' . htmlspecialchars($o['item_uom'] ?? '')
+                        ? formatQty($o['received_qty']) . ' ' . htmlspecialchars($o['item_uom'] ?? '')
                         : '<span class="text-muted">-</span>' ?></td>
                     <td><?php
                         $hasDate = !empty($o['received_date']) && $o['received_date'] !== '0000-00-00' && $o['received_date'] !== '0000-00-00 00:00:00';
@@ -164,7 +164,26 @@
                                 <span class="text-muted">-</span>
                             <?php endif; ?>
                         <?php elseif (in_array($status, ['pending', 'processed', 'partially_received', 'for inspection']) && $remainingQty > 0.0001): ?>
-                            <button class="btn btn-sm btn-success receive-shipment-btn"
+                            <?php
+                            // The same order row can render in both tabs (In-Transit for the
+                            // receivable balance, For QC Inspection for the staged batch).
+                            // QC-queue affordances belong only to the For QC Inspection tab.
+                            $isInspectionTab = (($filters['tab'] ?? '') === 'inspection');
+                            $showQcQueueUi = $isInspectionTab && !empty($o['has_pending_qc']);
+                            ?>
+                            <?php if ($showQcQueueUi): ?>
+                                <span class="badge bg-warning text-dark">In QC Queue</span>
+                            <?php endif; ?>
+                            <button class="btn btn-sm btn-outline-info btn-view-po <?= $showQcQueueUi ? 'd-block mt-1' : '' ?>" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                <i class="bi bi-eye"></i> View
+                            </button>
+                            <?php if ($showQcQueueUi): ?>
+                                <button class="btn btn-sm btn-outline-secondary btn-edit-staging d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="Edit staged receipt (qty, lot, expiry, remarks)">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                            <?php endif; ?>
+                            <?php if (!$isInspectionTab): ?>
+                            <button class="btn btn-sm btn-success <?= $showQcQueueUi ? 'd-block mt-1' : '' ?> receive-shipment-btn"
                                     data-id="<?= $o['supplier_order_id'] ?>"
                                     data-supplier="<?= htmlspecialchars($o['supplier_name']) ?>"
                                     data-item-code="<?= htmlspecialchars($o['item_code']) ?>"
@@ -177,7 +196,11 @@
                                     title="Receive and stage for QC inspection">
                                 <i class="bi bi-box-arrow-in-down"></i> Receive &amp; Send to QC
                             </button>
+                            <?php endif; ?>
                         <?php elseif ($status === 'requested'): ?>
+                            <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                <i class="bi bi-eye"></i> View
+                            </button>
                             <span class="badge bg-secondary">Awaiting Purchasing</span>
                         <?php elseif ($status === 'for inspection'): ?>
                             <?php if ($isQcUser): ?>
@@ -186,11 +209,20 @@
                                 </a>
                             <?php else: ?>
                                 <span class="badge bg-warning text-dark">In QC Queue</span>
+                                <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary btn-edit-staging d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="Edit staged receipt (qty, lot, expiry, remarks)">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
                             <?php endif; ?>
                         <?php elseif (in_array($status, ['approved', 'received'])): ?>
                             <span class="badge bg-success">Received &amp; Approved</span>
                             <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
                                 <i class="bi bi-eye"></i> View
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary btn-edit-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="Edit Record">
+                                <i class="bi bi-pencil"></i> Edit
                             </button>
                         <?php elseif ($status === 'rejected'): ?>
                             <span class="badge bg-danger">Rejected</span>
@@ -371,4 +403,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <?php endif; ?>
-<?php require BASE_PATH . 'app/views/shared/po_view_modal.php'; ?>
+<?php $poEditContext = 'receiving'; require BASE_PATH . 'app/views/shared/po_view_modal.php'; ?>
+<?php $poEditContext = 'receiving'; require BASE_PATH . 'app/views/shared/po_edit_modal.php'; ?>
+<?php require BASE_PATH . 'app/views/shared/staging_edit_modal.php'; ?>

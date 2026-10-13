@@ -2,35 +2,35 @@
     <div class="col-lg-10">
         <div class="card shadow-sm border-0">
             <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Confirm MO Release</h5>
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Confirm LMR Release</h5>
             </div>
             <div class="card-body">
-                <p class="mb-3">You are about to release the following Manufacturing Order. This will change its status to <strong>Released</strong>.</p>
+                <p class="mb-3">You are about to release the following LMR. This will change its status to <strong>Released</strong>.</p>
 
                 <table class="table table-bordered mb-3">
                     <tr>
-                        <th style="width:180px">MO Number</th>
-                        <td><?= htmlspecialchars($mo['mo_number'] ?? '') ?></td>
+                        <th style="width:180px">LMR Number</th>
+                        <td><?= htmlspecialchars($lmr['lmr_number'] ?? '') ?></td>
                     </tr>
                     <tr>
                         <th>Customer</th>
-                        <td><?= htmlspecialchars($mo['customer_name'] ?? $mo['customer_code'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($lmr['customer_name'] ?? $lmr['customer_code'] ?? '-') ?></td>
                     </tr>
                     <tr>
-                        <th>MO Type</th>
-                        <td><?= htmlspecialchars($mo['mo_type'] ?? 'Standard') ?></td>
+                        <th>LMR Type</th>
+                        <td><?= htmlspecialchars($lmr['lmr_type'] ?? 'Standard') ?></td>
                     </tr>
                     <tr>
                         <th>Order Date</th>
-                        <td><?= !empty($mo['order_date']) ? date('Y-m-d', strtotime($mo['order_date'])) : '-' ?></td>
+                        <td><?= !empty($lmr['order_date']) ? date('Y-m-d', strtotime($lmr['order_date'])) : '-' ?></td>
                     </tr>
                     <tr>
                         <th>Due Date</th>
-                        <td><?= !empty($mo['due_date']) ? date('Y-m-d', strtotime($mo['due_date'])) : '-' ?></td>
+                        <td><?= !empty($lmr['due_date']) ? date('Y-m-d', strtotime($lmr['due_date'])) : '-' ?></td>
                     </tr>
                     <tr>
                         <th>Status</th>
-                        <td><span class="badge bg-info"><?= htmlspecialchars($mo['mo_status'] ?? 'Planned') ?></span></td>
+                        <td><span class="badge bg-info"><?= htmlspecialchars($lmr['lmr_status'] ?? 'Planned') ?></span></td>
                     </tr>
                 </table>
 
@@ -75,7 +75,7 @@
                     </div>
                     <div class="card-body">
                         <?php if ($validation['valid']): ?>
-                            <p class="text-success mb-0"><strong>All materials available.</strong> This MO can be safely released.</p>
+                            <p class="text-success mb-0"><strong>All materials available.</strong> This LMR can be safely released.</p>
                         <?php else: ?>
                             <p class="text-danger fw-bold mb-2">The following materials lack sufficient stock:</p>
                             <table class="table table-sm table-bordered mb-3">
@@ -93,11 +93,11 @@
                                     <tr class="table-danger">
                                         <td><?= htmlspecialchars($s['item_code']) ?></td>
                                         <td><?= htmlspecialchars($s['item_description'] ?? $s['reason'] ?? '') ?></td>
-                                        <td class="text-end"><?= $s['required'] > 0 ? number_format($s['required'], 2) : '-' ?></td>
-                                        <td class="text-end"><?= $s['available'] > 0 ? number_format($s['available'], 2) : '-' ?></td>
+                                        <td class="text-end"><?= $s['required'] > 0 ? formatQty($s['required'], 2) : '-' ?></td>
+                                        <td class="text-end"><?= $s['available'] > 0 ? formatQty($s['available'], 2) : '-' ?></td>
                                         <td class="text-end fw-bold">
                                             <?php if ($s['short_by'] > 0): ?>
-                                                <?= number_format($s['short_by'], 2) ?> <?= htmlspecialchars($s['uom'] ?? '') ?>
+                                                <?= formatQty($s['short_by'], 2) ?> <?= htmlspecialchars($s['uom'] ?? '') ?>
                                             <?php else: ?>
                                                 <?= htmlspecialchars($s['reason'] ?? '') ?>
                                             <?php endif; ?>
@@ -124,7 +124,7 @@
                                                 | Legacy batches: <?= $item['batches_needed'] ?>
                                             <?php else: ?>
                                                 | UOM Div: <?= number_format($item['batch_unit_divisor'] ?? 1000, 0) ?>
-                                                | Bulk: <?= number_format($item['bulk_batch'] ?? 0, 3) ?>
+                                                | Bulk: <?= formatQty($item['bulk_batch'] ?? 0, 3) ?>
                                             <?php endif; ?>
                                         </span>
                                     </div>
@@ -138,15 +138,15 @@
                                                 <tr>
                                                     <td class="small"><?= htmlspecialchars($c['item_code']) ?></td>
                                                     <td class="small"><?= htmlspecialchars($c['item_description']) ?></td>
-                                                    <td class="text-end small"><?= number_format($c['required_qty'], 4) ?></td>
-                                                    <td class="text-end small"><?= number_format($c['soh'], 4) ?></td>
-                                                    <td class="text-end small"><?= number_format($c['allocated'] ?? 0, 4) ?></td>
-                                                    <td class="text-end small"><?= number_format($c['net_available'], 4) ?></td>
+                                                    <td class="text-end small"><?= formatQty($c['required_qty']) ?></td>
+                                                    <td class="text-end small"><?= formatQty($c['soh']) ?></td>
+                                                    <td class="text-end small"><?= formatQty($c['allocated'] ?? 0) ?></td>
+                                                    <td class="text-end small"><?= formatQty($c['net_available']) ?></td>
                                                     <td>
                                                         <?php if ($c['status'] === 'available'): ?>
                                                             <span class="badge bg-success">Available</span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-danger">Lacking <?= number_format($c['shortage'], 2) ?> <?= htmlspecialchars($c['item_uom'] ?? '') ?></span>
+                                                            <span class="badge bg-danger">Lacking <?= formatQty($c['shortage'], 2) ?> <?= htmlspecialchars($c['item_uom'] ?? '') ?></span>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>
@@ -173,7 +173,7 @@
                         <div class="form-check mb-2">
                             <input class="form-check-input" type="checkbox" id="confirmForceRelease" name="force_release" value="1">
                             <label class="form-check-label fw-bold text-danger" for="confirmForceRelease">
-                                I confirm I want to force-release this MO despite stock shortages
+                                I confirm I want to force-release this LMR despite stock shortages
                             </label>
                         </div>
                         <textarea class="form-control" name="force_reason" rows="2" placeholder="Mandatory reason for force release..." required></textarea>
@@ -188,13 +188,13 @@
                     </div>
                 <?php else: ?>
                 <div class="d-flex gap-2">
-                    <form method="POST" action="?controller=mo&action=releaseExecute">
-                        <input type="hidden" name="mo_id" value="<?= (int) ($mo['mo_id'] ?? 0) ?>">
+                    <form method="POST" action="?controller=lmr&action=releaseExecute">
+                        <input type="hidden" name="lmr_id" value="<?= (int) ($lmr['lmr_id'] ?? 0) ?>">
                         <button type="submit" class="btn btn-success">
-                            <i class="bi bi-check-lg me-1"></i><?= $validation['valid'] ? 'Yes, Release MO' : 'Force Release MO' ?>
+                            <i class="bi bi-check-lg me-1"></i><?= $validation['valid'] ? 'Yes, Release LMR' : 'Force Release LMR' ?>
                         </button>
                     </form>
-                    <a href="?controller=mo&action=index" class="btn btn-secondary">
+                    <a href="?controller=lmr&action=index" class="btn btn-secondary">
                         <i class="bi bi-x-lg me-1"></i>Cancel
                     </a>
                 </div>

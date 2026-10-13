@@ -64,12 +64,12 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
     <div class="fg-header">
         <?= htmlspecialchars($sec['fg_code'] . ' - ' . $sec['fg_name']) ?>
         &nbsp;&nbsp;|&nbsp;&nbsp; Prod. Qty: <?= number_format($sec['target_qty']) . ' ' . htmlspecialchars($sec['item_uom']) ?>
-        &nbsp;&nbsp;|&nbsp;&nbsp; Fill volume: <?= number_format($sec['fill_volume'] ?? $sec['batch_qty'], 4) . ' ' . htmlspecialchars($sec['uom'] ?? $sec['batch_uom']) ?>
+        &nbsp;&nbsp;|&nbsp;&nbsp; Fill volume: <?= formatQty($sec['fill_volume'] ?? $sec['batch_qty']) . ' ' . htmlspecialchars($sec['uom'] ?? $sec['batch_uom']) ?>
         <?php if (!empty($sec['is_legacy_formula'])): ?>
             &nbsp;&nbsp;|&nbsp;&nbsp; Batches (legacy): <?= number_format($sec['batches_needed'], 1) ?>
         <?php else: ?>
             &nbsp;&nbsp;|&nbsp;&nbsp; UOM Divisor: <?= number_format($sec['batch_unit_divisor'] ?? 1000, 0) ?>
-            &nbsp;&nbsp;|&nbsp;&nbsp; Bulk batch: <?= number_format($sec['bulk_batch'], 3) ?>
+            &nbsp;&nbsp;|&nbsp;&nbsp; Bulk batch: <?= formatQty($sec['bulk_batch'], 3) ?>
         <?php endif; ?>
     </div>
     <table>
@@ -80,7 +80,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <th>UoM</th>
                 <th class="num">Total Reqt</th>
                 <th class="num">SOH</th>
-                <th class="num">Allocated</th>
+                <th class="num">Open Customer PO / Allocated</th>
                 <th class="num">Pending PO/RR</th>
                 <th class="num">Supplier</th>
                 <th class="num">EXCESS / (LACKING)</th>
@@ -94,13 +94,13 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <td><?= htmlspecialchars($row['item_code']) ?></td>
                 <td><?= htmlspecialchars($row['item_description']) ?></td>
                 <td><?= htmlspecialchars($row['display_uom'] ?? $row['item_uom']) ?></td>
-                <td class="num"><?= number_format($row['total_reqt'], 2) ?></td>
-                <td class="num"><?= number_format($row['soh'], 2) ?></td>
-                <td class="num"><?= number_format($row['allocated'], 2) ?></td>
-                <td class="num"><?= number_format($row['pending'], 2) ?></td>
-                <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? number_format($row['supplier_pending'], 2) : '0.00' ?></td>
+                <td class="num"><?= formatQty($row['total_reqt'], 2) ?></td>
+                <td class="num"><?= formatQty($row['soh'], 2) ?></td>
+                <td class="num"><?= formatQty($row['allocated'], 2) ?></td>
+                <td class="num"><?= formatQty($row['pending'], 2) ?></td>
+                <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? formatQty($row['supplier_pending'], 2) : '0' ?></td>
                 <td class="num <?= $row['excess'] < 0 ? 'negative' : '' ?>">
-                    <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
+                    <?= $row['excess'] < 0 ? '(' . formatQty(abs($row['excess']), 2) . ')' : formatQty($row['excess'], 2) ?>
                 </td>
                 <td><?= date('m/d/Y') ?></td>
                 <td class="remarks-<?= strtolower(str_replace([' ', '/'], ['-', '-'], $row['remarks'])) ?>">
@@ -125,7 +125,7 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <th>UoM</th>
                 <th class="num">Total Reqt</th>
                 <th class="num">SOH</th>
-                <th class="num">Allocated</th>
+                <th class="num">Open Customer PO / Allocated</th>
                 <th class="num">Pending PO/RR</th>
                 <th class="num">Supplier</th>
                 <th class="num">EXCESS / (LACKING)</th>
@@ -138,13 +138,13 @@ td { border: 1px solid #ccc; padding: 2px 4px; font-size: 8px; }
                 <td><?= htmlspecialchars($row['item_code']) ?></td>
                 <td><?= htmlspecialchars($row['item_description']) ?></td>
                 <td><?= htmlspecialchars($row['display_uom'] ?? $row['item_uom']) ?></td>
-                <td class="num"><?= number_format($row['total_reqt'], 2) ?></td>
-                <td class="num"><?= number_format($row['soh'], 2) ?></td>
-                <td class="num"><?= number_format($row['allocated'], 2) ?></td>
-                <td class="num"><?= number_format($row['pending'], 2) ?></td>
-                <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? number_format($row['supplier_pending'], 2) : '0.00' ?></td>
+                <td class="num"><?= formatQty($row['total_reqt'], 2) ?></td>
+                <td class="num"><?= formatQty($row['soh'], 2) ?></td>
+                <td class="num"><?= formatQty($row['allocated'], 2) ?></td>
+                <td class="num"><?= formatQty($row['pending'], 2) ?></td>
+                <td class="num"><?= ($row['supplier_pending'] ?? 0) > 0 ? formatQty($row['supplier_pending'], 2) : '0' ?></td>
                 <td class="num <?= $row['excess'] < 0 ? 'negative' : '' ?>">
-                    <?= $row['excess'] < 0 ? '(' . number_format(abs($row['excess']), 2) . ')' : number_format($row['excess'], 2) ?>
+                    <?= $row['excess'] < 0 ? '(' . formatQty(abs($row['excess']), 2) . ')' : formatQty($row['excess'], 2) ?>
                 </td>
                 <td class="remarks-<?= strtolower(str_replace([' ', '/'], ['-', '-'], $row['remarks'])) ?>">
                     <?= htmlspecialchars($row['remarks']) ?>

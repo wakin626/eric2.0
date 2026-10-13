@@ -111,13 +111,13 @@
                         <?= intval($h['computed_prev_lot_qty'] ?? $h['previous_quantity'] ?? 0) ?>
                     </td>
                     <td>
-                        <span class="text-success">+<?= $h['added_quantity'] ?></span>
+                        <span class="text-success">+<?= formatQty($h['added_quantity']) ?></span>
                         <?php if (!empty($h['date_edited']) && $h['old_added_quantity'] !== null): ?>
                             <br><small class="text-muted">(old: +<?= $h['old_added_quantity'] ?>)</small>
                         <?php endif; ?>
                     </td>
                     <td><strong><?= intval($h['computed_new_lot_qty'] ?? $h['new_quantity'] ?? 0) ?></strong></td>
-                    <td><?= $h['computed_po_qty'] ?? 0 ?></td>
+                    <td><?= formatQty($h['computed_po_qty'] ?? 0) ?></td>
                     <td><?= htmlspecialchars($h['full_name'] ?? '-') ?></td>
                     <td>
                         <?php if (!empty($h['qc_remark'])): ?>

@@ -246,7 +246,7 @@ class QcModel extends BaseModel {
         $batch['qc_date'] = $batch['qc_date'] ? date('m/d/Y H:i', strtotime($batch['qc_date'])) : null;
         $batch['dr_invoice_no'] = trim((string) ($batch['dr_invoice_no'] ?? ''));
         foreach (['ordered_qty', 'received_qty', 'passed_qty', 'rejected_qty'] as $qk) {
-            $batch[$qk] = rtrim(rtrim(number_format(floatval($batch[$qk] ?? 0), 4), '0'), '.');
+            $batch[$qk] = formatQty(floatval($batch[$qk] ?? 0));
         }
 
         $receivingNotes = trim((string) ($row['remarks'] ?? ''));
@@ -262,7 +262,7 @@ class QcModel extends BaseModel {
             'supplier_name' => $row['supplier_name'] ?? null,
             'item_code' => $row['item_code'] ?? null,
             'description' => $row['item_description'] ?? null,
-            'quantity' => rtrim(rtrim(number_format($orderQty, 4), '0'), '.'),
+            'quantity' => formatQty($orderQty),
             'uom' => $uom,
             'unit_cost' => $row['unit_cost'] !== null ? number_format(floatval($row['unit_cost']), 2) : null,
             'order_date' => $row['order_date'] ? date('m/d/Y', strtotime($row['order_date'])) : null,
@@ -270,7 +270,7 @@ class QcModel extends BaseModel {
             'status' => $row['supplier_order_status'] ?? null,
             'order_remarks' => trim((string) ($row['order_remarks'] ?? '')) ?: null,
             'created_by' => $row['created_by_name'] ?? null,
-            'received_qty' => rtrim(rtrim(number_format($recvQty, 4), '0'), '.'),
+            'received_qty' => formatQty($recvQty),
             'received_date' => $row['received_date'] ? date('m/d/Y', strtotime($row['received_date'])) : null,
             'dr_number' => trim((string) ($row['dr_invoice_no'] ?? '')),
             'received_by' => $row['received_by_name'] ?? null,
@@ -281,8 +281,8 @@ class QcModel extends BaseModel {
             'inspector_name' => $batch['inspector_name'],
             'qc_date' => $batch['qc_date'] ? date('m/d/Y H:i', strtotime($batch['qc_date'])) : null,
             'qc_remarks' => $batch['qc_remarks'],
-            'passed_qty' => rtrim(rtrim(number_format(floatval($row['passed_qty'] ?? 0), 4), '0'), '.'),
-            'rejected_qty' => rtrim(rtrim(number_format(floatval($row['rejected_qty'] ?? 0), 4), '0'), '.'),
+            'passed_qty' => formatQty(floatval($row['passed_qty'] ?? 0)),
+            'rejected_qty' => formatQty(floatval($row['rejected_qty'] ?? 0)),
             'batches' => [$batch],
         ];
     }

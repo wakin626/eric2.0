@@ -3,7 +3,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h4 class="mb-1">LMR Print</h4>
-                <small class="text-muted">Manufacturing Order Release</small>
+                <small class="text-muted">LMR Release</small>
             </div>
             <button class="btn btn-primary" onclick="window.print()">
                 <i class="bi bi-printer me-1"></i>Print
@@ -13,14 +13,14 @@
         <div class="row g-3 mb-4">
             <div class="col-md-6">
                 <div class="border rounded p-3 h-100">
-                    <div class="small text-muted mb-1">MO Number</div>
-                    <strong><?= htmlspecialchars($mo['mo_number'] ?? '-') ?></strong>
+                    <div class="small text-muted mb-1">LMR Number</div>
+                    <strong><?= htmlspecialchars($lmr['lmr_number'] ?? '-') ?></strong>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="border rounded p-3 h-100">
                     <div class="small text-muted mb-1">Customer</div>
-                    <strong><?= htmlspecialchars($mo['customer_name'] ?? $mo['customer_code'] ?? '-') ?></strong>
+                    <strong><?= htmlspecialchars($lmr['customer_name'] ?? $lmr['customer_code'] ?? '-') ?></strong>
                 </div>
             </div>
         </div>
@@ -38,7 +38,7 @@
             <tbody>
                 <?php if (empty($items)): ?>
                     <tr>
-                        <td colspan="5" class="text-center text-muted">No items attached to this MO.</td>
+                        <td colspan="5" class="text-center text-muted">No items attached to this LMR.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($items as $item): ?>

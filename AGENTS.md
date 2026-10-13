@@ -39,7 +39,7 @@ uploads/       - Receipt files (finance module)
 
 ## Database
 - DB: `manufacturing_mgmt`, user: `root`, no password
-- Schema: `sql/schema.sql` — generated dump of the live DB (32 tables + 2 views), do not hand-edit; regenerate per the command in its file header
+- Schema: `sql/schema.sql` — generated dump of the live DB (32 tables + 3 views), do not hand-edit; regenerate per the command in its file header
 - Migrations: `sql/applied/` (done) + `sql/pending/` (run with `sql/run_pending.php` or idempotent `sql/pending/deploy_current.php`; tracked in `schema_migrations`)
 - Install admin: `php install-admin.php` (creates admin/admin user)
 - Key tables: users, customers, items, inventory_balances, purchase_orders, purchase_order_items, deliveries, supplier_orders, mrp_runs, mrp_run_items, delivery_receipts, production_history

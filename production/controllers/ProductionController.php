@@ -23,7 +23,7 @@ class ProductionController {
             header('Location: ?controller=auth&action=login');
             exit;
         }
-        $publicActions = ['getPODetails', 'searchItems', 'fgInput', 'saveFgInput', 'getLotsForInventory', 'moEntry', 'getCustomerPOs', 'getItemBomInfo'];
+        $publicActions = ['getPODetails', 'searchItems', 'fgInput', 'saveFgInput', 'getLotsForInventory', 'lmrEntry', 'getCustomerPOs', 'getItemBomInfo'];
         if (!in_array($action, $publicActions, true) && ($_SESSION['department'] ?? '') !== 'production') {
             header('Location: ?controller=admin');
             exit;
@@ -275,11 +275,11 @@ class ProductionController {
         $this->render('production/fg_input', $data);
     }
 
-    public function moEntry() {
-        $data['page_title'] = 'MO Entry';
+    public function lmrEntry() {
+        $data['page_title'] = 'LMR Entry';
         $data['customers'] = $this->catalogModel->getCustomers();
-        $data['items'] = $this->catalogModel->getMoProductItems();
-        $this->render('production/mo_entry', $data);
+        $data['items'] = $this->catalogModel->getLmrProductItems();
+        $this->render('production/lmr_entry', $data);
     }
 
     public function getCustomerPOs() {

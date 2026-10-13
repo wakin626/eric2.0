@@ -28,7 +28,7 @@ class CatalogModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
-    public function getMoProductItems() {
+    public function getLmrProductItems() {
         $sql = "SELECT DISTINCT i.*
                 FROM items i
                 INNER JOIN fg_boms b

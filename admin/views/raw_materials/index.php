@@ -38,9 +38,9 @@
                     <td><?= htmlspecialchars($rm['trade_name']) ?></td>
                     <td><span class="badge bg-<?= $rm['category'] === 'packaging' ? 'info' : 'secondary' ?>"><?= ucfirst(str_replace('_', ' ', $rm['category'])) ?></span></td>
                     <td><?= htmlspecialchars($rm['uom']) ?></td>
-                    <td><?= number_format($rm['stock_on_hand'], 4) ?></td>
-                    <td><?= number_format($rm['allocated_stock'], 4) ?></td>
-                    <td><?= number_format($rm['reorder_level'], 4) ?></td>
+                    <td><?= formatQty($rm['stock_on_hand']) ?></td>
+                    <td><?= formatQty($rm['allocated_stock']) ?></td>
+                    <td><?= formatQty($rm['reorder_level']) ?></td>
                     <td><span class="badge bg-<?= $rm['is_active'] ? 'success' : 'secondary' ?>"><?= $rm['is_active'] ? 'Active' : 'Inactive' ?></span></td>
                     <td>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#rmEditModal"

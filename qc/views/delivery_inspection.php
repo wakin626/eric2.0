@@ -118,7 +118,7 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <span class="text-success">+<?= $h['added_quantity'] ?></span>
+                        <span class="text-success">+<?= formatQty($h['added_quantity']) ?></span>
                         <?php if (!empty($h['pcs_per_case'])): ?>
                             <br><small class="text-muted" title="PCS per Case">/ <?= htmlspecialchars($h['pcs_per_case']) ?> cs</small>
                         <?php endif; ?>

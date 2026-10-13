@@ -59,7 +59,6 @@
                     <th>Item Code</th>
                     <th>Description</th>
                     <th class="text-end">Quantity</th>
-                    <th class="text-end">Unit Cost</th>
                     <th>Order Date</th>
                     <th>Expected</th>
                     <th>PO REF / SOURCE</th>
@@ -73,7 +72,7 @@
             <tbody>
                 <?php if (empty($orders)): ?>
                 <tr>
-                    <td colspan="14" class="text-center text-muted py-4">No purchasing POs found.</td>
+                    <td colspan="13" class="text-center text-muted py-4">No purchasing POs found.</td>
                 </tr>
                 <?php else: ?>
                 <?php foreach ($orders as $index => $o): $qty = floatval($o['quantity']); ?>
@@ -82,8 +81,7 @@
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= number_format($qty, $qty == floor($qty) ? 0 : 4) ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
-                    <td class="text-end"><?= number_format($o['unit_cost'], 2) ?></td>
+                    <td class="text-end"><?= formatQty($qty) ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
                     <td><?= $o['order_date'] ? date('m/d/Y', strtotime($o['order_date'])) : '-' ?></td>
                     <td><?= $o['expected_date'] ? date('m/d/Y', strtotime($o['expected_date'])) : '-' ?></td>
                     <td>
@@ -94,28 +92,36 @@
                     </td>
                     <td>
                         <?php if ($o['status'] === 'requested'): ?>
-                            <span class="badge bg-info">Requested</span>
+                            <span class="badge bg-info text-dark">Requested</span>
                         <?php elseif ($o['status'] === 'pending'): ?>
                             <span class="badge bg-warning text-dark">Pending</span>
                         <?php elseif ($o['status'] === 'processed'): ?>
                             <span class="badge bg-primary">Processed</span>
                         <?php elseif ($o['status'] === 'partially_received'): ?>
-                            <span class="badge bg-info text-dark">Partially Received</span>
+                            <span class="badge bg-secondary">Partially Received</span>
                         <?php elseif ($o['status'] === 'For Inspection'): ?>
-                            <span class="badge bg-warning text-dark">For Inspection</span>
+                            <span class="badge text-white" style="background:#6f42c1">For Inspection</span>
                         <?php elseif ($o['status'] === 'received'): ?>
                             <span class="badge bg-success">Received</span>
                         <?php elseif ($o['status'] === 'cancelled'): ?>
-                            <span class="badge bg-secondary">Cancelled</span>
+                            <span class="badge bg-dark">Cancelled</span>
                         <?php else: ?>
-                            <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
+                            <span class="badge bg-light text-dark border"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
                         <?php endif; ?>
                     </td>
                     <td class="text-end"><?php
                         $recvQty = floatval($o['received_qty'] ?? 0);
-                        echo $recvQty > 0
-                            ? rtrim(rtrim(number_format($recvQty, 4), '0'), '.') . ' ' . htmlspecialchars($o['item_uom'] ?? '')
-                            : '-';
+                        $remainQty = floatval($o['quantity']) - $recvQty;
+                        if ($recvQty > 0) {
+                            echo formatQty($recvQty) . ' ' . htmlspecialchars($o['item_uom'] ?? '');
+                            if ($o['status'] === 'partially_received' && $remainQty > 0.0001) {
+                                echo '<div class="small text-muted">' . formatQty($remainQty) . ' ' . htmlspecialchars($o['item_uom'] ?? '') . ' remaining</div>';
+                            } elseif ($o['status'] === 'For Inspection') {
+                                echo '<div class="small text-muted">awaiting QC</div>';
+                            }
+                        } else {
+                            echo '-';
+                        }
                     ?></td>
                     <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
                     <td><?= htmlspecialchars($o['created_by_name'] ?? '') ?></td>

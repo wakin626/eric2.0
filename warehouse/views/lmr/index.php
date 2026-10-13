@@ -1,9 +1,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h4 class="mb-0">Manufacturing Orders</h4>
+        <h4 class="mb-0">LMRs</h4>
     </div>
-    <a href="?controller=mo&action=create" class="btn btn-primary">
-        <i class="bi bi-plus-lg me-1"></i>Create New MO
+    <a href="?controller=lmr&action=create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Create New LMR
     </a>
 </div>
 
@@ -11,16 +11,16 @@
     <div class="card-body p-3">
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item">
-                <a class="nav-link <?= ($status ?? 'all') === 'all' ? 'active' : '' ?>" href="?controller=mo&action=index&status=all">All Orders</a>
+                <a class="nav-link <?= ($status ?? 'all') === 'all' ? 'active' : '' ?>" href="?controller=lmr&action=index&status=all">All Orders</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= ($status ?? '') === 'Planned' ? 'active' : '' ?>" href="?controller=mo&action=index&status=Planned">Planned Orders</a>
+                <a class="nav-link <?= ($status ?? '') === 'Planned' ? 'active' : '' ?>" href="?controller=lmr&action=index&status=Planned">Planned Orders</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= ($status ?? '') === 'Released' ? 'active' : '' ?>" href="?controller=mo&action=index&status=Released">Released Orders</a>
+                <a class="nav-link <?= ($status ?? '') === 'Released' ? 'active' : '' ?>" href="?controller=lmr&action=index&status=Released">Released Orders</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= ($status ?? '') === 'Completed' ? 'active' : '' ?>" href="?controller=mo&action=index&status=Completed">Completed Orders</a>
+                <a class="nav-link <?= ($status ?? '') === 'Completed' ? 'active' : '' ?>" href="?controller=lmr&action=index&status=Completed">Completed Orders</a>
             </li>
         </ul>
     </div>
@@ -32,7 +32,7 @@
             <table class="table table-hover mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>MO Number</th>
+                        <th>LMR Number</th>
                         <th>Customer</th>
                         <th>Item Code</th>
                         <th>BOM</th>
@@ -49,22 +49,22 @@
                             <td colspan="9" class="text-center text-muted py-4">No manufacturing orders found.</td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($orders as $mo): ?>
+                        <?php foreach ($orders as $lmr): ?>
                             <tr>
                                 <td>
                                     <strong>
-                                        <a href="?controller=mo&action=view&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="text-decoration-none">
-                                            <?= htmlspecialchars($mo['mo_number'] ?? '-') ?>
+                                        <a href="?controller=lmr&action=view&id=<?= (int) ($lmr['lmr_id'] ?? 0) ?>" class="text-decoration-none">
+                                            <?= htmlspecialchars($lmr['lmr_number'] ?? '-') ?>
                                         </a>
                                     </strong>
                                 </td>
-                                <td><?= htmlspecialchars($mo['customer_name'] ?? $mo['customer_code'] ?? '-') ?></td>
-                                <td><?= htmlspecialchars($mo['item_code'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($lmr['customer_name'] ?? $lmr['customer_code'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($lmr['item_code'] ?? '-') ?></td>
                                 <td>
                                     <?php
                                     $bomCode = null;
-                                    if (!empty($mo['items'])) {
-                                        foreach ($mo['items'] as $mi) {
+                                    if (!empty($lmr['items'])) {
+                                        foreach ($lmr['items'] as $mi) {
                                             if (!empty($mi['bom_code'])) {
                                                 $bomCode = $mi['bom_code'];
                                                 break;
@@ -75,7 +75,7 @@
                                     <?php if ($bomCode): ?>
                                         <span class="text-muted"><?= htmlspecialchars($bomCode) ?></span>
                                         <button class="btn btn-sm btn-outline-info ms-1 view-bom-btn"
-                                                data-mo-id="<?= (int) ($mo['mo_id'] ?? 0) ?>"
+                                                data-lmr-id="<?= (int) ($lmr['lmr_id'] ?? 0) ?>"
                                                 title="View BOM Breakdown">
                                             <i class="bi bi-eye"></i>
                                         </button>
@@ -83,29 +83,29 @@
                                         <small class="text-danger">No BOM</small>
                                     <?php endif; ?>
                                 </td>
-                                <td><?= htmlspecialchars($mo['qty_ordered'] ?? 0) ?></td>
-                                <td><?= htmlspecialchars($mo['batch_lot_no'] ?? '-') ?></td>
-                                <td><?= !empty($mo['planned_start_date']) ? date('Y-m-d', strtotime($mo['planned_start_date'])) : '-' ?></td>
+                                <td><?= htmlspecialchars($lmr['qty_ordered'] ?? 0) ?></td>
+                                <td><?= htmlspecialchars($lmr['batch_lot_no'] ?? '-') ?></td>
+                                <td><?= !empty($lmr['planned_start_date']) ? date('Y-m-d', strtotime($lmr['planned_start_date'])) : '-' ?></td>
                                 <td>
                                     <?php
                                         $statusClass = 'secondary';
-                                        if (($mo['mo_status'] ?? 'Planned') === 'Planned') $statusClass = 'info';
-                                        elseif (($mo['mo_status'] ?? '') === 'Released') $statusClass = 'primary';
-                                        elseif (($mo['mo_status'] ?? '') === 'Completed') $statusClass = 'success';
+                                        if (($lmr['lmr_status'] ?? 'Planned') === 'Planned') $statusClass = 'info';
+                                        elseif (($lmr['lmr_status'] ?? '') === 'Released') $statusClass = 'primary';
+                                        elseif (($lmr['lmr_status'] ?? '') === 'Completed') $statusClass = 'success';
                                     ?>
-                                    <span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($mo['mo_status'] ?? 'Planned') ?></span>
+                                    <span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($lmr['lmr_status'] ?? 'Planned') ?></span>
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
-                                        <a href="?controller=mo&action=view&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-info" title="View Details"><i class="bi bi-eye"></i></a>
-                                        <a href="?controller=mo&action=edit&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-primary">Edit</a>
-                                        <?php if (($mo['mo_status'] ?? '') === 'Planned'): ?>
-                                            <a href="?controller=mo&action=release&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-success">Release MO</a>
+                                        <a href="?controller=lmr&action=view&id=<?= (int) ($lmr['lmr_id'] ?? 0) ?>" class="btn btn-outline-info" title="View Details"><i class="bi bi-eye"></i></a>
+                                        <a href="?controller=lmr&action=edit&id=<?= (int) ($lmr['lmr_id'] ?? 0) ?>" class="btn btn-outline-primary">Edit</a>
+                                        <?php if (($lmr['lmr_status'] ?? '') === 'Planned'): ?>
+                                            <a href="?controller=lmr&action=release&id=<?= (int) ($lmr['lmr_id'] ?? 0) ?>" class="btn btn-outline-success">Release LMR</a>
                                         <?php endif; ?>
-                                        <?php if (($mo['mo_status'] ?? '') === 'Released'): ?>
-                                            <a href="?controller=mo&action=printLmr&id=<?= (int) ($mo['mo_id'] ?? 0) ?>" class="btn btn-outline-dark" target="_blank">Print LMR</a>
-                                            <form method="POST" action="?controller=mo&action=cancel" class="d-inline" onsubmit="return confirm('Cancel this MO and release all allocated materials?');">
-                                                <input type="hidden" name="mo_id" value="<?= (int) ($mo['mo_id'] ?? 0) ?>">
+                                        <?php if (($lmr['lmr_status'] ?? '') === 'Released'): ?>
+                                            <a href="?controller=lmr&action=printLmr&id=<?= (int) ($lmr['lmr_id'] ?? 0) ?>" class="btn btn-outline-dark" target="_blank">Print LMR</a>
+                                            <form method="POST" action="?controller=lmr&action=cancel" class="d-inline" onsubmit="return confirm('Cancel this LMR and release all allocated materials?');">
+                                                <input type="hidden" name="lmr_id" value="<?= (int) ($lmr['lmr_id'] ?? 0) ?>">
                                                 <button type="submit" class="btn btn-outline-danger">Cancel</button>
                                             </form>
                                         <?php else: ?>
@@ -146,13 +146,13 @@
 <script>
 document.querySelectorAll('.view-bom-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
-        var moId = this.getAttribute('data-mo-id');
+        var lmrId = this.getAttribute('data-lmr-id');
         var modal = new bootstrap.Modal(document.getElementById('bomBreakdownModal'));
         var body = document.getElementById('bomBreakdownBody');
         body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-info"></div><p class="mt-2 text-muted">Loading...</p></div>';
         modal.show();
 
-        fetch('?controller=mo&action=getBomBreakdown&mo_id=' + moId)
+        fetch('?controller=lmr&action=getBomBreakdown&lmr_id=' + lmrId)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.error) {
@@ -161,9 +161,9 @@ document.querySelectorAll('.view-bom-btn').forEach(function(btn) {
                 }
                 var html = '';
                 html += '<div class="row mb-3">';
-                html += '<div class="col-md-3"><strong>MO:</strong> ' + (data.mo.mo_number || '-') + '</div>';
-                html += '<div class="col-md-3"><strong>Customer:</strong> ' + (data.mo.customer_name || data.mo.customer_code || '-') + '</div>';
-                html += '<div class="col-md-3"><strong>Status:</strong> <span class="badge bg-info">' + (data.mo.mo_status || '-') + '</span></div>';
+                html += '<div class="col-md-3"><strong>LMR:</strong> ' + (data.lmr.lmr_number || '-') + '</div>';
+                html += '<div class="col-md-3"><strong>Customer:</strong> ' + (data.lmr.customer_name || data.lmr.customer_code || '-') + '</div>';
+                html += '<div class="col-md-3"><strong>Status:</strong> <span class="badge bg-info">' + (data.lmr.lmr_status || '-') + '</span></div>';
                 html += '</div>';
 
                 var anyShortage = false;
@@ -215,7 +215,7 @@ document.querySelectorAll('.view-bom-btn').forEach(function(btn) {
                 if (anyShortage) {
                     html = '<div class="alert alert-danger mb-3"><i class="bi bi-exclamation-triangle me-1"></i><strong>Stock shortages detected.</strong> Some materials lack sufficient inventory.</div>' + html;
                 } else {
-                    html = '<div class="alert alert-success mb-3"><i class="bi bi-check-circle me-1"></i><strong>All materials available.</strong> This MO can be safely released.</div>' + html;
+                    html = '<div class="alert alert-success mb-3"><i class="bi bi-check-circle me-1"></i><strong>All materials available.</strong> This LMR can be safely released.</div>' + html;
                 }
 
                 body.innerHTML = html;

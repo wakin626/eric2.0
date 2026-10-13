@@ -1,12 +1,12 @@
 <style>
-    .mo-card {
+    .lmr-card {
         border: 1px solid #e2e8f0;
         border-radius: 16px;
         background: #ffffff;
         box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
     }
 
-    .mo-section-title {
+    .lmr-section-title {
         font-size: 0.78rem;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -14,7 +14,7 @@
         font-weight: 700;
     }
 
-    .mo-toolbar {
+    .lmr-toolbar {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -62,9 +62,9 @@
         padding-left: 1.2rem;
     }
 
-    #moEntryForm .is-invalid,
-    #moEntryForm select.is-invalid,
-    #moEntryForm input.is-invalid {
+    #lmrEntryForm .is-invalid,
+    #lmrEntryForm select.is-invalid,
+    #lmrEntryForm input.is-invalid {
         border-color: #ef4444 !important;
         box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
     }
@@ -90,20 +90,20 @@
     }
 </style>
 
-<div class="mo-toolbar sticky-toolbar pb-2">
+<div class="lmr-toolbar sticky-toolbar pb-2">
     <div>
-        <h5 class="mb-1"><i class="bi bi-clipboard-check me-2 text-primary"></i>Manufacturing Order Entry</h5>
+        <h5 class="mb-1"><i class="bi bi-clipboard-check me-2 text-primary"></i>LMR Entry</h5>
         <small class="text-muted">PPIC work order entry and material line tracking</small>
     </div>
     <div class="d-flex align-items-center gap-2">
-        <a href="?controller=mo&action=index" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left me-1"></i>Back to MO List
+        <a href="?controller=lmr&action=index" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to LMR List
         </a>
         <button type="button" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-file-earmark-text me-1"></i>Draft
         </button>
-        <button type="button" id="btn-save-mo" class="btn btn-primary btn-sm">
-            <i class="bi bi-check2-circle me-1"></i>Save MO
+        <button type="button" id="btn-save-lmr" class="btn btn-primary btn-sm">
+            <i class="bi bi-check2-circle me-1"></i>Save LMR
         </button>
     </div>
 </div>
@@ -119,9 +119,9 @@
     <button type="button" class="btn-close ms-2 mt-1" onclick="document.getElementById('formToast').classList.remove('show');"></button>
 </div>
 
-<form id="moEntryForm" class="mo-card p-4" method="POST" action="<?= !empty($mo) ? '?controller=mo&action=update' : '?controller=mo&action=store' ?>" novalidate>
-    <?php if (!empty($mo)): ?>
-        <input type="hidden" name="mo_id" value="<?= (int) $mo['mo_id'] ?>">
+<form id="lmrEntryForm" class="lmr-card p-4" method="POST" action="<?= !empty($lmr) ? '?controller=lmr&action=update' : '?controller=lmr&action=store' ?>" novalidate>
+    <?php if (!empty($lmr)): ?>
+        <input type="hidden" name="lmr_id" value="<?= (int) $lmr['lmr_id'] ?>">
     <?php endif; ?>
     <input type="hidden" name="line_items_json" id="lineItemsJson">
     <input type="hidden" name="customer_id" id="customerIdHidden">
@@ -129,59 +129,59 @@
     <input type="hidden" name="customer_code" id="customerCodeHidden">
     <div class="row g-4 mb-4">
         <div class="col-lg-6">
-            <div class="mo-section-title mb-3">Header Meta & Schedule</div>
+            <div class="lmr-section-title mb-3">Header Meta & Schedule</div>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Number <span class="text-danger">*</span></label>
-                    <input type="text" name="mo_number" class="form-control" placeholder="Enter MO number" value="<?= htmlspecialchars($mo['mo_number'] ?? '') ?>" required>
+                    <label class="form-label fw-semibold">LMR Number <span class="text-danger">*</span></label>
+                    <input type="text" name="lmr_number" class="form-control" placeholder="Enter LMR number" value="<?= htmlspecialchars($lmr['lmr_number'] ?? '') ?>" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Type</label>
-                    <select name="mo_type" class="form-select filter-select">
-                        <option value="Standard" <?= ($mo['mo_type'] ?? 'Standard') === 'Standard' ? 'selected' : '' ?>>Standard</option>
-                        <option value="Rework" <?= ($mo['mo_type'] ?? '') === 'Rework' ? 'selected' : '' ?>>Rework</option>
-                        <option value="Trial" <?= ($mo['mo_type'] ?? '') === 'Trial' ? 'selected' : '' ?>>Trial</option>
+                    <label class="form-label fw-semibold">LMR Type</label>
+                    <select name="lmr_type" class="form-select filter-select">
+                        <option value="Standard" <?= ($lmr['lmr_type'] ?? 'Standard') === 'Standard' ? 'selected' : '' ?>>Standard</option>
+                        <option value="Rework" <?= ($lmr['lmr_type'] ?? '') === 'Rework' ? 'selected' : '' ?>>Rework</option>
+                        <option value="Trial" <?= ($lmr['lmr_type'] ?? '') === 'Trial' ? 'selected' : '' ?>>Trial</option>
                     </select>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Site</label>
-                    <select name="mo_site" class="form-select filter-select">
+                    <label class="form-label fw-semibold">LMR Site</label>
+                    <select name="lmr_site" class="form-select filter-select">
                         <option value="001 - Sterling Technopark" selected>001 - Sterling Technopark</option>
                     </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Order Date</label>
-                    <input type="date" name="order_date" class="form-control" value="<?= htmlspecialchars($mo['order_date'] ?? date('Y-m-d')) ?>">
+                    <input type="date" name="order_date" class="form-control" value="<?= htmlspecialchars($lmr['order_date'] ?? date('Y-m-d')) ?>">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Due Date</label>
-                    <input type="date" name="due_date" class="form-control" value="<?= htmlspecialchars($mo['due_date'] ?? date('Y-m-d')) ?>">
+                    <input type="date" name="due_date" class="form-control" value="<?= htmlspecialchars($lmr['due_date'] ?? date('Y-m-d')) ?>">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Planned Start Date</label>
-                    <input type="date" name="planned_start_date" class="form-control" value="<?= htmlspecialchars($mo['planned_start_date'] ?? date('Y-m-d')) ?>">
+                    <input type="date" name="planned_start_date" class="form-control" value="<?= htmlspecialchars($lmr['planned_start_date'] ?? date('Y-m-d')) ?>">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Priority</label>
-                    <input type="number" name="priority" class="form-control" value="<?= (int) ($mo['priority'] ?? 3) ?>" min="1" max="9">
+                    <input type="number" name="priority" class="form-control" value="<?= (int) ($lmr['priority'] ?? 3) ?>" min="1" max="9">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Reference No</label>
-                    <input type="text" name="reference_no" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($mo['reference_no'] ?? '') ?>">
+                    <input type="text" name="reference_no" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($lmr['reference_no'] ?? '') ?>">
                 </div>
             </div>
         </div>
 
         <div class="col-lg-6">
-            <div class="mo-section-title mb-3">Customer & Order Tracking</div>
+            <div class="lmr-section-title mb-3">Customer & Order Tracking</div>
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">MO Status</label>
-                    <select name="mo_status" class="form-select filter-select">
-                        <option value="Planned" <?= ($mo['mo_status'] ?? 'Planned') === 'Planned' ? 'selected' : '' ?>>Planned</option>
-                        <option value="Released" <?= ($mo['mo_status'] ?? '') === 'Released' ? 'selected' : '' ?>>Released</option>
-                        <option value="Completed" <?= ($mo['mo_status'] ?? '') === 'Completed' ? 'selected' : '' ?>>Completed</option>
-                        <option value="Cancelled" <?= ($mo['mo_status'] ?? '') === 'Cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                    <label class="form-label fw-semibold">LMR Status</label>
+                    <select name="lmr_status" class="form-select filter-select">
+                        <option value="Planned" <?= ($lmr['lmr_status'] ?? 'Planned') === 'Planned' ? 'selected' : '' ?>>Planned</option>
+                        <option value="Released" <?= ($lmr['lmr_status'] ?? '') === 'Released' ? 'selected' : '' ?>>Released</option>
+                        <option value="Completed" <?= ($lmr['lmr_status'] ?? '') === 'Completed' ? 'selected' : '' ?>>Completed</option>
+                        <option value="Cancelled" <?= ($lmr['lmr_status'] ?? '') === 'Cancelled' ? 'selected' : '' ?>>Cancelled</option>
                     </select>
                 </div>
                 <div class="col-md-6">
@@ -189,7 +189,7 @@
                     <select name="customer_code" id="customerCode" class="form-select filter-select">
                         <option value="">Select customer</option>
                         <?php foreach ($customers ?? [] as $customer): ?>
-                            <option value="<?= htmlspecialchars($customer['customer_id']) ?>" data-name="<?= htmlspecialchars($customer['customer_name'] ?? '') ?>" data-code="<?= htmlspecialchars($customer['customer_code'] ?? '') ?>" <?= (int) ($mo['customer_id'] ?? 0) === (int) $customer['customer_id'] ? 'selected' : '' ?>>
+                            <option value="<?= htmlspecialchars($customer['customer_id']) ?>" data-name="<?= htmlspecialchars($customer['customer_name'] ?? '') ?>" data-code="<?= htmlspecialchars($customer['customer_code'] ?? '') ?>" <?= (int) ($lmr['customer_id'] ?? 0) === (int) $customer['customer_id'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($customer['customer_code'] ?? '') ?>
                             </option>
                         <?php endforeach; ?>
@@ -197,15 +197,15 @@
                 </div>
                 <div class="col-md-12">
                     <label class="form-label fw-semibold">Customer Name</label>
-                    <input type="text" id="customerName" class="form-control" readonly placeholder="Auto-fills after selecting customer" value="<?= htmlspecialchars($mo['customer_name'] ?? '') ?>">
+                    <input type="text" id="customerName" class="form-control" readonly placeholder="Auto-fills after selecting customer" value="<?= htmlspecialchars($lmr['customer_name'] ?? '') ?>">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Batch / Lot No</label>
-                    <input type="text" name="batch_lot_no" class="form-control" placeholder="e.g. FB013-0826143" value="<?= htmlspecialchars($mo['batch_lot_no'] ?? '') ?>">
+                    <input type="text" name="batch_lot_no" class="form-control" placeholder="e.g. FB013-0826143" value="<?= htmlspecialchars($lmr['batch_lot_no'] ?? '') ?>">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">PO Number <span class="text-danger">*</span></label>
-                    <select name="po_number" id="poNumber" class="form-select filter-select" data-selected-po="<?= htmlspecialchars($mo['po_number'] ?? '') ?>">
+                    <select name="po_number" id="poNumber" class="form-select filter-select" data-selected-po="<?= htmlspecialchars($lmr['po_number'] ?? '') ?>">
                         <option value="">Select open PO</option>
                     </select>
                 </div>
@@ -214,8 +214,8 @@
     </div>
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="mo-section-title mb-0">Item / Material Lines</div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#moItemModal">
+        <div class="lmr-section-title mb-0">Item / Material Lines</div>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#lmrItemModal">
             <i class="bi bi-plus-circle me-1"></i>Add Line Item
         </button>
     </div>
@@ -236,10 +236,10 @@
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
-            <tbody id="moLinesTableBody">
+            <tbody id="lmrLinesTableBody">
                 <tr class="empty-state-row">
                     <td colspan="10" class="text-center text-muted py-3">
-                        No line items added yet. Use "Add Line Item" to begin the MO.
+                        No line items added yet. Use "Add Line Item" to begin the LMR.
                     </td>
                 </tr>
             </tbody>
@@ -247,11 +247,11 @@
     </div>
 </form>
 
-<div class="modal fade" id="moItemModal" tabindex="-1" aria-labelledby="moItemModalLabel" aria-hidden="true">
+<div class="modal fade" id="lmrItemModal" tabindex="-1" aria-labelledby="lmrItemModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header">
-                <h5 class="modal-title" id="moItemModalLabel"><i class="bi bi-plus-circle me-2"></i>Add MO Product Item</h5>
+                <h5 class="modal-title" id="lmrItemModalLabel"><i class="bi bi-plus-circle me-2"></i>Add LMR Product Item</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const lineBomCode = document.getElementById('lineBomCode');
     const lineQtyOrdered = document.getElementById('lineQtyOrdered');
     const lineType = document.getElementById('lineType');
-    const linesTable = document.getElementById('moLinesTableBody');
+    const linesTable = document.getElementById('lmrLinesTableBody');
     const saveLineBtn = document.getElementById('saveLineItemBtn');
     const bomStatusAlert = document.getElementById('bomStatusAlert');
     const bomComponentPreview = document.getElementById('bomComponentPreview');
@@ -505,7 +505,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         bomFetchTimeout = setTimeout(function () {
-            fetch('?controller=mo&action=getBomByItem&item_id=' + encodeURIComponent(itemId) + '&qty=' + encodeURIComponent(qty))
+            fetch('?controller=lmr&action=getBomByItem&item_id=' + encodeURIComponent(itemId) + '&qty=' + encodeURIComponent(qty))
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (data.error) {
@@ -603,7 +603,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (currentBomData && currentBomData.no_bom) {
-            alert('Cannot add item to MO without an active BOM formulation.');
+            alert('Cannot add item to LMR without an active BOM formulation.');
             return;
         }
 
@@ -620,7 +620,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (hasShortage) {
             alert('Cannot proceed with saving this production line because stock shortages exist for:\n'
                 + shortItems.join(', ')
-                + '.\n\nAll component items must be In Stock before adding to the MO.');
+                + '.\n\nAll component items must be In Stock before adding to the LMR.');
             return;
         }
 
@@ -660,7 +660,7 @@ document.addEventListener('DOMContentLoaded', function () {
         lineType.value = 'FG';
         resetBomPreview();
 
-        var modal = bootstrap.Modal.getInstance(document.getElementById('moItemModal'));
+        var modal = bootstrap.Modal.getInstance(document.getElementById('lmrItemModal'));
         if (modal) {
             modal.hide();
         }
@@ -681,14 +681,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    document.getElementById('moItemModal').addEventListener('show.bs.modal', function () {
+    document.getElementById('lmrItemModal').addEventListener('show.bs.modal', function () {
         filterItemOptionsByType();
         if (itemSelect.value) {
             fetchBomBreakdown(itemSelect.value, lineQtyOrdered.value || 0);
         }
     });
 
-    var moSiteSelect = document.querySelector('select[name="mo_site"]');
+    var moSiteSelect = document.querySelector('select[name="lmr_site"]');
     if (moSiteSelect) {
         // Site is display-only data (shown on LMR print) — it does not affect SOH.
         moSiteSelect.addEventListener('change', function () {
@@ -696,7 +696,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    document.getElementById('moItemModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('lmrItemModal').addEventListener('hidden.bs.modal', function () {
         resetBomPreview();
         itemSelect.value = '';
         lineDescription.value = '';
@@ -718,11 +718,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (row) {
             row.remove();
             syncLineItemsPayload();
-            if (!linesTable.querySelector('tr') && !document.querySelector('#moLinesTableBody .empty-state-row')) {
+            if (!linesTable.querySelector('tr') && !document.querySelector('#lmrLinesTableBody .empty-state-row')) {
                 linesTable.innerHTML = `
                     <tr class="empty-state-row">
                         <td colspan="10" class="text-center text-muted py-3">
-                            No line items added yet. Use "Add Line Item" to begin the MO.
+                            No line items added yet. Use "Add Line Item" to begin the LMR.
                         </td>
                     </tr>
                 `;
@@ -757,13 +757,13 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('formValidationAlert').classList.add('d-none');
         document.getElementById('formValidationMessage').innerHTML = '';
         document.getElementById('formToast').classList.remove('show');
-        document.querySelectorAll('#moEntryForm .is-invalid').forEach(function (el) {
+        document.querySelectorAll('#lmrEntryForm .is-invalid').forEach(function (el) {
             el.classList.remove('is-invalid');
         });
     }
 
     function setSubmitLoading(loading) {
-        var btn = document.getElementById('btn-save-mo');
+        var btn = document.getElementById('btn-save-lmr');
         if (!btn) return;
         if (loading) {
             btn.disabled = true;
@@ -778,18 +778,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    document.getElementById('btn-save-mo').addEventListener('click', async function () {
-        console.log('Save MO button clicked!');
+    document.getElementById('btn-save-lmr').addEventListener('click', async function () {
+        console.log('Save LMR button clicked!');
         try {
             clearFormValidation();
 
             var errors = [];
-            var moNumberInput = document.querySelector('input[name="mo_number"]');
+            var moNumberInput = document.querySelector('input[name="lmr_number"]');
             var customerSelectEl = document.getElementById('customerCode');
             var firstInvalid = null;
 
             if (!moNumberInput.value.trim()) {
-                errors.push('MO Number is required.');
+                errors.push('LMR Number is required.');
                 moNumberInput.classList.add('is-invalid');
                 if (!firstInvalid) firstInvalid = moNumberInput;
             }
@@ -826,13 +826,13 @@ document.addEventListener('DOMContentLoaded', function () {
             syncLineItemsPayload();
 
             var payload = JSON.parse(lineItemsJson.value || '[]');
-            console.log('Submitting MO payload:', payload);
+            console.log('Submitting LMR payload:', payload);
 
             setSubmitLoading(true);
 
-            var formData = new FormData(document.getElementById('moEntryForm'));
+            var formData = new FormData(document.getElementById('lmrEntryForm'));
 
-            var response = await fetch('?controller=mo&action=store', {
+            var response = await fetch('?controller=lmr&action=store', {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -861,8 +861,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (data.success) {
-                console.log('MO saved successfully. Redirecting to:', data.redirect);
-                window.location.href = data.redirect || '?controller=mo&action=index';
+                console.log('LMR saved successfully. Redirecting to:', data.redirect);
+                window.location.href = data.redirect || '?controller=lmr&action=index';
             } else {
                 setSubmitLoading(false);
                 var errMsg = data.error || 'An unknown error occurred. Please try again.';

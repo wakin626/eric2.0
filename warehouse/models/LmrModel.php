@@ -3,25 +3,25 @@ namespace App\Models;
 
 use App\Core\BaseModel;
 
-class MoModel extends BaseModel {
+class LmrModel extends BaseModel {
     public function getAll($status = null) {
-        $sql = "SELECT mo.*
-                FROM manufacturing_orders mo";
+        $sql = "SELECT lmr.*
+                FROM lmr_orders lmr";
         $params = [];
 
         if ($status && $status !== 'all') {
-            $sql .= " WHERE mo.mo_status = :status";
+            $sql .= " WHERE lmr.lmr_status = :status";
             $params['status'] = $status;
         }
 
-        $sql .= " ORDER BY mo.created_at DESC";
+        $sql .= " ORDER BY lmr.created_at DESC";
 
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute($params);
         $orders = $stmt->fetchAll();
 
         foreach ($orders as &$order) {
-            $order['items'] = $this->getItemsByMoId($order['mo_id']);
+            $order['items'] = $this->getItemsByLmrId($order['lmr_id']);
             $order['item_code'] = $order['items'][0]['item_code'] ?? '-';
             $order['qty_ordered'] = $order['items'][0]['qty_ordered'] ?? 0;
         }
@@ -29,10 +29,10 @@ class MoModel extends BaseModel {
         return $orders;
     }
 
-    public function getItemsByMoId($moId) {
-        $sql = "SELECT * FROM manufacturing_order_items WHERE mo_id = :mo_id ORDER BY moi_id ASC";
+    public function getItemsByLmrId($lmrId) {
+        $sql = "SELECT * FROM lmr_order_items WHERE lmr_id = :lmr_id ORDER BY lri_id ASC";
         $stmt = self::getConnection()->prepare($sql);
-        $stmt->execute(['mo_id' => $moId]);
+        $stmt->execute(['lmr_id' => $lmrId]);
         return $stmt->fetchAll();
     }
 
@@ -88,26 +88,26 @@ class MoModel extends BaseModel {
         $pdo->beginTransaction();
 
         try {
-            $stmt = $pdo->prepare("INSERT INTO manufacturing_orders (
-                mo_number, mo_type, mo_site, order_date, due_date, planned_start_date, priority,
-                reference_no, mo_status, customer_id, customer_code, customer_name,
+            $stmt = $pdo->prepare("INSERT INTO lmr_orders (
+                lmr_number, lmr_type, lmr_site, order_date, due_date, planned_start_date, priority,
+                reference_no, lmr_status, customer_id, customer_code, customer_name,
                 batch_lot_no, po_number, created_by
             ) VALUES (
-                :mo_number, :mo_type, :mo_site, :order_date, :due_date, :planned_start_date, :priority,
-                :reference_no, :mo_status, :customer_id, :customer_code, :customer_name,
+                :lmr_number, :lmr_type, :lmr_site, :order_date, :due_date, :planned_start_date, :priority,
+                :reference_no, :lmr_status, :customer_id, :customer_code, :customer_name,
                 :batch_lot_no, :po_number, :created_by
             )");
 
             $stmt->execute([
-                'mo_number' => trim($data['mo_number']),
-                'mo_type' => $data['mo_type'] ?? 'Standard',
-                'mo_site' => $data['mo_site'] ?? '001 - Sterling Technopark',
+                'lmr_number' => trim($data['lmr_number']),
+                'lmr_type' => $data['lmr_type'] ?? 'Standard',
+                'lmr_site' => $data['lmr_site'] ?? '001 - Sterling Technopark',
                 'order_date' => $data['order_date'] ?? null,
                 'due_date' => $data['due_date'] ?? null,
                 'planned_start_date' => $data['planned_start_date'] ?? null,
                 'priority' => (int) ($data['priority'] ?? 3),
                 'reference_no' => $data['reference_no'] ?? null,
-                'mo_status' => $data['mo_status'] ?? 'Planned',
+                'lmr_status' => $data['lmr_status'] ?? 'Planned',
                 'customer_id' => $data['customer_id'] ?? null,
                 'customer_code' => $data['customer_code'] ?? null,
                 'customer_name' => $data['customer_name'] ?? null,
@@ -116,18 +116,18 @@ class MoModel extends BaseModel {
                 'created_by' => $_SESSION['user_id'] ?? null
             ]);
 
-            $moId = $pdo->lastInsertId();
+            $lmrId = $pdo->lastInsertId();
 
             if (!empty($items)) {
-                $itemStmt = $pdo->prepare("INSERT INTO manufacturing_order_items (
-                    mo_id, item_id, item_code, item_description, uom, item_type, site, qty_ordered, so_number, bom_code
+                $itemStmt = $pdo->prepare("INSERT INTO lmr_order_items (
+                    lmr_id, item_id, item_code, item_description, uom, item_type, site, qty_ordered, so_number, bom_code
                 ) VALUES (
-                    :mo_id, :item_id, :item_code, :item_description, :uom, :item_type, :site, :qty_ordered, :so_number, :bom_code
+                    :lmr_id, :item_id, :item_code, :item_description, :uom, :item_type, :site, :qty_ordered, :so_number, :bom_code
                 )");
 
                 foreach ($items as $item) {
                     $itemStmt->execute([
-                        'mo_id' => $moId,
+                        'lmr_id' => $lmrId,
                         'item_id' => $item['item_id'] ?? null,
                         'item_code' => $item['item_code'] ?? null,
                         'item_description' => $item['item_description'] ?? null,
@@ -142,37 +142,55 @@ class MoModel extends BaseModel {
             }
 
             $pdo->commit();
-            return $moId;
+            return $lmrId;
         } catch (\Exception $e) {
             $pdo->rollBack();
             throw $e;
         }
     }
 
-    public function update($moId, $data, $items) {
+    public function update($lmrId, $data, $items) {
         $pdo = self::getConnection();
         $pdo->beginTransaction();
 
         try {
-            $stmt = $pdo->prepare("UPDATE manufacturing_orders SET
-                mo_number = :mo_number, mo_type = :mo_type, mo_site = :mo_site,
+            $cur = $pdo->prepare("SELECT lmr_status FROM lmr_orders WHERE lmr_id = :lmr_id LIMIT 1");
+            $cur->execute(['lmr_id' => $lmrId]);
+            $oldStatus = $cur->fetchColumn();
+            $newStatus = $data['lmr_status'] ?? 'Planned';
+
+            $cur = $pdo->prepare("SELECT COUNT(*) FROM mrp_allocations WHERE lmr_id = :lmr_id AND status = 'active'");
+            $cur->execute(['lmr_id' => $lmrId]);
+            $hadActive = (int) $cur->fetchColumn() > 0;
+            $oldTerminal = in_array($oldStatus, ['Completed', 'Cancelled'], true);
+            $newTerminal = in_array($newStatus, ['Completed', 'Cancelled'], true);
+
+            // Release BEFORE the item wipe: mrp_allocations.lri_id cascades away
+            // with lmr_order_items, and that cascade does not return
+            // the reserved stock — releasing first keeps qty_allocated honest.
+            if ($hadActive || ($newTerminal && !$oldTerminal)) {
+                $this->deallocateMaterials($lmrId);
+            }
+
+            $stmt = $pdo->prepare("UPDATE lmr_orders SET
+                lmr_number = :lmr_number, lmr_type = :lmr_type, lmr_site = :lmr_site,
                 order_date = :order_date, due_date = :due_date, planned_start_date = :planned_start_date,
-                priority = :priority, reference_no = :reference_no, mo_status = :mo_status,
+                priority = :priority, reference_no = :reference_no, lmr_status = :lmr_status,
                 customer_id = :customer_id, customer_code = :customer_code, customer_name = :customer_name,
                 batch_lot_no = :batch_lot_no, po_number = :po_number, updated_at = NOW()
-                WHERE mo_id = :mo_id");
+                WHERE lmr_id = :lmr_id");
 
             $stmt->execute([
-                'mo_id' => $moId,
-                'mo_number' => trim($data['mo_number']),
-                'mo_type' => $data['mo_type'] ?? 'Standard',
-                'mo_site' => $data['mo_site'] ?? '001 - Sterling Technopark',
+                'lmr_id' => $lmrId,
+                'lmr_number' => trim($data['lmr_number']),
+                'lmr_type' => $data['lmr_type'] ?? 'Standard',
+                'lmr_site' => $data['lmr_site'] ?? '001 - Sterling Technopark',
                 'order_date' => $data['order_date'] ?? null,
                 'due_date' => $data['due_date'] ?? null,
                 'planned_start_date' => $data['planned_start_date'] ?? null,
                 'priority' => (int) ($data['priority'] ?? 3),
                 'reference_no' => $data['reference_no'] ?? null,
-                'mo_status' => $data['mo_status'] ?? 'Planned',
+                'lmr_status' => $data['lmr_status'] ?? 'Planned',
                 'customer_id' => $data['customer_id'] ?? null,
                 'customer_code' => $data['customer_code'] ?? null,
                 'customer_name' => $data['customer_name'] ?? null,
@@ -180,19 +198,19 @@ class MoModel extends BaseModel {
                 'po_number' => $data['po_number'] ?? null,
             ]);
 
-            $delStmt = $pdo->prepare("DELETE FROM manufacturing_order_items WHERE mo_id = :mo_id");
-            $delStmt->execute(['mo_id' => $moId]);
+            $delStmt = $pdo->prepare("DELETE FROM lmr_order_items WHERE lmr_id = :lmr_id");
+            $delStmt->execute(['lmr_id' => $lmrId]);
 
             if (!empty($items)) {
-                $itemStmt = $pdo->prepare("INSERT INTO manufacturing_order_items (
-                    mo_id, item_id, item_code, item_description, uom, item_type, site, qty_ordered, so_number, bom_code
+                $itemStmt = $pdo->prepare("INSERT INTO lmr_order_items (
+                    lmr_id, item_id, item_code, item_description, uom, item_type, site, qty_ordered, so_number, bom_code
                 ) VALUES (
-                    :mo_id, :item_id, :item_code, :item_description, :uom, :item_type, :site, :qty_ordered, :so_number, :bom_code
+                    :lmr_id, :item_id, :item_code, :item_description, :uom, :item_type, :site, :qty_ordered, :so_number, :bom_code
                 )");
 
                 foreach ($items as $item) {
                     $itemStmt->execute([
-                        'mo_id' => $moId,
+                        'lmr_id' => $lmrId,
                         'item_id' => $item['item_id'] ?? null,
                         'item_code' => $item['item_code'] ?? null,
                         'item_description' => $item['item_description'] ?? null,
@@ -206,32 +224,64 @@ class MoModel extends BaseModel {
                 }
             }
 
+            if ($hadActive && $newStatus === 'Released') {
+                $this->allocateMaterials($lmrId);
+            }
+
             $pdo->commit();
-            return $moId;
+            return $lmrId;
         } catch (\Exception $e) {
             $pdo->rollBack();
             throw $e;
         }
     }
 
-    public function findById($moId) {
-        $sql = "SELECT * FROM manufacturing_orders WHERE mo_id = :mo_id LIMIT 1";
+    public function findById($lmrId) {
+        $sql = "SELECT * FROM lmr_orders WHERE lmr_id = :lmr_id LIMIT 1";
         $stmt = self::getConnection()->prepare($sql);
-        $stmt->execute(['mo_id' => $moId]);
+        $stmt->execute(['lmr_id' => $lmrId]);
         return $stmt->fetch();
     }
 
-    public function updateStatus($moId, $status) {
-        $sql = "UPDATE manufacturing_orders SET mo_status = :status, updated_at = NOW() WHERE mo_id = :mo_id";
-        $stmt = self::getConnection()->prepare($sql);
-        return $stmt->execute(['status' => $status, 'mo_id' => $moId]);
+    public function updateStatus($lmrId, $status) {
+        $pdo = self::getConnection();
+        $ownsTx = !$pdo->inTransaction();
+        if ($ownsTx) {
+            $pdo->beginTransaction();
+        }
+        try {
+            $cur = $pdo->prepare("SELECT lmr_status FROM lmr_orders WHERE lmr_id = :lmr_id LIMIT 1");
+            $cur->execute(['lmr_id' => $lmrId]);
+            $oldStatus = $cur->fetchColumn();
+
+            $terminal = ['Completed', 'Cancelled'];
+            if ($oldStatus !== false
+                && in_array($status, $terminal, true)
+                && !in_array($oldStatus, $terminal, true)) {
+                $this->deallocateMaterials($lmrId);
+            }
+
+            $sql = "UPDATE lmr_orders SET lmr_status = :status, updated_at = NOW() WHERE lmr_id = :lmr_id";
+            $stmt = $pdo->prepare($sql);
+            $result = $stmt->execute(['status' => $status, 'lmr_id' => $lmrId]);
+
+            if ($ownsTx) {
+                $pdo->commit();
+            }
+            return $result;
+        } catch (\Exception $e) {
+            if ($ownsTx) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
-    public function allocateMaterials($moId) {
+    public function allocateMaterials($lmrId) {
         $pdo = self::getConnection();
         $warehouseModel = new \App\Models\WarehouseModel();
 
-        $items = $this->getItemsByMoId($moId);
+        $items = $this->getItemsByLmrId($lmrId);
 
         foreach ($items as $item) {
             $bomCode = $item['bom_code'] ?? null;
@@ -250,17 +300,17 @@ class MoModel extends BaseModel {
                 if ($requiredQty <= 0) continue;
 
                 $allocStmt = $pdo->prepare("
-                    INSERT INTO mrp_allocations (mo_id, moi_id, item_id, allocated_qty, status)
-                    VALUES (:mo_id, :moi_id, :item_id, :qty, 'active')
+                    INSERT INTO mrp_allocations (lmr_id, lri_id, item_id, allocated_qty, status)
+                    VALUES (:lmr_id, :lri_id, :item_id, :qty, 'active')
                     ON DUPLICATE KEY UPDATE
                         allocated_qty = allocated_qty + VALUES(allocated_qty),
-                        moi_id = VALUES(moi_id),
+                        lri_id = VALUES(lri_id),
                         status = 'active',
                         updated_at = NOW()
                 ");
                 $allocStmt->execute([
-                    'mo_id' => $moId,
-                    'moi_id' => $item['moi_id'],
+                    'lmr_id' => $lmrId,
+                    'lri_id' => $item['lri_id'],
                     'item_id' => $comp['component_item_id'],
                     'qty' => $requiredQty,
                 ]);
@@ -281,11 +331,11 @@ class MoModel extends BaseModel {
         }
     }
 
-    public function deallocateMaterials($moId) {
+    public function deallocateMaterials($lmrId) {
         $pdo = self::getConnection();
 
-        $stmt = $pdo->prepare("SELECT item_id, allocated_qty FROM mrp_allocations WHERE mo_id = :mo_id AND status = 'active'");
-        $stmt->execute(['mo_id' => $moId]);
+        $stmt = $pdo->prepare("SELECT item_id, allocated_qty FROM mrp_allocations WHERE lmr_id = :lmr_id AND status = 'active'");
+        $stmt->execute(['lmr_id' => $lmrId]);
         $allocations = $stmt->fetchAll();
 
         foreach ($allocations as $alloc) {
@@ -306,14 +356,14 @@ class MoModel extends BaseModel {
 
         $cancelStmt = $pdo->prepare("
             UPDATE mrp_allocations SET status = 'cancelled', updated_at = NOW()
-            WHERE mo_id = :mo_id AND status = 'active'
+            WHERE lmr_id = :lmr_id AND status = 'active'
         ");
-        $cancelStmt->execute(['mo_id' => $moId]);
+        $cancelStmt->execute(['lmr_id' => $lmrId]);
     }
 
-    public function getMoBomBreakdown($moId) {
+    public function getLmrBomBreakdown($lmrId) {
         $warehouseModel = new \App\Models\WarehouseModel();
-        $items = $this->getItemsByMoId($moId);
+        $items = $this->getItemsByLmrId($lmrId);
         $breakdown = [];
 
         foreach ($items as $item) {
@@ -322,7 +372,7 @@ class MoModel extends BaseModel {
 
             if (empty($bomCode)) {
                 $breakdown[] = [
-                    'moi_id' => $item['moi_id'],
+                    'lri_id' => $item['lri_id'],
                     'item_code' => $item['item_code'] ?? '-',
                     'item_description' => $item['item_description'] ?? '-',
                     'qty_ordered' => $qtyOrdered,
@@ -336,7 +386,7 @@ class MoModel extends BaseModel {
             $bom = $warehouseModel->getBomByCode($bomCode);
             if (!$bom) {
                 $breakdown[] = [
-                    'moi_id' => $item['moi_id'],
+                    'lri_id' => $item['lri_id'],
                     'item_code' => $item['item_code'] ?? '-',
                     'item_description' => $item['item_description'] ?? '-',
                     'qty_ordered' => $qtyOrdered,
@@ -383,7 +433,7 @@ class MoModel extends BaseModel {
             }
 
             $breakdown[] = [
-                'moi_id' => $item['moi_id'],
+                'lri_id' => $item['lri_id'],
                 'item_code' => $item['item_code'] ?? '-',
                 'item_description' => $item['item_description'] ?? '-',
                 'qty_ordered' => $qtyOrdered,
@@ -404,8 +454,8 @@ class MoModel extends BaseModel {
         return $breakdown;
     }
 
-    public function validateMoRelease($moId) {
-        $breakdown = $this->getMoBomBreakdown($moId);
+    public function validateMoRelease($lmrId) {
+        $breakdown = $this->getLmrBomBreakdown($lmrId);
         $shortages = [];
 
         foreach ($breakdown as $item) {

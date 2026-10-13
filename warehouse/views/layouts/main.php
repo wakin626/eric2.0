@@ -116,8 +116,8 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?= in_array($currentAction, ['index', 'create', 'edit', 'printLmr']) || str_contains($currentAction ?? '', 'mo') ? 'active' : '' ?>" href="?controller=mo&action=index">
-                            <i class="bi bi-clipboard-check me-2"></i>MO Entry
+                        <a class="nav-link <?= in_array($currentAction, ['index', 'create', 'edit', 'printLmr']) || str_contains($currentAction ?? '', 'lmr') ? 'active' : '' ?>" href="?controller=lmr&action=index">
+                            <i class="bi bi-clipboard-check me-2"></i>LMR Entry
                         </a>
                     </li>
                     <li class="nav-item">

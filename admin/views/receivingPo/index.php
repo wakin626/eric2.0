@@ -106,9 +106,9 @@
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= rtrim(rtrim(number_format(floatval($o['quantity']), 4), '0'), '.') ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
+                    <td class="text-end"><?= formatQty($o['quantity']) ?> <?= htmlspecialchars($o['item_uom'] ?? '') ?></td>
                     <td class="text-end"><?= $o['received_qty'] > 0
-                        ? rtrim(rtrim(number_format(floatval($o['received_qty']), 4), '0'), '.') . ' ' . htmlspecialchars($o['item_uom'] ?? '')
+                        ? formatQty($o['received_qty']) . ' ' . htmlspecialchars($o['item_uom'] ?? '')
                         : '<span class="text-muted">-</span>' ?></td>
                     <td><?php
                         $hasDate = !empty($o['received_date']) && $o['received_date'] !== '0000-00-00' && $o['received_date'] !== '0000-00-00 00:00:00';

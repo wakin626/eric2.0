@@ -79,8 +79,8 @@
                     <td><?= htmlspecialchars($r['trade_name']) ?></td>
                     <td><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $r['category']))) ?></td>
                     <td><?= htmlspecialchars($r['uom']) ?></td>
-                    <td><?= number_format($r['stock_on_hand'], 4) ?></td>
-                    <td><?= number_format($r['reorder_level'], 4) ?></td>
+                    <td><?= formatQty($r['stock_on_hand']) ?></td>
+                    <td><?= formatQty($r['reorder_level']) ?></td>
                     <td>
                         <?php if (!empty($r['errors'])): ?>
                             <small class="text-danger"><?= implode('; ', $r['errors']) ?></small>

@@ -71,7 +71,7 @@
                     <td><?= htmlspecialchars($o['supplier_name']) ?></td>
                     <td><code><?= htmlspecialchars($o['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($o['item_description']) ?></td>
-                    <td class="text-end"><?= number_format($o['quantity'], 4) ?></td>
+                    <td class="text-end"><?= formatQty($o['quantity']) ?></td>
                     <td class="text-end"><?= number_format($o['unit_cost'], 2) ?></td>
                     <td><?= $o['order_date'] ? date('m/d/Y', strtotime($o['order_date'])) : '-' ?></td>
                     <td><?= $o['expected_date'] ? date('m/d/Y', strtotime($o['expected_date'])) : '-' ?></td>
@@ -89,7 +89,7 @@
                             <span class="badge bg-secondary">Cancelled</span>
                         <?php endif; ?>
                     </td>
-                    <td class="text-end"><?= $o['received_qty'] > 0 ? number_format($o['received_qty'], 4) : '-' ?></td>
+                    <td class="text-end"><?= $o['received_qty'] > 0 ? formatQty($o['received_qty']) : '-' ?></td>
                     <td><?= $o['received_date'] ? date('m/d/Y', strtotime($o['received_date'])) : '-' ?></td>
                     <td><?= htmlspecialchars($o['created_by_name'] ?? '') ?></td>
                     <td>

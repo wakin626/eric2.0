@@ -38,7 +38,7 @@
                         <td><?= htmlspecialchars($item['item_code']) ?></td>
                         <td><?= htmlspecialchars($item['item_description']) ?></td>
                         <td><?= htmlspecialchars($item['item_uom']) ?></td>
-                        <td><?= $item['quantity'] ?></td>
+                        <td><?= formatQty($item['quantity']) ?></td>
                         <td>
                             <?php $conv = $item['uom_conversion'] ?? null; ?>
                             <?php if ($conv && $item['item_uom'] !== 'CS'): ?>

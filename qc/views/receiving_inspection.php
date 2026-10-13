@@ -51,6 +51,9 @@ function submitQcDecisionOnce(form) {
                                     <span class="badge bg-warning text-dark"><?= htmlspecialchars($currentStatus === 'PENDING_QC' ? 'Pending Inspection' : $currentStatus) ?></span>
                                 </td>
                                 <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $itemId ?>" title="View Details">
+                                        <i class="bi bi-eye"></i> View
+                                    </button>
                                     <form method="POST" action="?controller=qc&action=approveReceivingInspection" class="d-inline-flex gap-2"
                                           onsubmit="return submitQcDecisionOnce(this);">
                                         <input type="hidden" name="receiving_item_id" value="<?= $itemId ?>">
@@ -129,6 +132,9 @@ function submitQcDecisionOnce(form) {
                                     <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= (int) ($item['receiving_item_id'] ?? 0) ?>" title="View Details">
                                         <i class="bi bi-eye"></i> View
                                     </button>
+                                    <button class="btn btn-sm btn-outline-secondary btn-edit-po" data-id="<?= (int) ($item['supplier_order_id'] ?? 0) ?>" title="Edit Record">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -139,3 +145,4 @@ function submitQcDecisionOnce(form) {
     </div>
 </div>
 <?php require BASE_PATH . 'app/views/shared/po_view_modal.php'; ?>
+<?php $poEditContext = 'qc'; require BASE_PATH . 'app/views/shared/po_edit_modal.php'; ?>

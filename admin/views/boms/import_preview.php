@@ -81,8 +81,8 @@
                     <td><?= htmlspecialchars($r['bom_code'] ?: '-') ?></td>
                     <td><code><?= htmlspecialchars($r['rm_code']) ?></code></td>
                     <td><?= htmlspecialchars($r['item_name']) ?></td>
-                    <td><?= number_format($r['dosage_rate'], 6) ?></td>
-                    <td><?= number_format($r['wastage_pct'], 2) ?>%</td>
+                    <td><?= formatQty($r['dosage_rate'], 6) ?></td>
+                    <td><?= formatQty($r['wastage_pct'], 2) ?>%</td>
                     <td>
                         <?php if (!empty($r['errors'])): ?>
                             <small class="text-danger"><?= implode('; ', $r['errors']) ?></small>

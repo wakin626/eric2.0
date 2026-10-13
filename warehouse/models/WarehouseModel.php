@@ -22,7 +22,7 @@ class WarehouseModel extends BaseModel {
         return $stmt->fetch();
     }
 
-    // ─── Catalog (delegated to CatalogModel) ────────────────────────────────
+    // â”€â”€â”€ Catalog (delegated to CatalogModel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getCustomers() {
         return $this->catalogModel->getCustomers();
@@ -568,7 +568,7 @@ class WarehouseModel extends BaseModel {
      * TEMPORARY static list: when the suppliers table ships, replace the body
      * with e.g. SELECT supplier_id AS id, supplier_name AS name
      *          FROM suppliers WHERE `remove` = 0 ORDER BY supplier_name
-     * and nothing else changes — both the purchasingPo view (server-rendered
+     * and nothing else changes â€” both the purchasingPo view (server-rendered
      * options) and WarehouseController::getSuppliers() (JSON hook) read this.
      */
     public function getSuppliers() {
@@ -1604,7 +1604,7 @@ class WarehouseModel extends BaseModel {
             ->execute(['delivery_id' => $deliveryId]);
 
         if ($report['report_type'] === 'quantity' && $report['lot_id']) {
-            // 3a. Quantity report — update lot_items JSON
+            // 3a. Quantity report â€” update lot_items JSON
             $lotId = $report['lot_id'];
             $lotItems = json_decode($report['lot_items'] ?? '[]', true);
             if (!is_array($lotItems)) $lotItems = [];
@@ -1641,7 +1641,7 @@ class WarehouseModel extends BaseModel {
             ) WHERE po.po_id = :po_id2")
                 ->execute(['po_id' => $report['po_id'], 'po_id2' => $report['po_id']]);
         } elseif ($report['report_type'] === 'dr_number' && $newDrNumber) {
-            // 3b. DR Number report — update dr_number
+            // 3b. DR Number report â€” update dr_number
             $conn->prepare("UPDATE deliveries SET dr_number = :dr_number
                 WHERE delivery_id = :delivery_id")
                 ->execute(['dr_number' => $newDrNumber, 'delivery_id' => $deliveryId]);
@@ -2549,7 +2549,7 @@ class WarehouseModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
-    // ─── Backloads (delegated to BackloadModel) ─────────────────────────────
+    // â”€â”€â”€ Backloads (delegated to BackloadModel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function createBackload($data) {
         return $this->backloadModel->createBackload($data);
@@ -3025,7 +3025,7 @@ public function searchItems($query) {
         return $this->catalogModel->searchItems($query);
     }
 
-    // ─── MRP Methods ──────────────────────────────────────────────────────────
+    // â”€â”€â”€ MRP Methods â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getCustomersWithOpenPOs() {
         $sql = "SELECT DISTINCT c.customer_id, c.customer_code, c.customer_name
@@ -3063,8 +3063,8 @@ public function searchItems($query) {
      * assigned on the BOM header (fg_boms.customer_id).
      *
      * An FG may carry several active BOMs (multi-formulation), so the join is
-     * pinned to one row per item — the default BOM when flagged, otherwise the
-     * oldest active one — otherwise the dropdown would list the FG twice.
+     * pinned to one row per item â€” the default BOM when flagged, otherwise the
+     * oldest active one â€” otherwise the dropdown would list the FG twice.
      */
     public function getFgsWithBomByCustomer($customerId = null) {
         // Pick one BOM per FG inside the same filter as the outer query, so a
@@ -3126,7 +3126,7 @@ public function searchItems($query) {
 
         // Explicit choice (Switch BOM): honoured only while it still belongs to
         // this FG. A stale id (another tab, back button, deleted BOM) must not
-        // blank the calculation — it falls through to the default resolution.
+        // blank the calculation â€” it falls through to the default resolution.
         if (!empty($bomId)) {
             $stmt = self::getConnection()->prepare($select . " AND b.id = :bom_id");
             $params['bom_id'] = intval($bomId);
@@ -3152,7 +3152,7 @@ public function searchItems($query) {
     }
 
     /**
-     * All active BOMs for one FG/SFG — powers the MRP Sheet "Switch BOM" list.
+     * All active BOMs for one FG/SFG â€” powers the MRP Sheet "Switch BOM" list.
      * Ordered exactly like getBomForFg() resolves them (customer match first,
      * then the default formulation), so boms[0] is what Calculate would use
      * when no BOM is explicitly chosen.
@@ -3214,11 +3214,11 @@ public function searchItems($query) {
     /**
      * Physical SOH/allocated per BOM component, summed across ALL sites.
      *
-     * Single source of truth shared by the MO Entry modal, MRP sheet, MO
+     * Single source of truth shared by the LMR Entry modal, MRP sheet, LMR
      * release validation and LMR printing, so every screen reports the exact
      * same figure regardless of which site row QC/receiving wrote stock to.
      * view_inventory_status is COALESCE(SUM(qty_on_hand),0) per item over
-     * inventory_balances — equivalent to the raw COALESCE(SUM(...)) query.
+     * inventory_balances â€” equivalent to the raw COALESCE(SUM(...)) query.
      */
     public function getBOMComponentsWithStock($bom_ids) {
         if (empty($bom_ids)) return [];
@@ -3246,7 +3246,7 @@ public function searchItems($query) {
         if (empty($ingredient_item_ids)) return [];
         $placeholders = implode(',', array_fill(0, count($ingredient_item_ids), '?'));
         // Legacy BOMs: (qty / batch_qty) * dosage * wastage
-        // New BOMs:    RM → (qty * fill_volume / divisor) * dosage% ; others → qty * dosage ; both * wastage
+        // New BOMs:    RM â†’ (qty * fill_volume / divisor) * dosage% ; others â†’ qty * dosage ; both * wastage
         $sql = "SELECT bi.item_id AS component_item_id,
                        SUM(
                            CASE
@@ -3285,10 +3285,10 @@ public function searchItems($query) {
         return $result;
     }
 
-    // ─── BOM Lookup ──────────────────────────────────────────────────────────
+    // â”€â”€â”€ BOM Lookup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
-     * BOM header used by MO / production flows. Multi-BOM: resolves to the
+     * BOM header used by LMR / production flows. Multi-BOM: resolves to the
      * active default formulation (oldest active BOM as fallback), matching
      * what the MRP Sheet picks when no BOM is chosen explicitly.
      */
@@ -3320,7 +3320,7 @@ public function searchItems($query) {
         return $stmt->fetch() ?: false;
     }
 
-    // ─── Procurement PO ─────────────────────────────────────────────────────
+    // â”€â”€â”€ Procurement PO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getSupplierOrdersFiltered($filters = []) {
         $where = ["so.`remove` = 0"];
@@ -3434,16 +3434,25 @@ public function searchItems($query) {
     }
 
     /**
-     * Pending PO / RR per item — the informational "PENDING PO / RR" column on
+     * Pending PO / RR per item â€” the informational "PENDING PO / RR" column on
      * the MRP sheet and snapshot history. Never part of the LACKING netting
      * (Lacking = max(0, Required - max(0, SOH - Allocated))).
-     *   1. Open supplier order remainders (ordered, not yet received):
+     *
+     * Item matching is by the items FK (item_id), never by item_code strings:
+     * supplier_orders has no item_code column, so a requisition can only ever
+     * count against the exact item row it references â€” a line for PM00097
+     * sums only PM00097's requisitions; dummy/orphan codes cannot leak in.
+     *
+     * Statuses mirror the Purchasing PO tabs (purchasingStatusTabSet) and only
+     * cover open, non-fulfilled quantities; terminal states (received,
+     * cancelled, rejected, completed) and remove = 1 rows never count:
+     *   1. Open Requested requisitions (MRP- or procurement-generated) at
+     *      their remaining quantity (quantity - received_qty) â€” each MRP run
+     *      keeps its own distinct row, so re-runs see what is already queued.
+     *   2. Open supplier order remainders (ordered, not yet received):
      *      status in pending / processed / partially_received / For Inspection.
-     *   2. Received-but-not-yet-passed-QC stock sitting in the inspection hold
-     *      bucket (inventory_balances.qty_for_inspect) — not counted in SOH.
-     *   3. Open Requested requisitions (MRP- or procurement-generated) — each
-     *      MRP run keeps its own distinct row, and those open requests count
-     *      as pending coverage so re-runs see what is already queued.
+     *   3. Received-but-not-yet-passed-QC stock sitting in the inspection hold
+     *      bucket (inventory_balances.qty_for_inspect) â€” not counted in SOH.
      */
     public function getPendingPoRrForItems($item_ids) {
         if (empty($item_ids)) return [];
@@ -3478,7 +3487,10 @@ public function searchItems($query) {
             $result[intval($row['item_id'])] += floatval($row['inspect_qty']);
         }
 
-        $sql = "SELECT item_id, SUM(quantity) AS requested_qty
+        // Open requisitions count at their unfulfilled remainder only â€” same
+        // formula as the open-PO branch, so a Requested row that already
+        // received part of its quantity never overstates PENDING PO / RR.
+        $sql = "SELECT item_id, SUM(GREATEST(quantity - COALESCE(received_qty, 0), 0)) AS requested_qty
                 FROM supplier_orders
                 WHERE `remove` = 0
                   AND status = 'requested'
@@ -3618,7 +3630,7 @@ public function searchItems($query) {
         }
     }
 
-    // ─── Purchasing PO (renamed from Procurement PO) ────────────────────────────
+    // â”€â”€â”€ Purchasing PO (renamed from Procurement PO) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Status sets behind the Purchasing PO filter tabs.
@@ -3822,7 +3834,7 @@ public function searchItems($query) {
             'supplier_name' => $po['supplier_name'] ?? null,
             'item_code' => $po['item_code'] ?? null,
             'description' => $po['item_description'] ?? null,
-            'quantity' => rtrim(rtrim(number_format($qty, 4), '0'), '.'),
+            'quantity' => formatQty($qty),
             'uom' => $uom,
             'unit_cost' => number_format(floatval($po['unit_cost'] ?? 0), 2),
             'order_date' => $po['order_date'] ? date('m/d/Y', strtotime($po['order_date'])) : null,
@@ -3830,7 +3842,7 @@ public function searchItems($query) {
             'status' => $po['status'] ?? null,
             'order_remarks' => trim((string) ($po['remarks'] ?? '')) ?: null,
             'created_by' => $po['created_by_name'] ?? null,
-            'received_qty' => rtrim(rtrim(number_format($recvTotal, 4), '0'), '.'),
+            'received_qty' => formatQty($recvTotal),
             'received_date' => ($latest && $latest['received_date']) ? date('m/d/Y', strtotime($latest['received_date'])) : null,
             'dr_number' => $latest ? trim((string) ($latest['dr_invoice_no'] ?? '')) : '',
             'received_by' => $po['received_by_name'] ?? null,
@@ -3845,6 +3857,97 @@ public function searchItems($query) {
             'rejected_qty' => $latest ? rtrim(rtrim(number_format(floatval($latest['rejected_qty'] ?? 0), 4), '0'), '.') : null,
             'batches' => $batches,
         ];
+    }
+
+    /**
+     * Raw (unformatted) purchasing PO row for the Edit modal, with an
+     * editable flag â€” cancelled/rejected orders are frozen; everything else
+     * may be corrected (with received rows clamped to their received qty).
+     */
+    public function getPurchasingPoForEdit($id) {
+        $po = $this->getPurchasingPoById($id);
+        if (!$po) {
+            return false;
+        }
+        $frozen = ['cancelled', 'rejected'];
+        $receivedQty = floatval($po['received_qty'] ?? 0);
+        $editable = !in_array(strtolower((string) ($po['status'] ?? '')), $frozen, true);
+        return [
+            'supplier_order_id' => (int) $po['supplier_order_id'],
+            'supplier_name' => $po['supplier_name'] ?? '',
+            'item_code' => $po['item_code'] ?? '',
+            'item_description' => $po['item_description'] ?? null,
+            'uom' => $po['item_uom'] ?? '',
+            'quantity' => formatQty(floatval($po['quantity'] ?? 0)),
+            'received_qty' => formatQty($receivedQty),
+            'unit_cost' => rtrim(rtrim(number_format(floatval($po['unit_cost'] ?? 0), 2), '0'), '.'),
+            'order_date' => $po['order_date'] ?? null,
+            'expected_date' => $po['expected_date'] ?? null,
+            'remarks' => trim((string) ($po['remarks'] ?? '')),
+            'status' => $po['status'] ?? null,
+            'editable' => $editable,
+        ];
+    }
+
+    /**
+     * Correct typo-level fields on a purchasing PO. Cancelled/rejected rows
+     * are frozen; rows with received quantities may still be edited but the
+     * quantity can never drop below what was already received. Item identity
+     * and any inventory/receiving links are preserved.
+     */
+    public function updatePurchasingPo($id, array $data) {
+        $conn = self::getConnection();
+        $stmt = $conn->prepare(
+            "SELECT supplier_order_id, status, received_qty FROM supplier_orders
+              WHERE supplier_order_id = :id AND `remove` = 0
+              LIMIT 1 FOR UPDATE"
+        );
+        $conn->beginTransaction();
+        try {
+            $stmt->execute(['id' => $id]);
+            $po = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$po) {
+                throw new \RuntimeException('Purchasing PO not found.');
+            }
+            if (in_array(strtolower((string) $po['status']), ['cancelled', 'rejected'], true)) {
+                throw new \RuntimeException('Cancelled or rejected orders cannot be edited.');
+            }
+            $receivedQty = floatval($po['received_qty']);
+            $newQty = floatval($data['quantity'] ?? 0);
+            if ($newQty <= 0) {
+                throw new \RuntimeException('Quantity must be greater than zero.');
+            }
+            if ($receivedQty > 0 && $newQty < $receivedQty) {
+                throw new \RuntimeException('Quantity cannot be less than the already-received quantity ('
+                    . formatQty($receivedQty) . ').');
+            }
+
+            $upd = $conn->prepare(
+                "UPDATE supplier_orders SET
+                    supplier_name = :supplier_name,
+                    quantity = :quantity,
+                    unit_cost = :unit_cost,
+                    order_date = :order_date,
+                    expected_date = :expected_date,
+                    remarks = :remarks
+                  WHERE supplier_order_id = :id"
+            );
+            $upd->execute([
+                'supplier_name' => trim($data['supplier_name'] ?? ''),
+                'quantity' => $newQty,
+                'unit_cost' => floatval($data['unit_cost'] ?? 0),
+                'order_date' => ($data['order_date'] ?? '') !== '' ? $data['order_date'] : null,
+                'expected_date' => ($data['expected_date'] ?? '') !== '' ? $data['expected_date'] : null,
+                'remarks' => trim($data['remarks'] ?? '') !== '' ? trim($data['remarks']) : null,
+                'id' => $id,
+            ]);
+
+            $conn->commit();
+            return true;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
     }
 
     public function createPurchasingPo($data) {
@@ -3909,11 +4012,11 @@ public function searchItems($query) {
     /**
      * Bulk-process selected requisitions into ONE consolidated PO draft.
      *
-     * All selected rows must share the same item — validated here as well as
+     * All selected rows must share the same item â€” validated here as well as
      * in the browser, with the offending item codes in the error. The oldest
      * selected row survives with quantity = SUM(selected) and the merged MRP
      * reference tags (MRP1, MRP2, ...); the remaining rows are marked
-     * status 'PO_Created' — kept visible in Purchasing "All Orders" for audit
+     * status 'PO_Created' â€” kept visible in Purchasing "All Orders" for audit
      * but excluded from Receiving's tabs and from the MRP pending-coverage
      * math (which only counts requested + open PO statuses), so the summed
      * quantity is never counted twice.
@@ -4054,7 +4157,13 @@ public function searchItems($query) {
             if (!$order) {
                 throw new \RuntimeException('Purchasing PO not found.');
             }
-            if (in_array($order['status'], ['cancelled', 'received', 'completed'])) {
+            // Cannot cancel once any receipt has been staged: the goods already
+            // sit in the QC inspection queue / received counts and must go
+            // through inspection instead of being silently voided.
+            if (floatval($order['received_qty'] ?? 0) > 0.0001) {
+                throw new \RuntimeException('Cannot cancel: this PO already has received goods awaiting inspection.');
+            }
+            if (in_array($order['status'], ['cancelled', 'received', 'completed', 'partially_received', 'For Inspection'])) {
                 throw new \RuntimeException('Cannot cancel a purchasing PO with status "' . ucfirst($order['status']) . '".');
             }
 
@@ -4102,7 +4211,7 @@ public function searchItems($query) {
         return $stmt->rowCount() > 0;
     }
 
-    // ─── Receiving Purchasing PO ────────────────────────────────────────────────
+    // â”€â”€â”€ Receiving Purchasing PO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Status sets behind the Receiving PO filter tabs.
@@ -4112,7 +4221,7 @@ public function searchItems($query) {
     private function receivingStatusTabSet($tab) {
         switch ((string) $tab) {
             case 'pending':      // In-Transit: ordered/underway, awaiting receipt
-            case '':             // default — Receiving has no "All Shipments" view
+            case '':             // default â€” Receiving has no "All Shipments" view
                 return ['pending', 'processed', 'partially_received'];
             case 'inspection':   // received into quarantine, awaiting QC decision
                 return ['For Inspection'];
@@ -4126,15 +4235,16 @@ public function searchItems($query) {
 
     /**
      * Per-tab row counts for the receiving status tabs.
-     * "requested" lines are excluded — they never appear on Receiving.
+     * "requested" lines are excluded â€” they never appear on Receiving.
      */
     public function getReceivingTabCounts() {
+        $conn = self::getConnection();
         $sql = "SELECT status, COUNT(*) AS c FROM supplier_orders
                 WHERE `remove` = 0 AND status <> 'requested'
                 GROUP BY status";
         $byStatus = [];
         $all = 0;
-        foreach (self::getConnection()->query($sql)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+        foreach ($conn->query($sql)->fetchAll(\PDO::FETCH_ASSOC) as $row) {
             $byStatus[$row['status']] = (int) $row['c'];
             $all += (int) $row['c'];
         }
@@ -4145,10 +4255,25 @@ public function searchItems($query) {
             }
             return $total;
         };
+        // In-Transit: only lines with a receivable balance (strict rule).
+        $pendingCount = (int) $conn->query(
+            "SELECT COUNT(*) FROM supplier_orders
+             WHERE `remove` = 0 AND status IN ('pending', 'processed', 'partially_received')
+               AND (quantity - COALESCE(received_qty, 0)) > 0.0001"
+        )->fetchColumn();
+        // For QC Inspection: fully-staged lines plus any line with an
+        // uninspected (PENDING_QC) batch.
+        $inspectionCount = (int) $conn->query(
+            "SELECT COUNT(*) FROM supplier_orders so
+             WHERE so.`remove` = 0 AND so.status NOT IN ('requested', 'received', 'rejected', 'cancelled')
+               AND (so.status = 'For Inspection' OR EXISTS (
+                   SELECT 1 FROM receiving_items rix
+                   WHERE rix.supplier_order_id = so.supplier_order_id AND rix.qc_status = 'PENDING_QC'))"
+        )->fetchColumn();
         return [
             'all' => $all,
-            'pending' => $sumOf($this->receivingStatusTabSet('pending')),
-            'inspection' => $sumOf($this->receivingStatusTabSet('inspection')),
+            'pending' => $pendingCount,
+            'inspection' => $inspectionCount,
             'completed' => $sumOf($this->receivingStatusTabSet('completed')),
         ];
     }
@@ -4166,13 +4291,32 @@ public function searchItems($query) {
         } else {
             $statuses = $this->receivingStatusTabSet($filters['tab'] ?? '');
         }
-        if ($statuses !== null) {
+        // For QC Inspection tab the status set alone is too narrow — fully-staged
+        // lines AND any line with an uninspected batch qualify (see below), so the
+        // plain status IN() is replaced by the compound predicate.
+        $isInspectionTab = ($filters['tab'] ?? '') === 'inspection' && empty($filters['status']);
+        if ($statuses !== null && !$isInspectionTab) {
             $placeholders = [];
             foreach ($statuses as $i => $status) {
                 $placeholders[] = ":st{$i}";
                 $params["st{$i}"] = $status;
             }
             $where[] = 'so.status IN (' . implode(', ', $placeholders) . ')';
+        }
+        // Strict In-Transit rule: a line is receivable only while a balance
+        // remains — fully-staged ('For Inspection') or fully-received lines
+        // never linger in In-Transit even if status data drifts.
+        if (($filters['tab'] ?? '') === 'pending' && empty($filters['status'])) {
+            $where[] = '(so.quantity - COALESCE(so.received_qty, 0)) > 0.0001';
+        }
+        // For QC Inspection tab: fully-staged lines AND any line that still has
+        // an uninspected batch (e.g. partially_received with a staged 20 while
+        // the 10 balance sits in In-Transit). Terminal outcomes stay in Completed.
+        if (($filters['tab'] ?? '') === 'inspection' && empty($filters['status'])) {
+            $where[] = "so.status NOT IN ('received', 'rejected', 'cancelled')
+                        AND (so.status = 'For Inspection' OR EXISTS (
+                            SELECT 1 FROM receiving_items rix
+                            WHERE rix.supplier_order_id = so.supplier_order_id AND rix.qc_status = 'PENDING_QC'))";
         }
         if (!empty($filters['supplier'])) {
             $where[] = "so.supplier_name = :supplier";
@@ -4190,6 +4334,9 @@ public function searchItems($query) {
         $whereSql = implode(' AND ', $where);
         // PO Ref is the explicit po_ref entered by procurement; '-' when empty.
         $sql = "SELECT so.*, i.item_code, i.item_description, i.item_type,
+                       EXISTS (SELECT 1 FROM receiving_items rix
+                               WHERE rix.supplier_order_id = so.supplier_order_id
+                                 AND rix.qc_status = 'PENDING_QC') AS has_pending_qc,
                        COALESCE(so.uom,
                                 (SELECT bi.uom FROM fg_bom_items bi
                                  JOIN fg_boms b ON b.id = bi.bom_id AND b.status = 'active'
@@ -4241,8 +4388,8 @@ public function searchItems($query) {
             $remaining = $orderedQty - $currentReceived;
             if ($newReceivedQty > $orderedQty + 0.0001) {
                 throw new \RuntimeException(
-                    'Cannot receive ' . number_format($receivedQty, 4) . ' — only ' .
-                    number_format(max($remaining, 0), 4) . ' remaining of ' . number_format($orderedQty, 4) . '.'
+                    'Cannot receive ' . formatQty($receivedQty) . ' â€” only ' .
+                    formatQty(max($remaining, 0)) . ' remaining of ' . formatQty($orderedQty) . '.'
                 );
             }
 
@@ -4357,7 +4504,119 @@ public function searchItems($query) {
         }
     }
 
-    // ─── MRP Snapshots ──────────────────────────────────────────────────────
+    /**
+     * Load the pending QC staging batch (receiving_items) of a supplier order
+     * for the "Edit Receiving (staged)" modal â€” lot, expiry, qty, remarks.
+     */
+    public function getReceivingStagingForEdit($supplierOrderId) {
+        $sql = "SELECT ri.id, ri.supplier_order_id, ri.po_ref, ri.item_code, ri.item_name,
+                       ri.uom, ri.ordered_qty, ri.received_qty, ri.lot_number, ri.expiry_date,
+                       ri.remarks, ri.qc_status, ri.received_date,
+                       so.quantity AS ordered_total, so.received_qty AS cumulative_received,
+                       so.status AS order_status
+                FROM receiving_items ri
+                JOIN supplier_orders so ON so.supplier_order_id = ri.supplier_order_id
+                WHERE ri.supplier_order_id = :sid AND ri.qc_status = 'PENDING_QC'
+                ORDER BY ri.id DESC
+                LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['sid' => intval($supplierOrderId)]);
+        return $stmt->fetch();
+    }
+
+    /**
+     * Save corrections to a staged (PENDING_QC) receiving batch: received qty,
+     * lot number, expiry date and remarks. Adjusts the inspection-hold balance
+     * and the order's cumulative received qty / status accordingly.
+     */
+    public function updateReceivingStaging($id, $data) {
+        $conn = self::getConnection();
+        $conn->beginTransaction();
+        try {
+            $stmt = $conn->prepare(
+                "SELECT ri.*, so.quantity AS ordered_total, so.received_qty AS cumulative_received, so.item_id
+                 FROM receiving_items ri
+                 JOIN supplier_orders so ON so.supplier_order_id = ri.supplier_order_id
+                 WHERE ri.id = :id FOR UPDATE"
+            );
+            $stmt->execute(['id' => intval($id)]);
+            $row = $stmt->fetch();
+            if (!$row) {
+                throw new \RuntimeException('Staged receipt not found.');
+            }
+            if ($row['qc_status'] !== 'PENDING_QC') {
+                throw new \RuntimeException('Only batches still awaiting QC inspection can be edited.');
+            }
+
+            $newQty = floatval($data['received_qty']);
+            $oldQty = floatval($row['received_qty']);
+            if ($newQty <= 0) {
+                throw new \RuntimeException('Received quantity must be greater than zero.');
+            }
+            // Cumulative received excluding this batch must still fit the order.
+            $otherReceived = floatval($row['cumulative_received']) - $oldQty;
+            if ($otherReceived + $newQty > floatval($row['ordered_total']) + 0.0001) {
+                throw new \RuntimeException(
+                    'Received quantity cannot exceed the ordered total of ' .
+                    formatQty(floatval($row['ordered_total'])) . '.'
+                );
+            }
+
+            $remarks = trim((string) ($data['remarks'] ?? ''));
+            $lot = trim((string) ($data['lot_number'] ?? ''));
+            $expiry = trim((string) ($data['expiry_date'] ?? ''));
+
+            $conn->prepare(
+                "UPDATE receiving_items
+                 SET received_qty = :qty, lot_number = :lot, expiry_date = :expiry, remarks = :remarks
+                 WHERE id = :id"
+            )->execute([
+                'qty' => $newQty,
+                'lot' => $lot !== '' ? $lot : null,
+                'expiry' => $expiry !== '' ? $expiry : null,
+                'remarks' => $remarks !== '' ? $remarks : null,
+                'id' => $id,
+            ]);
+
+            // Mirror the delta onto the inspection hold and the order totals.
+            $delta = $newQty - $oldQty;
+            if (abs($delta) > 0.0001) {
+                $conn->prepare(
+                    "UPDATE inventory_balances
+                     SET qty_for_inspect = GREATEST(qty_for_inspect + :delta, 0)
+                     WHERE item_id = :item_id AND site_code = :site_code"
+                )->execute([
+                    'delta' => $delta,
+                    'item_id' => $row['item_id'],
+                    'site_code' => self::DEFAULT_SITE_CODE,
+                ]);
+
+                $newCumulative = max(0, floatval($row['cumulative_received']) + $delta);
+                $remaining = floatval($row['ordered_total']) - $newCumulative;
+                // A balance still due keeps the order open as 'partially_received'
+                // so the remaining qty stays receivable under In-Transit; only a
+                // fully-staged order gates to 'For Inspection' (0 balance left).
+                $status = $remaining > 0.0001 ? 'partially_received' : 'For Inspection';
+                $conn->prepare(
+                    "UPDATE supplier_orders
+                     SET received_qty = :qty, status = :status, last_update = NOW()
+                     WHERE supplier_order_id = :sid"
+                )->execute([
+                    'qty' => $newCumulative,
+                    'status' => $status,
+                    'sid' => $row['supplier_order_id'],
+                ]);
+            }
+
+            $conn->commit();
+            return true;
+        } catch (\Exception $e) {
+            $conn->rollBack();
+            throw $e;
+        }
+    }
+
+    // â”€â”€â”€ MRP Snapshots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function saveMrpRun($po_id, $customer_id, $user_id, $sections, $consolidated) {
         $conn = self::getConnection();
@@ -4396,11 +4655,11 @@ public function searchItems($query) {
 
     /**
      * Save an FG/customer/target MRP calculation: history run + component lines,
-     * committed-stock allocation, and the purchase requests for lacking items —
+     * committed-stock allocation, and the purchase requests for lacking items â€”
      * all in one transaction so a failure leaves no half-saved run.
      *
-     * $rows    — every BOM component: component_item_id, required, soh, allocated
-     * $lacking — [item_id => ['quantity' => float, 'uom' => string]] recomputed by caller
+     * $rows    â€” every BOM component: component_item_id, required, soh, allocated
+     * $lacking â€” [item_id => ['quantity' => float, 'uom' => string]] recomputed by caller
      */
     /**
      * Next MRP reference in the MRP#YYYY-XXXX sequence (e.g. MRP#2026-0001).
@@ -4409,7 +4668,7 @@ public function searchItems($query) {
      * never feed the counter.
      *
      * $lockForUpdate serializes concurrent generators by locking the newest
-     * mrp_runs row — call it inside a transaction (saveMrpCalculationRun does)
+     * mrp_runs row â€” call it inside a transaction (saveMrpCalculationRun does)
      * so two simultaneous saves cannot mint the same number.
      */
     public function generateNextMrpRef($conn = null, $lockForUpdate = false) {
@@ -4421,7 +4680,7 @@ public function searchItems($query) {
             //    supremum gap when empty). 2) Locking read of the sequence:
             //    a plain SELECT here would reuse this transaction's earlier
             //    snapshot (saveMrpCalculationRun reads items first) and miss
-            //    refs committed after it — FOR UPDATE always sees the latest.
+            //    refs committed after it â€” FOR UPDATE always sees the latest.
             $conn->query('SELECT run_id FROM mrp_runs ORDER BY run_id DESC LIMIT 1 FOR UPDATE');
         }
 
@@ -4461,7 +4720,7 @@ public function searchItems($query) {
 
             // Server-assigned sequence (MRP#YYYY-XXXX), generated fresh inside
             // this transaction under the row lock so the saved ref is unique.
-            // The prompt modal only previews this number — $customRef is ignored.
+            // The prompt modal only previews this number â€” $customRef is ignored.
             $mrpRef = $this->generateNextMrpRef($conn, true);
 
             $conn->prepare(
@@ -4487,7 +4746,7 @@ public function searchItems($query) {
                      :pending, :excess, :remarks, :qty_committed)"
             );
             // ALLOCATED on the Item Master comes from view_inventory_status, which
-            // sums inventory_balances.qty_allocated — so committed stock is booked
+            // sums inventory_balances.qty_allocated â€” so committed stock is booked
             // there (qty_on_hand / qty_for_inspect are never touched here).
             $allocStmt = $conn->prepare(
                 "INSERT INTO inventory_balances (item_id, site_code, qty_allocated)
@@ -4538,7 +4797,7 @@ public function searchItems($query) {
             }
 
             // Purchase requests for lacking items: every MRP run INSERTs its
-            // own distinct Requested row — requisitions from earlier runs (and
+            // own distinct Requested row â€” requisitions from earlier runs (and
             // procurement's own) are never UPDATEd or deleted here, so each
             // snapshot keeps its own requisition trail. Rows are tagged with
             // this run id (mrp_run_id + mrp_ref + the legacy remarks format)
@@ -4592,7 +4851,7 @@ public function searchItems($query) {
      * Snapshot detail rows for the history modal (and PDF / delete release).
      *
      * FROZEN columns: total_reqt, soh, allocated, pending, excess and remarks are
-     * selected explicitly from mrp_run_items — captured at save time — so callers
+     * selected explicitly from mrp_run_items â€” captured at save time â€” so callers
      * always get the historical figures. The items joins supply static descriptors
      * only (codes, descriptions, uom) and never touch view_inventory_status.
      *
@@ -4626,7 +4885,7 @@ public function searchItems($query) {
 
     /**
      * Every supplier order a run generated: matched on mrp_run_id first, then
-     * the legacy remarks convention — procurement may have rewritten remarks
+     * the legacy remarks convention â€” procurement may have rewritten remarks
      * after processing, and rows written before the column existed only carry
      * the remarks form.
      */
@@ -4645,7 +4904,7 @@ public function searchItems($query) {
      * Cancel the purchase requests this run generated while they are still
      * unconverted (Requested / Draft). POs already converted to an active order
      * (pending/processed), received, approved or rejected are deliberately NOT
-     * touched — they are real commitments that outlive the snapshot.
+     * touched â€” they are real commitments that outlive the snapshot.
      * Returns the number of orders cancelled.
      */
     public function cancelLinkedSupplierOrdersForRun($run_id) {
@@ -4663,7 +4922,7 @@ public function searchItems($query) {
      * converted: Requested, Draft and already-Cancelled lines get remove = 1 so
      * they disappear from the Purchasing PO screens entirely instead of piling
      * up as dead Cancelled rows in History. Converted / received / rejected
-     * lines keep remove = 0 — they are real commitments that outlive the run.
+     * lines keep remove = 0 â€” they are real commitments that outlive the run.
      * Returns the number of orders purged.
      */
     public function purgeUnfulfilledSupplierOrdersForRun($run_id) {
@@ -4730,7 +4989,7 @@ public function searchItems($query) {
 
     public function getAllMrpRuns() {
         // LEFT JOINs: FG/customer-target runs have no purchase order, and the
-        // customer may be unset ("All Customers") — they must still be listed.
+        // customer may be unset ("All Customers") â€” they must still be listed.
         $sql = "SELECT mr.*, u.full_name AS user_name,
                        po.customer_po_number, po.total_quantity, po.produced_quantity, po.delivered_quantity,
                        c.customer_name, c.customer_code

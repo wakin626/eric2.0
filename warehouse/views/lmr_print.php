@@ -4,15 +4,15 @@
  * Clean minimalist paper-form layout (no grid borders / no barcode).
  * Standalone document (no layout wrapper). Print via browser (@media print).
  *
- * Expects: $mo, $items, $breakdown, $documentId
+ * Expects: $lmr, $items, $breakdown, $documentId
  */
 
-$mo = $mo ?? [];
+$lmr = $lmr ?? [];
 $items = $items ?? [];
 $breakdown = $breakdown ?? [];
-$documentId = $documentId ?? ('LMR-' . ($mo['mo_number'] ?? ''));
+$documentId = $documentId ?? ('LMR-' . ($lmr['lmr_number'] ?? ''));
 
-// First non-empty SO number across MO lines
+// First non-empty SO number across LMR lines
 $soNumber = '';
 foreach ($items as $lineItem) {
     if (!empty($lineItem['so_number'])) {
@@ -59,7 +59,7 @@ usort($components, function ($a, $b) {
 $components = array_values($components);
 $totalRawMaterial = array_sum(array_column($components, 'required_qty'));
 
-$batchLot = !empty($mo['batch_lot_no']) ? $mo['batch_lot_no'] : '';
+$batchLot = !empty($lmr['batch_lot_no']) ? $lmr['batch_lot_no'] : '';
 $soDisplay = $soNumber !== '' ? $soNumber : '';
 $batchDisplay = $batchLot;
 
@@ -77,7 +77,7 @@ $uf = function ($val) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LMR - <?= htmlspecialchars($mo['mo_number'] ?? '') ?></title>
+<title>LMR - <?= htmlspecialchars($lmr['lmr_number'] ?? '') ?></title>
 <style>
     /* ── Base (screen preview mirrors print structure) ──────── */
     * { box-sizing: border-box; }
@@ -156,7 +156,7 @@ $uf = function ($val) {
         padding-bottom: 1px;
     }
 
-    /* ── Inline MO summary: no boxed borders ────────────────── */
+    /* ── Inline LMR summary: no boxed borders ────────────────── */
     .summary-table {
         width: 100%;
         border-collapse: collapse;
@@ -278,7 +278,7 @@ $uf = function ($val) {
 <body>
 
 <div class="toolbar no-print">
-    <a href="?controller=mo&action=view&id=<?= (int) ($mo['mo_id'] ?? 0) ?>">&larr; Back to MO</a>
+    <a href="?controller=lmr&action=view&id=<?= (int) ($lmr['lmr_id'] ?? 0) ?>">&larr; Back to LMR</a>
     <button type="button" onclick="window.print()">🖨 Print</button>
 </div>
 
@@ -297,19 +297,19 @@ $uf = function ($val) {
     <table class="meta-table">
         <tr>
             <td class="meta-label">Site:</td>
-            <td class="meta-value"><?= $uf($mo['mo_site'] ?? '') ?></td>
+            <td class="meta-value"><?= $uf($lmr['lmr_site'] ?? '') ?></td>
             <td class="meta-label">Formulation:</td>
             <td class="meta-value"><?= $uf($formulation) ?></td>
         </tr>
         <tr>
             <td class="meta-label">Customer:</td>
-            <td class="meta-value"><?= $uf(($mo['customer_name'] ?? '') ?: ($mo['customer_code'] ?? '')) ?></td>
+            <td class="meta-value"><?= $uf(($lmr['customer_name'] ?? '') ?: ($lmr['customer_code'] ?? '')) ?></td>
             <td class="meta-label">Supersedes:</td>
             <td class="meta-value"><?= $uf('') ?></td>
         </tr>
         <tr>
             <td class="meta-label">Customer PO No.:</td>
-            <td class="meta-value"><?= $uf($mo['po_number'] ?? '') ?></td>
+            <td class="meta-value"><?= $uf($lmr['po_number'] ?? '') ?></td>
             <td class="meta-label">LMR Rev. No.:</td>
             <td class="meta-value"><?= $uf('') ?></td>
         </tr>
@@ -333,11 +333,11 @@ $uf = function ($val) {
         </tr>
     </table>
 
-    <!-- 2. Manufacturing Order Line Summary (inline, no boxed borders) -->
+    <!-- 2. LMR Line Summary (inline, no boxed borders) -->
     <table class="summary-table">
         <thead>
             <tr>
-                <th>MO Number</th>
+                <th>LMR Number</th>
                 <th>Item Number</th>
                 <th>Description</th>
                 <th>Qty Ordered</th>
@@ -347,15 +347,15 @@ $uf = function ($val) {
         <tbody>
             <?php if (empty($items)): ?>
                 <tr>
-                    <td colspan="5" class="empty-note">No items attached to this MO.</td>
+                    <td colspan="5" class="empty-note">No items attached to this LMR.</td>
                 </tr>
             <?php else: ?>
                 <?php foreach ($items as $lineItem): ?>
                     <tr>
-                        <td><?= htmlspecialchars($mo['mo_number'] ?? '') ?></td>
+                        <td><?= htmlspecialchars($lmr['lmr_number'] ?? '') ?></td>
                         <td><?= htmlspecialchars($lineItem['item_code'] ?? '-') ?></td>
                         <td><?= htmlspecialchars($lineItem['item_description'] ?? '-') ?></td>
-                        <td><?= number_format(floatval($lineItem['qty_ordered'] ?? 0), 3) ?></td>
+                        <td><?= formatQty(floatval($lineItem['qty_ordered'] ?? 0), 3) ?></td>
                         <td><?= $batchLot !== '' ? htmlspecialchars($batchLot) : '<span class="underline-field">&nbsp;</span>' ?></td>
                     </tr>
                 <?php endforeach; ?>
@@ -382,7 +382,7 @@ $uf = function ($val) {
         <tbody>
             <?php if (empty($components)): ?>
                 <tr>
-                    <td colspan="10" class="empty-note">No BOM components available for this MO.</td>
+                    <td colspan="10" class="empty-note">No BOM components available for this LMR.</td>
                 </tr>
             <?php else: ?>
                 <?php $currentPhase = null; foreach ($components as $comp): ?>
@@ -396,7 +396,7 @@ $uf = function ($val) {
                         <td><?= htmlspecialchars($comp['phase_code']) ?></td>
                         <td><?= htmlspecialchars($comp['item_code']) ?></td>
                         <td><?= htmlspecialchars($comp['item_description']) ?></td>
-                        <td class="num"><?= number_format($comp['required_qty'], 3) ?></td>
+                        <td class="num"><?= formatQty($comp['required_qty'], 3) ?></td>
                         <td><?= htmlspecialchars($comp['item_uom']) ?></td>
                         <td>_______</td>
                         <td>_______</td>
@@ -418,7 +418,7 @@ $uf = function ($val) {
         <tfoot>
             <tr>
                 <td colspan="3">Total Raw Material:</td>
-                <td class="num"><?= number_format($totalRawMaterial, 3) ?></td>
+                <td class="num"><?= formatQty($totalRawMaterial, 3) ?></td>
                 <td colspan="6"></td>
             </tr>
         </tfoot>

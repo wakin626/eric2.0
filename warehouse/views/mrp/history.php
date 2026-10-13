@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     var html = '<table class="table table-sm table-bordered"><thead><tr>' +
                         '<th>FG Code</th><th>Component</th><th>UoM</th>' +
                         '<th class="text-end">Total Reqt</th><th class="text-end">SOH</th>' +
-                        '<th class="text-end">Allocated</th><th class="text-end">Pending PO/RR</th>' +
+                        '<th class="text-end">Open Customer PO / Allocated</th><th class="text-end">Pending PO/RR</th>' +
                         '<th class="text-end">Excess</th><th>Remarks</th></tr></thead><tbody>';
                     items.forEach(function(row) {
                         // excess is a formatted string ("-2,500"); a leading '-' marks a shortage.

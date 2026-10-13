@@ -1,4 +1,4 @@
-﻿<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeliveryModal">
             <i class="bi bi-plus-circle me-1"></i> Create Delivery Receipt
@@ -145,7 +145,7 @@
                     <td><?= htmlspecialchars($d['customer_name'] ?? '-') ?></td>
                     <td><small><?= $itemSummary ?></small></td>
                     <td><?= htmlspecialchars($d['dr_number'] ?? '') ?: '<span class="text-muted">-</span>' ?></td>
-                    <td><?= $d['delivery_quantity'] ?? 0 ?></td>
+                    <td><?= formatQty($d['delivery_quantity'] ?? 0) ?></td>
                     <td>
                         <?php if (!empty($casesSummary)): ?>
                             <small><?= $casesSummary ?></small>

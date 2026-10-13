@@ -27,7 +27,6 @@ $poViewEndpoint = $isQcController
                         <div class="col-md-4"><b>Item Code:</b> <span id="vItemCode"></span></div>
                         <div class="col-md-4"><b>Description:</b> <span id="vDescription"></span></div>
                         <div class="col-md-4"><b>Order Qty:</b> <span id="vOrderQty"></span></div>
-                        <div class="col-md-4"><b>Unit Cost:</b> <span id="vUnitCost"></span></div>
                         <div class="col-md-4"><b>Order Date:</b> <span id="vOrderDate"></span></div>
                         <div class="col-md-4"><b>Expected Date:</b> <span id="vExpectedDate"></span></div>
                         <div class="col-md-4"><b>Status:</b> <span id="vStatus"></span></div>
@@ -158,7 +157,6 @@ $poViewEndpoint = $isQcController
         setText('vItemCode', data.item_code);
         setText('vDescription', data.description);
         setText('vOrderQty', data.quantity ? data.quantity + (uom ? ' ' + uom : '') : null);
-        setText('vUnitCost', data.unit_cost !== null && data.unit_cost !== undefined ? data.unit_cost : null);
         setText('vOrderDate', data.order_date);
         setText('vExpectedDate', data.expected_date);
         setText('vCreatedBy', data.created_by);

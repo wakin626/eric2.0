@@ -127,10 +127,10 @@
                         <?php if ($hasLotItems): ?>
                             <?php foreach ($lotItems as $idx => $li): ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <?= $li['qty'] ?? 0 ?>
+                                <?= formatQty($li['qty'] ?? 0) ?>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <?= $d['delivery_quantity'] ?? 0 ?>
+                            <?= formatQty($d['delivery_quantity'] ?? 0) ?>
                         <?php endif; ?>
                     </td>
                     <td><?= date('Y-m-d', strtotime($d['delivery_date'])) ?></td>
@@ -154,7 +154,7 @@
                                     $caseParts[] = htmlspecialchars($desc) . ': ' . floor($info['qty'] / $c) . ' CS';
                                 }
                             }
-                            echo !empty($caseParts) ? implode('<br>', $caseParts) : '<span class="text-muted">—</span>';
+                            echo !empty($caseParts) ? implode('<br>', $caseParts) : '<span class="text-muted">â€”</span>';
                         } else {
                             $conv = $d['actual_uom_conversion'] ?? $d['uom_conversion'] ?? null;
                             $itemUom = $d['item_uom'] ?? '';
@@ -162,7 +162,7 @@
                             if ($conv && $itemUom !== 'CS') {
                                 echo htmlspecialchars($desc) . ': ' . floor(($d['delivery_quantity'] ?? 0) / $conv) . ' CS';
                             } else {
-                                echo '<span class="text-muted">—</span>';
+                                echo '<span class="text-muted">â€”</span>';
                             }
                         }
                         ?>

@@ -1,12 +1,12 @@
 <?php
 namespace App\Controllers;
 
-use App\Models\MoModel;
+use App\Models\LmrModel;
 use App\Models\CatalogModel;
 use App\Models\AuditModel;
 
-class MoController {
-    private $moModel;
+class LmrController {
+    private $lmrModel;
     private $catalogModel;
 
     public function __construct() {
@@ -18,43 +18,43 @@ class MoController {
         $allowedDepartments = ['warehouse', 'admin', 'rnd', 'production'];
         $dept = $_SESSION['department'] ?? '';
         if (!in_array($dept, $allowedDepartments)) {
-            $_SESSION['error'] = 'You do not have access to Manufacturing Orders.';
+            $_SESSION['error'] = 'You do not have access to LMRs.';
             header('Location: ?controller=' . ($dept === 'finance' ? 'finance' : 'admin'));
             exit;
         }
 
-        $this->moModel = new MoModel();
+        $this->lmrModel = new LmrModel();
         $this->catalogModel = new CatalogModel();
     }
 
     public function index() {
         $status = $_GET['status'] ?? 'all';
-        $orders = $this->moModel->getAll($status);
+        $orders = $this->lmrModel->getAll($status);
 
         $data = [
-            'page_title' => 'Manufacturing Orders',
+            'page_title' => 'LMRs',
             'orders' => $orders,
             'status' => $status,
             'customers' => $this->catalogModel->getCustomers(),
         ];
 
-        $this->render('mo/index', $data);
+        $this->render('lmr/index', $data);
     }
 
     public function create() {
         $data = [
-            'page_title' => 'Create MO',
+            'page_title' => 'Create LMR',
             'customers' => $this->catalogModel->getCustomers(),
             'items' => [],
-            'allItems' => $this->catalogModel->getMoProductItems(),
+            'allItems' => $this->catalogModel->getLmrProductItems(),
         ];
 
-        $this->render('mo_entry', $data);
+        $this->render('lmr_entry', $data);
     }
 
     public function store() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ?controller=mo&action=index');
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
@@ -79,15 +79,15 @@ class MoController {
         }
 
         $header = [
-            'mo_number' => trim($_POST['mo_number'] ?? ''),
-            'mo_type' => $_POST['mo_type'] ?? 'Standard',
-            'mo_site' => $_POST['mo_site'] ?? '001 - Sterling Technopark',
+            'lmr_number' => trim($_POST['lmr_number'] ?? ''),
+            'lmr_type' => $_POST['lmr_type'] ?? 'Standard',
+            'lmr_site' => $_POST['lmr_site'] ?? '001 - Sterling Technopark',
             'order_date' => $_POST['order_date'] ?? date('Y-m-d'),
             'due_date' => $_POST['due_date'] ?? date('Y-m-d'),
             'planned_start_date' => $_POST['planned_start_date'] ?? date('Y-m-d'),
             'priority' => (int) ($_POST['priority'] ?? 3),
             'reference_no' => $_POST['reference_no'] ?? null,
-            'mo_status' => $_POST['mo_status'] ?? 'Planned',
+            'lmr_status' => $_POST['lmr_status'] ?? 'Planned',
             'customer_id' => $customer['customer_id'] ?? null,
             'customer_code' => $customer['customer_code'] ?? ($_POST['customer_code'] ?? null),
             'customer_name' => $customer['customer_name'] ?? ($_POST['customer_name'] ?? null),
@@ -95,14 +95,14 @@ class MoController {
             'po_number' => $_POST['po_number'] ?? null,
         ];
 
-        if (empty($header['mo_number'])) {
+        if (empty($header['lmr_number'])) {
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'error' => 'MO Number is required.']);
+                echo json_encode(['success' => false, 'error' => 'LMR Number is required.']);
                 exit;
             }
-            $_SESSION['error'] = 'MO Number is required.';
-            header('Location: ?controller=mo&action=create');
+            $_SESSION['error'] = 'LMR Number is required.';
+            header('Location: ?controller=lmr&action=create');
             exit;
         }
 
@@ -113,7 +113,7 @@ class MoController {
                 exit;
             }
             $_SESSION['error'] = 'Please select a customer.';
-            header('Location: ?controller=mo&action=create');
+            header('Location: ?controller=lmr&action=create');
             exit;
         }
 
@@ -124,63 +124,63 @@ class MoController {
                 exit;
             }
             $_SESSION['error'] = 'PO Number is required for LMR printing.';
-            header('Location: ?controller=mo&action=create');
+            header('Location: ?controller=lmr&action=create');
             exit;
         }
 
         try {
-            $this->moModel->create($header, $items);
+            $this->lmrModel->create($header, $items);
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => true, 'redirect' => '?controller=mo&action=index']);
+                echo json_encode(['success' => true, 'redirect' => '?controller=lmr&action=index']);
                 exit;
             }
-            $_SESSION['success'] = 'Manufacturing Order created successfully.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['success'] = 'LMR created successfully.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         } catch (\Exception $e) {
-            error_log('MoController::store error: ' . $e->getMessage());
+            error_log('LmrController::store error: ' . $e->getMessage());
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'error' => 'Failed to save MO: ' . $e->getMessage()]);
+                echo json_encode(['success' => false, 'error' => 'Failed to save LMR: ' . $e->getMessage()]);
                 exit;
             }
-            $_SESSION['error'] = 'Failed to save MO: ' . $e->getMessage();
-            header('Location: ?controller=mo&action=create');
+            $_SESSION['error'] = 'Failed to save LMR: ' . $e->getMessage();
+            header('Location: ?controller=lmr&action=create');
             exit;
         }
     }
 
     public function update() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ?controller=mo&action=index');
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
         $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH'])
               && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest';
 
-        $moId = intval($_POST['mo_id'] ?? 0);
-        if (!$moId) {
+        $lmrId = intval($_POST['lmr_id'] ?? 0);
+        if (!$lmrId) {
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'error' => 'Invalid MO ID.']);
+                echo json_encode(['success' => false, 'error' => 'Invalid LMR ID.']);
                 exit;
             }
-            $_SESSION['error'] = 'Invalid MO ID.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'Invalid LMR ID.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
-        $order = $this->moModel->findById($moId);
+        $order = $this->lmrModel->findById($lmrId);
         if (!$order) {
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'error' => 'MO not found.']);
+                echo json_encode(['success' => false, 'error' => 'LMR not found.']);
                 exit;
             }
-            $_SESSION['error'] = 'MO not found.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'LMR not found.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
@@ -202,15 +202,15 @@ class MoController {
         }
 
         $header = [
-            'mo_number' => trim($_POST['mo_number'] ?? ''),
-            'mo_type' => $_POST['mo_type'] ?? 'Standard',
-            'mo_site' => $_POST['mo_site'] ?? '001 - Sterling Technopark',
+            'lmr_number' => trim($_POST['lmr_number'] ?? ''),
+            'lmr_type' => $_POST['lmr_type'] ?? 'Standard',
+            'lmr_site' => $_POST['lmr_site'] ?? '001 - Sterling Technopark',
             'order_date' => $_POST['order_date'] ?? date('Y-m-d'),
             'due_date' => $_POST['due_date'] ?? date('Y-m-d'),
             'planned_start_date' => $_POST['planned_start_date'] ?? date('Y-m-d'),
             'priority' => (int) ($_POST['priority'] ?? 3),
             'reference_no' => $_POST['reference_no'] ?? null,
-            'mo_status' => $_POST['mo_status'] ?? 'Planned',
+            'lmr_status' => $_POST['lmr_status'] ?? 'Planned',
             'customer_id' => $customer['customer_id'] ?? null,
             'customer_code' => $customer['customer_code'] ?? ($_POST['customer_code'] ?? null),
             'customer_name' => $customer['customer_name'] ?? ($_POST['customer_name'] ?? null),
@@ -218,14 +218,14 @@ class MoController {
             'po_number' => $_POST['po_number'] ?? null,
         ];
 
-        if (empty($header['mo_number'])) {
+        if (empty($header['lmr_number'])) {
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'error' => 'MO Number is required.']);
+                echo json_encode(['success' => false, 'error' => 'LMR Number is required.']);
                 exit;
             }
-            $_SESSION['error'] = 'MO Number is required.';
-            header('Location: ?controller=mo&action=edit&id=' . $moId);
+            $_SESSION['error'] = 'LMR Number is required.';
+            header('Location: ?controller=lmr&action=edit&id=' . $lmrId);
             exit;
         }
 
@@ -236,7 +236,7 @@ class MoController {
                 exit;
             }
             $_SESSION['error'] = 'Please select a customer.';
-            header('Location: ?controller=mo&action=edit&id=' . $moId);
+            header('Location: ?controller=lmr&action=edit&id=' . $lmrId);
             exit;
         }
 
@@ -247,100 +247,100 @@ class MoController {
                 exit;
             }
             $_SESSION['error'] = 'PO Number is required for LMR printing.';
-            header('Location: ?controller=mo&action=edit&id=' . $moId);
+            header('Location: ?controller=lmr&action=edit&id=' . $lmrId);
             exit;
         }
 
         try {
-            $this->moModel->update($moId, $header, $items);
+            $this->lmrModel->update($lmrId, $header, $items);
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => true, 'redirect' => '?controller=mo&action=index']);
+                echo json_encode(['success' => true, 'redirect' => '?controller=lmr&action=index']);
                 exit;
             }
-            $_SESSION['success'] = 'Manufacturing Order updated successfully.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['success'] = 'LMR updated successfully.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         } catch (\Exception $e) {
-            error_log('MoController::update error: ' . $e->getMessage());
+            error_log('LmrController::update error: ' . $e->getMessage());
             if ($isAjax) {
                 header('Content-Type: application/json');
-                echo json_encode(['success' => false, 'error' => 'Failed to update MO: ' . $e->getMessage()]);
+                echo json_encode(['success' => false, 'error' => 'Failed to update LMR: ' . $e->getMessage()]);
                 exit;
             }
-            $_SESSION['error'] = 'Failed to update MO: ' . $e->getMessage();
-            header('Location: ?controller=mo&action=edit&id=' . $moId);
+            $_SESSION['error'] = 'Failed to update LMR: ' . $e->getMessage();
+            header('Location: ?controller=lmr&action=edit&id=' . $lmrId);
             exit;
         }
     }
 
     public function edit() {
         $id = $_GET['id'] ?? 0;
-        $order = $this->moModel->findById($id);
+        $order = $this->lmrModel->findById($id);
         if (!$order) {
-            $_SESSION['error'] = 'MO not found.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'LMR not found.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
         $data = [
-            'page_title' => 'Edit MO',
-            'mo' => $order,
-            'items' => $this->moModel->getItemsByMoId($id),
+            'page_title' => 'Edit LMR',
+            'lmr' => $order,
+            'items' => $this->lmrModel->getItemsByLmrId($id),
             'customers' => $this->catalogModel->getCustomers(),
-            'allItems' => $this->catalogModel->getMoProductItems(),
+            'allItems' => $this->catalogModel->getLmrProductItems(),
         ];
 
-        $this->render('mo_entry', $data);
+        $this->render('lmr_entry', $data);
     }
 
     public function release() {
         $id = intval($_GET['id'] ?? 0);
         if (!$id) {
-            $_SESSION['error'] = 'Invalid MO.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'Invalid LMR.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
-        $order = $this->moModel->findById($id);
+        $order = $this->lmrModel->findById($id);
         if (!$order) {
-            $_SESSION['error'] = 'MO not found.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'LMR not found.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
-        $breakdown = $this->moModel->getMoBomBreakdown($id);
-        $validation = $this->moModel->validateMoRelease($id);
+        $breakdown = $this->lmrModel->getLmrBomBreakdown($id);
+        $validation = $this->lmrModel->validateMoRelease($id);
 
         $data = [
-            'page_title' => 'Confirm Release MO',
-            'mo' => $order,
-            'items' => $this->moModel->getItemsByMoId($id),
+            'page_title' => 'Confirm Release LMR',
+            'lmr' => $order,
+            'items' => $this->lmrModel->getItemsByLmrId($id),
             'breakdown' => $breakdown,
             'validation' => $validation,
             'isAdmin' => ($_SESSION['department'] ?? '') === 'admin',
         ];
-        $this->render('mo/release_confirm', $data);
+        $this->render('lmr/release_confirm', $data);
     }
 
     public function releaseExecute() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ?controller=mo&action=index');
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
-        $id = intval($_POST['mo_id'] ?? 0);
+        $id = intval($_POST['lmr_id'] ?? 0);
         if (!$id) {
-            $_SESSION['error'] = 'Invalid MO.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'Invalid LMR.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
-        $order = $this->moModel->findById($id);
+        $order = $this->lmrModel->findById($id);
         if (!$order) {
-            $_SESSION['error'] = 'MO not found.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'LMR not found.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
-        $validation = $this->moModel->validateMoRelease($id);
+        $validation = $this->lmrModel->validateMoRelease($id);
         $isForceRelease = !empty($_POST['force_release']);
         $forceReason = trim($_POST['force_reason'] ?? '');
         $isAdmin = ($_SESSION['department'] ?? '') === 'admin';
@@ -348,11 +348,11 @@ class MoController {
         if (!$validation['valid']) {
             if ($isForceRelease && $isAdmin && !empty($forceReason)) {
                 AuditModel::log(
-                    $_SESSION['user_id'], 'FORCE_RELEASE', 'mo',
-                    'Force released MO ' . $order['mo_number'] . ' despite stock shortages. Reason: ' . $forceReason,
+                    $_SESSION['user_id'], 'FORCE_RELEASE', 'lmr',
+                    'Force released LMR ' . $order['lmr_number'] . ' despite stock shortages. Reason: ' . $forceReason,
                     null,
                     ['shortages' => $validation['shortages'], 'reason' => $forceReason],
-                    'manufacturing_order', $id
+                    'lmr_order', $id
                 );
             } else {
                 $shortageList = '';
@@ -361,11 +361,11 @@ class MoController {
                     if (!empty($s['reason'])) {
                         $shortageList .= ' — ' . $s['reason'];
                     } else {
-                        $shortageList .= ' — Short by ' . number_format($s['short_by'], 2) . ' ' . ($s['uom'] ?? '');
+                        $shortageList .= ' — Short by ' . formatQty($s['short_by'], 2) . ' ' . ($s['uom'] ?? '');
                     }
                 }
-                $_SESSION['error'] = 'Cannot Release MO-' . htmlspecialchars($order['mo_number']) . ': Lacking Materials' . $shortageList;
-                header('Location: ?controller=mo&action=release&id=' . $id);
+                $_SESSION['error'] = 'Cannot Release LMR-' . htmlspecialchars($order['lmr_number']) . ': Lacking Materials' . $shortageList;
+                header('Location: ?controller=lmr&action=release&id=' . $id);
                 exit;
             }
         }
@@ -373,96 +373,96 @@ class MoController {
         try {
             \App\Core\BaseModel::beginTransaction();
 
-            $this->moModel->updateStatus($id, 'Released');
-            $this->moModel->allocateMaterials($id);
+            $this->lmrModel->updateStatus($id, 'Released');
+            $this->lmrModel->allocateMaterials($id);
 
             \App\Core\BaseModel::commit();
         } catch (\Exception $e) {
             \App\Core\BaseModel::rollback();
             $_SESSION['error'] = 'Release failed: ' . $e->getMessage();
-            header('Location: ?controller=mo&action=release&id=' . $id);
+            header('Location: ?controller=lmr&action=release&id=' . $id);
             exit;
         }
 
         if (!$isForceRelease) {
             AuditModel::log(
-                $_SESSION['user_id'], 'RELEASE', 'mo',
-                'Released MO ' . $order['mo_number'],
-                null, ['mo_status' => $order['mo_status']],
-                'manufacturing_order', $id
+                $_SESSION['user_id'], 'RELEASE', 'lmr',
+                'Released LMR ' . $order['lmr_number'],
+                null, ['lmr_status' => $order['lmr_status']],
+                'lmr_order', $id
             );
         }
 
-        $_SESSION['success'] = 'MO ' . htmlspecialchars($order['mo_number']) . ' released successfully. Material allocations updated.';
-        header('Location: ?controller=mo&action=index');
+        $_SESSION['success'] = 'LMR ' . htmlspecialchars($order['lmr_number']) . ' released successfully. Material allocations updated.';
+        header('Location: ?controller=lmr&action=index');
         exit;
     }
 
     public function cancel() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ?controller=mo&action=index');
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
-        $id = intval($_POST['mo_id'] ?? $_GET['id'] ?? 0);
+        $id = intval($_POST['lmr_id'] ?? $_GET['id'] ?? 0);
         if (!$id) {
-            $_SESSION['error'] = 'Invalid MO.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'Invalid LMR.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
-        $order = $this->moModel->findById($id);
+        $order = $this->lmrModel->findById($id);
         if (!$order) {
-            $_SESSION['error'] = 'MO not found.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'LMR not found.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
-        if ($order['mo_status'] !== 'Released') {
+        if ($order['lmr_status'] !== 'Released') {
             $_SESSION['error'] = 'Only Released MOs can be cancelled.';
-            header('Location: ?controller=mo&action=index');
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
         try {
             \App\Core\BaseModel::beginTransaction();
 
-            $this->moModel->deallocateMaterials($id);
-            $this->moModel->updateStatus($id, 'Cancelled');
+            $this->lmrModel->deallocateMaterials($id);
+            $this->lmrModel->updateStatus($id, 'Cancelled');
 
             \App\Core\BaseModel::commit();
         } catch (\Exception $e) {
             \App\Core\BaseModel::rollback();
             $_SESSION['error'] = 'Cancel failed: ' . $e->getMessage();
-            header('Location: ?controller=mo&action=index');
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
         AuditModel::log(
-            $_SESSION['user_id'], 'CANCEL', 'mo',
-            'Cancelled MO ' . $order['mo_number'] . ' and deallocated materials',
-            null, ['mo_status' => 'Released'],
-            'manufacturing_order', $id
+            $_SESSION['user_id'], 'CANCEL', 'lmr',
+            'Cancelled LMR ' . $order['lmr_number'] . ' and deallocated materials',
+            null, ['lmr_status' => 'Released'],
+            'lmr_order', $id
         );
 
-        $_SESSION['success'] = 'MO ' . htmlspecialchars($order['mo_number']) . ' cancelled. Material allocations released.';
-        header('Location: ?controller=mo&action=index');
+        $_SESSION['success'] = 'LMR ' . htmlspecialchars($order['lmr_number']) . ' cancelled. Material allocations released.';
+        header('Location: ?controller=lmr&action=index');
         exit;
     }
 
     public function printLmr() {
         $id = $_GET['id'] ?? 0;
-        $order = $this->moModel->findById($id);
+        $order = $this->lmrModel->findById($id);
         if (!$order) {
-            $_SESSION['error'] = 'MO not found.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'LMR not found.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
         $data = [
             'page_title' => 'LMR Print',
-            'mo' => $order,
-            'items' => $this->moModel->getItemsByMoId($id),
-            'breakdown' => $this->moModel->getMoBomBreakdown($id),
-            'documentId' => 'LMR-' . $order['mo_number'],
+            'lmr' => $order,
+            'items' => $this->lmrModel->getItemsByLmrId($id),
+            'breakdown' => $this->lmrModel->getLmrBomBreakdown($id),
+            'documentId' => 'LMR-' . $order['lmr_number'],
         ];
 
         extract($data);
@@ -473,21 +473,21 @@ class MoController {
     public function getBomBreakdown() {
         header('Content-Type: application/json');
         try {
-            $moId = intval($_GET['mo_id'] ?? 0);
-            if ($moId <= 0) {
+            $lmrId = intval($_GET['lmr_id'] ?? 0);
+            if ($lmrId <= 0) {
                 http_response_code(400);
-                echo json_encode(['error' => 'Invalid MO ID']);
+                echo json_encode(['error' => 'Invalid LMR ID']);
                 exit;
             }
-            $order = $this->moModel->findById($moId);
+            $order = $this->lmrModel->findById($lmrId);
             if (!$order) {
                 http_response_code(404);
-                echo json_encode(['error' => 'MO not found']);
+                echo json_encode(['error' => 'LMR not found']);
                 exit;
             }
-            $breakdown = $this->moModel->getMoBomBreakdown($moId);
+            $breakdown = $this->lmrModel->getLmrBomBreakdown($lmrId);
             echo json_encode([
-                'mo' => $order,
+                'lmr' => $order,
                 'breakdown' => $breakdown,
             ]);
         } catch (\Exception $e) {
@@ -525,7 +525,7 @@ class MoController {
                 ]);
                 exit;
             }
-            $breakdown = $this->moModel->getBomBreakdownForItem($itemId, $qty);
+            $breakdown = $this->lmrModel->getBomBreakdownForItem($itemId, $qty);
             echo json_encode($breakdown);
         } catch (\Exception $e) {
             error_log('getBomByItem error: ' . $e->getMessage());
@@ -537,22 +537,22 @@ class MoController {
 
     public function view() {
         $id = intval($_GET['id'] ?? 0);
-        $order = $this->moModel->findById($id);
+        $order = $this->lmrModel->findById($id);
         if (!$order) {
-            $_SESSION['error'] = 'MO not found.';
-            header('Location: ?controller=mo&action=index');
+            $_SESSION['error'] = 'LMR not found.';
+            header('Location: ?controller=lmr&action=index');
             exit;
         }
 
-        $breakdown = $this->moModel->getMoBomBreakdown($id);
+        $breakdown = $this->lmrModel->getLmrBomBreakdown($id);
 
         $data = [
-            'page_title' => 'MO Details',
-            'mo' => $order,
-            'items' => $this->moModel->getItemsByMoId($id),
+            'page_title' => 'LMR Details',
+            'lmr' => $order,
+            'items' => $this->lmrModel->getItemsByLmrId($id),
             'breakdown' => $breakdown,
         ];
-        $this->render('mo/view', $data);
+        $this->render('lmr/view', $data);
     }
 
     private function render($view, $data = []) {

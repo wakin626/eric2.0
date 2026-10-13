@@ -144,13 +144,13 @@
                         <?php if ($hasLotItems): ?>
                             <?php foreach ($lotItems as $idx => $li): ?>
                                 <?= $idx > 0 ? '<hr class="my-1 border-secondary">' : '' ?>
-                                <?= $li['qty'] ?? 0 ?>
+                                <?= formatQty($li['qty'] ?? 0) ?>
                                 <?php if (isset($oldQtyMap[strval($li['lot_id'] ?? '')])): ?>
-                                    <br><small style="color:#e6a800;font-weight:bold;">(old: <?= $oldQtyMap[strval($li['lot_id'])] ?>)</small>
+                                    <br><small style="color:#e6a800;font-weight:bold;">(old: <?= formatQty($oldQtyMap[strval($li['lot_id'])]) ?>)</small>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <?= $d['delivery_quantity'] ?? 0 ?>
+                            <?= formatQty($d['delivery_quantity'] ?? 0) ?>
                             <?php if (!empty($oldQtyMap)): ?>
                                 <?php $firstOld = reset($oldQtyMap); ?>
                                 <br><small style="color:#e6a800;font-weight:bold;">(old: <?= $firstOld ?>)</small>
@@ -178,7 +178,7 @@
                                     $caseParts[] = htmlspecialchars($desc) . ': ' . floor($info['qty'] / $c) . ' CS';
                                 }
                             }
-                            echo !empty($caseParts) ? implode('<br>', $caseParts) : '<span class="text-muted">—</span>';
+                            echo !empty($caseParts) ? implode('<br>', $caseParts) : '<span class="text-muted">â€”</span>';
                         } else {
                             $conv = $d['actual_uom_conversion'] ?? $d['uom_conversion'] ?? null;
                             $itemUom = $d['item_uom'] ?? '';
@@ -186,7 +186,7 @@
                             if ($conv && $itemUom !== 'CS') {
                                 echo htmlspecialchars($desc) . ': ' . floor(($d['delivery_quantity'] ?? 0) / $conv) . ' CS';
                             } else {
-                                echo '<span class="text-muted">—</span>';
+                                echo '<span class="text-muted">â€”</span>';
                             }
                         }
                         ?>
@@ -302,7 +302,7 @@ foreach (['search', 'filter_customer', 'filter_item', 'filter_dr', 'filter_po', 
                         </div>
                     </div>
                     <div id="editLotItemsRow" style="display:none;">
-                        <label class="form-label fw-bold">Lot Items — Edit Quantity</label>
+                        <label class="form-label fw-bold">Lot Items â€” Edit Quantity</label>
                         <div class="border rounded p-2" style="background:#f8f9fa;">
                             <div class="row mb-1">
                                 <div class="col-md-4"><small class="text-muted fw-bold">Item</small></div>

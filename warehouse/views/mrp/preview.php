@@ -44,6 +44,9 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
     .sidebar { display: none !important; }
     .mrp-section { page-break-inside: avoid; }
     body { font-size: 10px; }
+    .input-allocated-override { border: 0 !important; padding: 0 !important; appearance: textfield; }
+    .input-allocated-override::-webkit-outer-spin-button,
+    .input-allocated-override::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 }
 </style>
 
@@ -212,7 +215,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             &nbsp;|&nbsp;
             PM/SFG: Target &times; Dosage &times; (1 + Wastage&thinsp;/&thinsp;100)
             &nbsp;|&nbsp;
-            Lacking = max(0, Required &minus; max(0, SOH &minus; Allocated))
+            Lacking = max(0, Required &minus; max(0, SOH &minus; Open Customer PO / Allocated))
         </div>
     </div>
 </div>
@@ -241,7 +244,7 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                     <th>Category</th>
                     <th class="num">Required Qty</th>
                     <th class="num">SOH</th>
-                    <th class="num">Allocated</th>
+                    <th class="num">Open Customer PO / Allocated</th>
                     <th class="num">Pending PO / RR</th>
                     <th class="num">Available</th>
                     <th class="num">Lacking Qty</th>
@@ -249,16 +252,25 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             </thead>
             <tbody>
                 <?php foreach ($mrpSection['components'] as $row): ?>
-                <tr class="<?= $row['lacking_qty'] > 0 ? 'mrp-shortage-row' : '' ?>">
+                <tr class="<?= $row['lacking_qty'] > 0 ? 'mrp-shortage-row' : '' ?>"
+                    data-item-id="<?= (int) $row['component_item_id'] ?>">
                     <td><code><?= htmlspecialchars($row['item_code']) ?></code></td>
                     <td><?= htmlspecialchars($row['item_description']) ?></td>
                     <td><span class="badge bg-light text-dark border mrp-cat-badge"><?= htmlspecialchars($row['category']) ?></span></td>
                     <td class="num"><?= formatQty($row['required_qty']) ?> <?= htmlspecialchars($row['display_uom'] ?? $row['item_uom']) ?></td>
                     <td class="num"><?= formatQty($row['soh']) ?></td>
-                    <td class="num"><?= formatQty($row['allocated']) ?></td>
+                    <td class="num">
+                        <input type="number"
+                               class="form-control form-control-sm input-allocated-override text-end"
+                               value="<?= htmlspecialchars((string) (float) $row['allocated']) ?>"
+                               data-soh="<?= htmlspecialchars((string) (float) $row['soh']) ?>"
+                               data-required="<?= htmlspecialchars((string) (float) $row['required_qty']) ?>"
+                               step="any" min="0"
+                               aria-label="Open Customer PO / Allocated for <?= htmlspecialchars($row['item_code']) ?>">
+                    </td>
                     <td class="num <?= floatval($row['pending_po_rr'] ?? 0) > 0 ? 'text-info fw-semibold' : '' ?>"><?= formatQty($row['pending_po_rr'] ?? 0) ?></td>
-                    <td class="num <?= $row['available'] >= $row['required_qty'] ? 'text-success' : 'text-danger' ?> fw-bold"><?= formatQty($row['available']) ?></td>
-                    <td class="num <?= $row['lacking_qty'] > 0 ? 'text-danger fw-bold' : 'text-success' ?>">
+                    <td class="num cell-available <?= $row['available'] >= $row['required_qty'] ? 'text-success' : 'text-danger' ?> fw-bold"><?= formatQty($row['available']) ?></td>
+                    <td class="num cell-lacking <?= $row['lacking_qty'] > 0 ? 'text-danger fw-bold' : 'text-success' ?>">
                         <?= formatQty($row['lacking_qty']) ?>
                     </td>
                 </tr>
@@ -421,6 +433,99 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
     document.addEventListener('DOMContentLoaded', function () {
         var saveBtn = document.getElementById('saveMrpCalculationBtn');
         var refModalEl = document.getElementById('mrpRefModal');
+
+        // ─── Editable ALLOCATED — live recalculation of AVAILABLE / LACKING ──
+        // Excel-style netting on every keystroke of the ALLOCATED input:
+        //   available = max(0, SOH - edited allocated)
+        //   lacking   = max(0, Required - available)
+        // The Save & Transfer button's data-lacking payload is rebuilt from the
+        // live cells, so the transfer follows the planner's overrides. Vanilla
+        // JS — the project ships no jQuery.
+        var fmtQty = function (n) {
+            var parts = (Number(n) || 0).toFixed(4).split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            return parts.join('.').replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        };
+
+        var netRow = function (input) {
+            var soh = parseFloat(input.dataset.soh) || 0;
+            var required = parseFloat(input.dataset.required) || 0;
+            var allocated = parseFloat(input.value);
+            if (isNaN(allocated) || allocated < 0) allocated = 0;   // empty / invalid → 0
+            var available = Math.max(0, soh - allocated);
+            return {
+                allocated: allocated,
+                available: available,
+                lacking: Math.max(0, required - available),
+                required: required
+            };
+        };
+
+        var recalcRow = function (tr) {
+            var input = tr.querySelector('.input-allocated-override');
+            if (!input) return;
+            var net = netRow(input);
+
+            var availableCell = tr.querySelector('.cell-available');
+            if (availableCell) {
+                availableCell.textContent = fmtQty(net.available);
+                availableCell.classList.toggle('text-success', net.available >= net.required);
+                availableCell.classList.toggle('text-danger', net.available < net.required);
+            }
+            var lackingCell = tr.querySelector('.cell-lacking');
+            if (lackingCell) {
+                lackingCell.textContent = fmtQty(net.lacking);
+                lackingCell.classList.toggle('text-danger', net.lacking > 0);
+                lackingCell.classList.toggle('fw-bold', net.lacking > 0);
+                lackingCell.classList.toggle('text-success', net.lacking <= 0);
+            }
+            tr.classList.toggle('mrp-shortage-row', net.lacking > 0);
+
+            var edited = input.value !== input.defaultValue;
+            input.classList.toggle('border-primary', edited);
+            input.title = edited ? 'Open Customer PO overridden (original: ' + input.defaultValue + ')' : '';
+        };
+
+        var collectMrpRows = function () {
+            var rows = [];
+            document.querySelectorAll('.mrp-table tbody tr[data-item-id]').forEach(function (tr) {
+                var input = tr.querySelector('.input-allocated-override');
+                var itemId = parseInt(tr.getAttribute('data-item-id'), 10) || 0;
+                if (!input || itemId <= 0) return;
+                var net = netRow(input);
+                rows.push({ component_item_id: itemId, allocated: net.allocated, lacking_qty: net.lacking });
+            });
+            return rows;
+        };
+
+        var refreshSaveState = function () {
+            if (!saveBtn) return;
+            var lackingRows = collectMrpRows().filter(function (r) {
+                return r.lacking_qty > 0;
+            }).map(function (r) {
+                return { component_item_id: r.component_item_id, lacking_qty: r.lacking_qty };
+            });
+            saveBtn.setAttribute('data-lacking', JSON.stringify(lackingRows));
+            if (saveBtn.dataset.saving) return;   // mid-submit: keep it locked
+            saveBtn.disabled = lackingRows.length === 0;
+            if (lackingRows.length) {
+                saveBtn.removeAttribute('title');
+            } else {
+                saveBtn.setAttribute('title', 'Nothing lacking — no purchase requests needed');
+            }
+        };
+
+        var onAllocatedInput = function (e) {
+            var input = e.target && e.target.closest ? e.target.closest('.input-allocated-override') : null;
+            if (!input) return;
+            var tr = input.closest('tr');
+            if (!tr) return;
+            recalcRow(tr);
+            refreshSaveState();
+        };
+        document.addEventListener('input', onAllocatedInput);
+        document.addEventListener('change', onAllocatedInput);
+
         if (!saveBtn || !refModalEl) return;
         var refModal = bootstrap.Modal.getOrCreateInstance(refModalEl);
         var refInput = document.getElementById('mrpRefInput');
@@ -460,7 +565,9 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
             refInput.value = '';
             refConfirmBtn.disabled = false;
             clearRefError();
-            if (!saveBtn.dataset.saving) saveBtn.disabled = false;
+            // Re-derive the disabled state from the live cells instead of
+            // blindly re-enabling: the lacking set may have changed.
+            if (!saveBtn.dataset.saving) refreshSaveState();
         };
 
         saveBtn.addEventListener('click', function () {
@@ -512,6 +619,10 @@ $showSaveBtn = !empty($didCalculate) && !empty($mrpSection) && !empty($mrpSectio
                 bom_id: <?= (int)($selectedBomId ?? 0) ?>,
                 calculate: '1',
                 lacking_json: JSON.stringify(pendingRows),
+                // Every row's live ALLOCATED override + the LACKING QTY
+                // recalculated from it, so the server nets with the planner's
+                // numbers instead of the raw inventory values.
+                rows_json: JSON.stringify(collectMrpRows()),
                 custom_mrp_ref: ref
             };
             Object.keys(fields).forEach(function (name) {

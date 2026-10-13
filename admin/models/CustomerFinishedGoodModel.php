@@ -46,8 +46,8 @@ class CustomerFinishedGoodModel extends BaseModel {
             throw new \Exception("Item code already exists for this customer.");
         }
 
-        $sql = "INSERT INTO {$this->table} (item_code, item_description, customer_id, item_uom, uom_conversion, item_amount, status) 
-                VALUES (:item_code, :item_description, :customer_id, :item_uom, :uom_conversion, :item_amount, :status)";
+        $sql = "INSERT INTO {$this->table} (item_code, item_description, item_type, customer_id, item_uom, uom_conversion, item_amount, status) 
+                VALUES (:item_code, :item_description, 'FG', :customer_id, :item_uom, :uom_conversion, :item_amount, :status)";
         $stmt = $conn->prepare($sql);
         $stmt->execute([
             'item_code' => $data['item_code'],
@@ -79,6 +79,7 @@ class CustomerFinishedGoodModel extends BaseModel {
         $sql = "UPDATE {$this->table} SET 
                 item_code = :item_code, 
                 item_description = :item_description, 
+                item_type = 'FG',
                 customer_id = :customer_id,
                 item_uom = :item_uom, 
                 uom_conversion = :uom_conversion,

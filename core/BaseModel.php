@@ -6,9 +6,9 @@ use PDOException;
 
 class BaseModel {
     /**
-     * Canonical inventory site code written by QC, receiving, MRP and MO
+     * Canonical inventory site code written by QC, receiving, MRP and LMR
      * allocation. Replaces the legacy 'MAIN' placeholder so stock always
-     * lands on the same row the MO/MRP screens read from.
+     * lands on the same row the LMR/MRP screens read from.
      */
     const DEFAULT_SITE_CODE = '001';
 

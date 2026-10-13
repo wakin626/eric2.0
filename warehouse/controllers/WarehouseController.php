@@ -28,11 +28,13 @@ class WarehouseController {
         $apiActions = ['getPODetails', 'getItemsByCustomer', 'backloadDelivery', 'getDeliveryLotsForBackload',
             'getLotsByPOItem', 'getPOItemsForAssignment', 'getActivePOsForAssignment', 'getLotsForTransfer',
             'viewBackloads', 'getPOsContainingItem', 'getAvailableItemsForDelivery', 'searchItems',
-            'mrpRunDetail', 'purchasingPo', 'receivingPo', 'moEntry', 'getCustomerPOs', 'getItemBomInfo', 'getItemBalances',
+            'mrpRunDetail', 'purchasingPo', 'receivingPo', 'lmrEntry', 'getCustomerPOs', 'getItemBomInfo', 'getItemBalances',
             'getPoFullDetails', 'getSuppliers', 'getItemBoms', 'getBomComponents'];
         // Item Master List is viewable read-only by rnd/admin; only warehouse can create/import items
         $itemListReadOnly = $action === 'items' && in_array($dept, ['warehouse', 'rnd', 'admin']);
-        if (!$itemListReadOnly && !$mrpAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
+        // Edit modal (metadata-only corrections) is shared with QC for inspected records
+        $poEditAllowed = $action === 'updatePurchasingPo' && in_array($dept, ['warehouse', 'qc']);
+        if (!$itemListReadOnly && !$mrpAllowed && !$poEditAllowed && !in_array($action, $apiActions) && $dept !== 'warehouse') {
             header('Location: ?controller=admin');
             exit;
         }
@@ -75,12 +77,12 @@ class WarehouseController {
         $this->render('dashboard', $data);
     }
 
-    public function moEntry() {
-        $data['page_title'] = 'MO Entry';
+    public function lmrEntry() {
+        $data['page_title'] = 'LMR Entry';
         $data['customers'] = $this->catalogModel->getCustomers();
         $data['items'] = [];
-        $data['allItems'] = $this->catalogModel->getMoProductItems();
-        $this->render('mo_entry', $data);
+        $data['allItems'] = $this->catalogModel->getLmrProductItems();
+        $this->render('lmr_entry', $data);
     }
 
     public function getCustomerPOs() {
@@ -2077,6 +2079,21 @@ class WarehouseController {
         $targetQty = floatval($_POST['target_qty'] ?? 0);
         $bomId = intval($_POST['bom_id'] ?? 0);
         $postedLacking = json_decode($_POST['lacking_json'] ?? '[]', true);
+        // Editable ALLOCATED column: [component_item_id => allocated] posted by
+        // the sheet's live recalculation. Invalid or negative entries are
+        // ignored so the live inventory value stays authoritative for that row.
+        // Absent payload = legacy client = today's behavior (no overrides).
+        $postedRows = json_decode($_POST['rows_json'] ?? '[]', true);
+        $allocOverrides = [];
+        if (is_array($postedRows)) {
+            foreach ($postedRows as $postedRow) {
+                if (!is_array($postedRow)) continue;
+                $id = intval($postedRow['component_item_id'] ?? 0);
+                if ($id > 0 && is_numeric($postedRow['allocated'] ?? null) && floatval($postedRow['allocated']) >= 0) {
+                    $allocOverrides[$id] = floatval($postedRow['allocated']);
+                }
+            }
+        }
 
         try {
             if ($fgItemId <= 0 || $targetQty <= 0) {
@@ -2113,15 +2130,17 @@ class WarehouseController {
             $recomputed = [];
             foreach ($components as $comp) {
                 $required = $this->computeMrpPoolRequiredQty($targetQty, $meta, $comp);
+                $itemId = intval($comp['component_item_id']);
                 $soh = floatval($comp['soh']);
-                $allocated = floatval($comp['allocated']);
+                // Planner's manual ALLOCATED override from the editable sheet
+                // column (validated above); falls back to live inventory.
+                $allocated = $allocOverrides[$itemId] ?? floatval($comp['allocated']);
                 // Same netting as the Calculate screen: deduct only
                 // unallocated physical SOH (never negative). Pending PO/RR is
                 // informational and never reduces the lacking quantity.
                 $available = max(0, $soh - $allocated);
                 $pendingPoRr = floatval($pendingPoRrMap[$comp['component_item_id']] ?? 0);
                 $lacking = max(0, $required - $available);
-                $itemId = intval($comp['component_item_id']);
                 $rows[] = [
                     'component_item_id' => $itemId,
                     'required' => $required,
@@ -2442,7 +2461,7 @@ class WarehouseController {
 
             $_SESSION['success'] = count($orderIds) . ' requisition(s) consolidated into PO #'
                 . $result['consolidated_id'] . ' (total qty '
-                . rtrim(rtrim(number_format((float) $result['total_qty'], 4), '0'), '.') . ').';
+                . formatQty((float) $result['total_qty']) . ').';
         } catch (\Exception $e) {
             $_SESSION['error'] = $e->getMessage();
         }
@@ -2463,6 +2482,108 @@ class WarehouseController {
             $_SESSION['error'] = $e->getMessage();
         }
         header('Location: ?controller=warehouse&action=purchasingPo');
+        exit;
+    }
+
+    /**
+     * Edit Purchasing PO: GET returns the raw row as JSON for the edit modal;
+     * POST validates and saves typo corrections (Qty, Supplier, Unit Cost,
+     * dates, remarks). Only requested/pending rows with nothing received.
+     */
+    public function updatePurchasingPo() {
+        // Edit is metadata-only (supplier/qty/cost/dates/remarks) and is
+        // shared with QC for post-inspection corrections.
+        $dept = $_SESSION['department'] ?? '';
+        if (!in_array($dept, ['warehouse', 'qc'], true)) {
+            $_SESSION['error'] = 'Editing purchasing PO records is not permitted for this role.';
+            $this->redirectToRoleHome('purchasingPo');
+        }
+        $id = intval($_GET['id'] ?? 0);
+
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            header('Content-Type: application/json');
+            $row = $id > 0 ? $this->warehouseModel->getPurchasingPoForEdit($id) : false;
+            if (!$row) {
+                echo json_encode(['success' => false, 'error' => 'Purchasing PO not found.']);
+                exit;
+            }
+            echo json_encode(['success' => true, 'data' => $row]);
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ?controller=warehouse&action=purchasingPo');
+            exit;
+        }
+
+        header('Content-Type: application/json');
+        try {
+            $id = intval($_POST['supplier_order_id'] ?? ($id ?: 0));
+            if ($id <= 0) {
+                throw new \RuntimeException('Invalid purchasing PO.');
+            }
+            $data = [
+                'supplier_name' => trim($_POST['supplier_name'] ?? ''),
+                'quantity' => floatval($_POST['quantity'] ?? 0),
+                'unit_cost' => floatval($_POST['unit_cost'] ?? 0),
+                'order_date' => trim($_POST['order_date'] ?? ''),
+                'expected_date' => trim($_POST['expected_date'] ?? ''),
+                'remarks' => trim($_POST['remarks'] ?? ''),
+            ];
+            if ($data['supplier_name'] === '') {
+                throw new \RuntimeException('Supplier name is required.');
+            }
+            if ($data['quantity'] <= 0) {
+                throw new \RuntimeException('Quantity must be greater than zero.');
+            }
+            $this->warehouseModel->updatePurchasingPo($id, $data);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    /**
+     * Edit a staged (For Inspection) receiving batch: received qty, lot number,
+     * expiry date and remarks on the receiving_items row. GET returns JSON for
+     * the staging edit modal; POST saves.
+     */
+    public function updateReceivingStaging() {
+        $dept = $_SESSION['department'] ?? '';
+        if (!in_array($dept, ['warehouse', 'qc'], true)) {
+            echo json_encode(['success' => false, 'error' => 'Editing staged receipts is not permitted for this role.']);
+            exit;
+        }
+        $id = intval($_GET['id'] ?? $_POST['id'] ?? 0);
+
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            header('Content-Type: application/json');
+            $row = $id > 0 ? $this->warehouseModel->getReceivingStagingForEdit($id) : false;
+            if (!$row) {
+                echo json_encode(['success' => false, 'error' => 'No staged receipt awaiting inspection for this order.']);
+                exit;
+            }
+            echo json_encode(['success' => true, 'data' => $row]);
+            exit;
+        }
+
+        header('Content-Type: application/json');
+        try {
+            if ($id <= 0) {
+                throw new \RuntimeException('Invalid staged receipt.');
+            }
+            $data = [
+                'received_qty' => floatval($_POST['received_qty'] ?? 0),
+                'lot_number' => trim($_POST['lot_number'] ?? ''),
+                'expiry_date' => trim($_POST['expiry_date'] ?? ''),
+                'remarks' => trim($_POST['remarks'] ?? ''),
+            ];
+            $this->warehouseModel->updateReceivingStaging($id, $data);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
         exit;
     }
 
@@ -2632,7 +2753,7 @@ class WarehouseController {
             $newReceived = floatval($order['received_qty'] ?? 0) + floatval($receivedQty);
             $status = $newReceived >= floatval($order['quantity']) ? 'fully received' : 'partially received';
 
-            $message = "Purchasing PO {$poRef} ({$itemDesc}) from {$supplier} has been {$status}. Received qty: " . number_format($receivedQty, 4);
+            $message = "Purchasing PO {$poRef} ({$itemDesc}) from {$supplier} has been {$status}. Received qty: " . formatQty($receivedQty);
 
             foreach (['admin', 'finance'] as $department) {
                 NotificationHelper::create(

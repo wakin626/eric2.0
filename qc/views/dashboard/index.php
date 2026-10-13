@@ -32,7 +32,7 @@
                                 <td><?= htmlspecialchars($item['supplier_name'] ?? '-') ?></td>
                                 <td><strong><?= htmlspecialchars($item['item_code'] ?? '-') ?></strong><br><small><?= htmlspecialchars($item['item_description'] ?? '-') ?></small></td>
                                 <td><?= htmlspecialchars($item['lot_number'] ?? '-') ?></td>
-                                <td class="text-end"><?= number_format((float) ($item['received_qty'] ?? 0), 4) ?></td>
+                                <td class="text-end"><?= formatQty((float) ($item['received_qty'] ?? 0)) ?></td>
                                 <td><?= !empty($item['received_date']) ? date('Y-m-d', strtotime($item['received_date'])) : '-' ?></td>
                                 <td><?= !empty($item['remarks']) ? htmlspecialchars($item['remarks']) : '<span class="text-muted">-</span>' ?></td>
                                 <td class="text-end">
@@ -177,7 +177,7 @@
                         <?php endif; ?>
                     </td>
                     <td>
-                        <span class="text-success">+<?= $h['added_quantity'] ?></span>
+                        <span class="text-success">+<?= formatQty($h['added_quantity']) ?></span>
                         <?php if (!empty($h['pcs_per_case'])): ?>
                             <br><small class="text-muted" title="PCS per Case">/ <?= htmlspecialchars($h['pcs_per_case']) ?> cs</small>
                         <?php endif; ?>

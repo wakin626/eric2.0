@@ -41,8 +41,16 @@ spl_autoload_register(function ($class) {
 $controller = $_GET['controller'] ?? 'auth';
 $action = $_GET['action'] ?? 'login';
 
+// Legacy alias: 'mo' routes were renamed to 'lmr' — redirect old links/bookmarks.
+if ($controller === 'mo') {
+    $qs = $_GET;
+    $qs['controller'] = 'lmr';
+    header('Location: ?' . http_build_query($qs));
+    exit;
+}
+
 $authControllers = ['auth'];
-$warehouseControllers = ['warehouse', 'mo'];
+$warehouseControllers = ['warehouse', 'lmr'];
 $productionControllers = ['production'];
 $financeControllers = ['finance'];
 $qcControllers = ['qc'];
