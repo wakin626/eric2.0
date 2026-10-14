@@ -210,17 +210,20 @@
                             <?php endif; ?>
                         <?php elseif (in_array($o['status'], ['processed', 'partially_received', 'For Inspection'])): ?>
                             <?php
-                            // Once goods have been receipted (processed into the QC queue
-                            // or partially received) the order can no longer be cancelled.
-                            $canCancel = in_array($o['status'], ['processed'], true)
-                                && floatval($o['received_qty'] ?? 0) <= 0.0001;
+                            // Once goods have been receipted (staged into the QC
+                            // queue or partially received) the order can no
+                            // longer be cancelled or edited — it is "received".
+                            $hasReceipts = floatval($o['received_qty'] ?? 0) > 0.0001;
+                            $canCancel = $o['status'] === 'processed' && !$hasReceipts;
                             ?>
                             <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
                                 <i class="bi bi-eye"></i> View
                             </button>
+                            <?php if (!$hasReceipts): ?>
                             <button class="btn btn-sm btn-outline-secondary btn-edit-po" data-id="<?= $o['supplier_order_id'] ?>" title="Edit Record">
                                 <i class="bi bi-pencil"></i> Edit
                             </button>
+                            <?php endif; ?>
                             <?php if ($canCancel): ?>
                             <a href="?controller=warehouse&action=cancelPurchasingPo&id=<?= $o['supplier_order_id'] ?>" class="btn btn-outline-warning btn-sm" title="Cancel" onclick="return confirm('Cancel this order? Any pending QC inspection entries will be cleared from the queue.')">
                                 <i class="bi bi-x-circle"></i> Cancel

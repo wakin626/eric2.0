@@ -3189,6 +3189,8 @@ public function searchItems($query) {
                 WHERE po.customer_id = :customer_id
                   AND po.delivered_quantity < po.total_quantity
                   AND po.`remove` = 0
+                  AND po.status NOT IN ('delivered', 'rejected')
+                  AND po.completed_at IS NULL
                 ORDER BY po.customer_po_date DESC";
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute(['customer_id' => $customer_id]);
@@ -3861,8 +3863,8 @@ public function searchItems($query) {
 
     /**
      * Raw (unformatted) purchasing PO row for the Edit modal, with an
-     * editable flag â€” cancelled/rejected orders are frozen; everything else
-     * may be corrected (with received rows clamped to their received qty).
+     * editable flag — cancelled/rejected orders are frozen; fully received
+     * & approved lines too (only QC may correct them post-inspection).
      */
     public function getPurchasingPoForEdit($id) {
         $po = $this->getPurchasingPoById($id);
@@ -3871,7 +3873,11 @@ public function searchItems($query) {
         }
         $frozen = ['cancelled', 'rejected'];
         $receivedQty = floatval($po['received_qty'] ?? 0);
-        $editable = !in_array(strtolower((string) ($po['status'] ?? '')), $frozen, true);
+        $dept = $_SESSION['department'] ?? '';
+        // Receipted lines are locked for everyone except QC (post-inspection
+        // corrections); quantity changes go through the staged-receipt Edit.
+        $editable = !in_array(strtolower((string) ($po['status'] ?? '')), $frozen, true)
+            && !($receivedQty > 0.0001 && $dept !== 'qc');
         return [
             'supplier_order_id' => (int) $po['supplier_order_id'],
             'supplier_name' => $po['supplier_name'] ?? '',
@@ -3913,6 +3919,14 @@ public function searchItems($query) {
                 throw new \RuntimeException('Cancelled or rejected orders cannot be edited.');
             }
             $receivedQty = floatval($po['received_qty']);
+            $dept = $_SESSION['department'] ?? '';
+            // Any receipted line is "received" — QC retains post-inspection
+            // correction rights; everyone else is locked, with quantity
+            // corrections done via the staged-receipt Edit instead.
+            if ($receivedQty > 0.0001 && $dept !== 'qc') {
+                throw new \RuntimeException('This PO already has received goods; editing the PO record is locked. '
+                    . 'Use the staged-receipt Edit in Receiving while the batch is still awaiting inspection.');
+            }
             $newQty = floatval($data['quantity'] ?? 0);
             if ($newQty <= 0) {
                 throw new \RuntimeException('Quantity must be greater than zero.');
@@ -3921,7 +3935,6 @@ public function searchItems($query) {
                 throw new \RuntimeException('Quantity cannot be less than the already-received quantity ('
                     . formatQty($receivedQty) . ').');
             }
-
             $upd = $conn->prepare(
                 "UPDATE supplier_orders SET
                     supplier_name = :supplier_name,

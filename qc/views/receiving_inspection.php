@@ -48,7 +48,7 @@ function submitQcDecisionOnce(form) {
                                 <td class="text-end"><?= formatQty($receivedQty) ?> <?= htmlspecialchars($item['item_uom'] ?? $item['uom'] ?? '') ?></td>
                                 <td><?= !empty($item['received_date']) ? date('Y-m-d', strtotime($item['received_date'])) : '-' ?></td>
                                 <td>
-                                    <span class="badge bg-warning text-dark"><?= htmlspecialchars($currentStatus === 'PENDING_QC' ? 'Pending Inspection' : $currentStatus) ?></span>
+                                    <span class="badge text-white" style="background:#6f42c1"><?= htmlspecialchars($currentStatus === 'PENDING_QC' ? 'Pending Inspection' : $currentStatus) ?></span>
                                 </td>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $itemId ?>" title="View Details">

@@ -36,6 +36,17 @@ class LmrModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    public function getActiveBoms() {
+        $sql = "SELECT b.bom_code, b.fg_item_id, i.item_code, i.item_description
+                FROM fg_boms b
+                JOIN items i ON i.item_id = b.fg_item_id
+                WHERE b.status = 'active' AND i.`remove` = 0
+                ORDER BY b.bom_code ASC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll();
+    }
+
     /**
      * Legacy-aware required quantity for one BOM component.
      * Legacy: (orderQty / batch_qty) * dosage * wastage
@@ -91,11 +102,13 @@ class LmrModel extends BaseModel {
             $stmt = $pdo->prepare("INSERT INTO lmr_orders (
                 lmr_number, lmr_type, lmr_site, order_date, due_date, planned_start_date, priority,
                 reference_no, lmr_status, customer_id, customer_code, customer_name,
-                batch_lot_no, po_number, created_by
+                batch_lot_no, lot_series, lot_number, date_started, date_finished, expiry_date,
+                po_number, bom_code, item_code, item_description, qty_ordered, created_by
             ) VALUES (
                 :lmr_number, :lmr_type, :lmr_site, :order_date, :due_date, :planned_start_date, :priority,
                 :reference_no, :lmr_status, :customer_id, :customer_code, :customer_name,
-                :batch_lot_no, :po_number, :created_by
+                :batch_lot_no, :lot_series, :lot_number, :date_started, :date_finished, :expiry_date,
+                :po_number, :bom_code, :item_code, :item_description, :qty_ordered, :created_by
             )");
 
             $stmt->execute([
@@ -112,7 +125,16 @@ class LmrModel extends BaseModel {
                 'customer_code' => $data['customer_code'] ?? null,
                 'customer_name' => $data['customer_name'] ?? null,
                 'batch_lot_no' => $data['batch_lot_no'] ?? null,
+                'lot_series' => $data['lot_series'] ?? null,
+                'lot_number' => $data['lot_number'] ?? null,
+                'date_started' => $data['date_started'] ?? null,
+                'date_finished' => $data['date_finished'] ?? null,
+                'expiry_date' => $data['expiry_date'] ?? null,
                 'po_number' => $data['po_number'] ?? null,
+                'bom_code' => $data['bom_code'] ?? null,
+                'item_code' => $data['item_code'] ?? null,
+                'item_description' => $data['item_description'] ?? null,
+                'qty_ordered' => isset($data['qty_ordered']) && $data['qty_ordered'] !== '' && $data['qty_ordered'] !== null ? (float) $data['qty_ordered'] : null,
                 'created_by' => $_SESSION['user_id'] ?? null
             ]);
 
@@ -177,7 +199,10 @@ class LmrModel extends BaseModel {
                 order_date = :order_date, due_date = :due_date, planned_start_date = :planned_start_date,
                 priority = :priority, reference_no = :reference_no, lmr_status = :lmr_status,
                 customer_id = :customer_id, customer_code = :customer_code, customer_name = :customer_name,
-                batch_lot_no = :batch_lot_no, po_number = :po_number, updated_at = NOW()
+                batch_lot_no = :batch_lot_no, lot_series = :lot_series, lot_number = :lot_number,
+                date_started = :date_started, date_finished = :date_finished, expiry_date = :expiry_date,
+                po_number = :po_number, bom_code = :bom_code, item_code = :item_code,
+                item_description = :item_description, qty_ordered = :qty_ordered, updated_at = NOW()
                 WHERE lmr_id = :lmr_id");
 
             $stmt->execute([
@@ -195,7 +220,16 @@ class LmrModel extends BaseModel {
                 'customer_code' => $data['customer_code'] ?? null,
                 'customer_name' => $data['customer_name'] ?? null,
                 'batch_lot_no' => $data['batch_lot_no'] ?? null,
+                'lot_series' => $data['lot_series'] ?? null,
+                'lot_number' => $data['lot_number'] ?? null,
+                'date_started' => $data['date_started'] ?? null,
+                'date_finished' => $data['date_finished'] ?? null,
+                'expiry_date' => $data['expiry_date'] ?? null,
                 'po_number' => $data['po_number'] ?? null,
+                'bom_code' => $data['bom_code'] ?? null,
+                'item_code' => $data['item_code'] ?? null,
+                'item_description' => $data['item_description'] ?? null,
+                'qty_ordered' => isset($data['qty_ordered']) && $data['qty_ordered'] !== '' && $data['qty_ordered'] !== null ? (float) $data['qty_ordered'] : null,
             ]);
 
             $delStmt = $pdo->prepare("DELETE FROM lmr_order_items WHERE lmr_id = :lmr_id");

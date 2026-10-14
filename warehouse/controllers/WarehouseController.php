@@ -82,6 +82,8 @@ class WarehouseController {
         $data['customers'] = $this->catalogModel->getCustomers();
         $data['items'] = [];
         $data['allItems'] = $this->catalogModel->getLmrProductItems();
+        $lmrModel = new \App\Models\LmrModel();
+        $data['boms'] = $lmrModel->getActiveBoms();
         $this->render('lmr_entry', $data);
     }
 

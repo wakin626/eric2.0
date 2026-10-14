@@ -47,6 +47,7 @@ class LmrController {
             'customers' => $this->catalogModel->getCustomers(),
             'items' => [],
             'allItems' => $this->catalogModel->getLmrProductItems(),
+            'boms' => $this->lmrModel->getActiveBoms(),
         ];
 
         $this->render('lmr_entry', $data);
@@ -92,6 +93,15 @@ class LmrController {
             'customer_code' => $customer['customer_code'] ?? ($_POST['customer_code'] ?? null),
             'customer_name' => $customer['customer_name'] ?? ($_POST['customer_name'] ?? null),
             'batch_lot_no' => $_POST['batch_lot_no'] ?? null,
+            'lot_series' => $_POST['lot_series'] ?? null,
+            'lot_number' => $_POST['lot_number'] ?? null,
+            'date_started' => !empty($_POST['date_started']) ? $_POST['date_started'] : null,
+            'date_finished' => !empty($_POST['date_finished']) ? $_POST['date_finished'] : null,
+            'expiry_date' => !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null,
+            'bom_code' => $_POST['bom_code'] ?? null,
+            'item_code' => $_POST['item_code'] ?? null,
+            'item_description' => $_POST['item_description'] ?? null,
+            'qty_ordered' => ($_POST['qty_ordered'] ?? '') !== '' && ($_POST['qty_ordered'] ?? null) !== null ? (float) $_POST['qty_ordered'] : null,
             'po_number' => $_POST['po_number'] ?? null,
         ];
 
@@ -201,20 +211,31 @@ class LmrController {
             }
         }
 
+        // Header form no longer posts these meta/schedule fields — preserve the
+        // existing record values so editing doesn't silently reset them.
         $header = [
             'lmr_number' => trim($_POST['lmr_number'] ?? ''),
-            'lmr_type' => $_POST['lmr_type'] ?? 'Standard',
+            'lmr_type' => isset($_POST['lmr_type']) && $_POST['lmr_type'] !== '' ? $_POST['lmr_type'] : ($order['lmr_type'] ?? 'Standard'),
             'lmr_site' => $_POST['lmr_site'] ?? '001 - Sterling Technopark',
-            'order_date' => $_POST['order_date'] ?? date('Y-m-d'),
-            'due_date' => $_POST['due_date'] ?? date('Y-m-d'),
-            'planned_start_date' => $_POST['planned_start_date'] ?? date('Y-m-d'),
-            'priority' => (int) ($_POST['priority'] ?? 3),
-            'reference_no' => $_POST['reference_no'] ?? null,
-            'lmr_status' => $_POST['lmr_status'] ?? 'Planned',
+            'order_date' => isset($_POST['order_date']) && $_POST['order_date'] !== '' ? $_POST['order_date'] : ($order['order_date'] ?? date('Y-m-d')),
+            'due_date' => isset($_POST['due_date']) && $_POST['due_date'] !== '' ? $_POST['due_date'] : ($order['due_date'] ?? date('Y-m-d')),
+            'planned_start_date' => isset($_POST['planned_start_date']) && $_POST['planned_start_date'] !== '' ? $_POST['planned_start_date'] : ($order['planned_start_date'] ?? date('Y-m-d')),
+            'priority' => (int) ($_POST['priority'] ?? ($order['priority'] ?? 3)),
+            'reference_no' => isset($_POST['reference_no']) ? $_POST['reference_no'] : ($order['reference_no'] ?? null),
+            'lmr_status' => isset($_POST['lmr_status']) && $_POST['lmr_status'] !== '' ? $_POST['lmr_status'] : ($order['lmr_status'] ?? 'Planned'),
             'customer_id' => $customer['customer_id'] ?? null,
             'customer_code' => $customer['customer_code'] ?? ($_POST['customer_code'] ?? null),
             'customer_name' => $customer['customer_name'] ?? ($_POST['customer_name'] ?? null),
             'batch_lot_no' => $_POST['batch_lot_no'] ?? null,
+            'lot_series' => $_POST['lot_series'] ?? null,
+            'lot_number' => $_POST['lot_number'] ?? null,
+            'date_started' => !empty($_POST['date_started']) ? $_POST['date_started'] : null,
+            'date_finished' => !empty($_POST['date_finished']) ? $_POST['date_finished'] : null,
+            'expiry_date' => !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null,
+            'bom_code' => $_POST['bom_code'] ?? null,
+            'item_code' => $_POST['item_code'] ?? null,
+            'item_description' => $_POST['item_description'] ?? null,
+            'qty_ordered' => ($_POST['qty_ordered'] ?? '') !== '' && ($_POST['qty_ordered'] ?? null) !== null ? (float) $_POST['qty_ordered'] : null,
             'po_number' => $_POST['po_number'] ?? null,
         ];
 
@@ -289,6 +310,7 @@ class LmrController {
             'items' => $this->lmrModel->getItemsByLmrId($id),
             'customers' => $this->catalogModel->getCustomers(),
             'allItems' => $this->catalogModel->getLmrProductItems(),
+            'boms' => $this->lmrModel->getActiveBoms(),
         ];
 
         $this->render('lmr_entry', $data);

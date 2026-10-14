@@ -34,7 +34,7 @@
     <?php
     // Status tabs: in-transit vs quarantine (For QC) vs approved receipts.
     $tabCounts = $tabCounts ?? ['pending' => 0, 'inspection' => 0, 'completed' => 0];
-    // Receiving has no "All Shipments" view — only actionable pipeline tabs,
+    // Receiving has no "All Shipments" view â€” only actionable pipeline tabs,
     // with In-Transit as the landing tab.
     $activeTab = $filters['tab'] ?: 'pending';
     $recvTabs = [
@@ -123,23 +123,23 @@
                     <td><?= !empty($o['received_by_name']) ? htmlspecialchars($o['received_by_name']) : '<span class="text-muted">-</span>' ?></td>
                     <td>
                         <?php if ($status === 'requested'): ?>
-                            <span class="badge bg-info">Requested</span>
+<span class="badge bg-info text-dark">Requested</span>
                         <?php elseif ($status === 'pending'): ?>
                             <span class="badge bg-warning text-dark">Pending</span>
                         <?php elseif ($status === 'processed'): ?>
                             <span class="badge bg-primary">Processed</span>
                         <?php elseif ($status === 'partially_received'): ?>
-                            <span class="badge bg-info text-dark">Partially Received</span>
+                            <span class="badge bg-secondary">Partially Received</span>
                         <?php elseif ($status === 'for inspection'): ?>
-                            <span class="badge bg-warning text-dark">For Inspection</span>
-                        <?php elseif (in_array($status, ['approved', 'received'])): ?>
+                            <span class="badge text-white" style="background:#6f42c1">For Inspection</span>
+                        <?php elseif ($status === 'received'): ?>
                             <span class="badge bg-success">Received & Approved</span>
                         <?php elseif ($status === 'rejected'): ?>
                             <span class="badge bg-danger">Rejected</span>
                         <?php elseif ($status === 'cancelled'): ?>
-                            <span class="badge bg-secondary">Cancelled</span>
+                            <span class="badge bg-dark">Cancelled</span>
                         <?php elseif ($status === 'po_created'): ?>
-                            <span class="badge bg-dark">PO Created (consolidated)</span>
+                            <span class="badge bg-light text-dark border">PO Created (consolidated)</span>
                         <?php else: ?>
                             <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst((string) ($o['status'] ?? 'Unknown'))) ?: 'Unknown' ?></span>
                         <?php endif; ?>
@@ -167,17 +167,19 @@
                             <?php
                             // The same order row can render in both tabs (In-Transit for the
                             // receivable balance, For QC Inspection for the staged batch).
-                            // QC-queue affordances belong only to the For QC Inspection tab.
+                            // The "In QC Queue" hint only adds information on the In-Transit
+                            // tab; on For QC Inspection it duplicates the status badge.
                             $isInspectionTab = (($filters['tab'] ?? '') === 'inspection');
-                            $showQcQueueUi = $isInspectionTab && !empty($o['has_pending_qc']);
+                            $showQcQueueUi = !$isInspectionTab && !empty($o['has_pending_qc']);
+                            $showEditStaging = $isInspectionTab && !empty($o['has_pending_qc']);
                             ?>
                             <?php if ($showQcQueueUi): ?>
-                                <span class="badge bg-warning text-dark">In QC Queue</span>
+                                <span class="badge text-white" style="background:#6f42c1">In QC Queue</span>
                             <?php endif; ?>
                             <button class="btn btn-sm btn-outline-info btn-view-po <?= $showQcQueueUi ? 'd-block mt-1' : '' ?>" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
                                 <i class="bi bi-eye"></i> View
                             </button>
-                            <?php if ($showQcQueueUi): ?>
+                            <?php if ($showEditStaging): ?>
                                 <button class="btn btn-sm btn-outline-secondary btn-edit-staging d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="Edit staged receipt (qty, lot, expiry, remarks)">
                                     <i class="bi bi-pencil"></i> Edit
                                 </button>
@@ -208,8 +210,7 @@
                                     <i class="bi bi-clipboard-check"></i> Process Inspection
                                 </a>
                             <?php else: ?>
-                                <span class="badge bg-warning text-dark">In QC Queue</span>
-                                <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
                                     <i class="bi bi-eye"></i> View
                                 </button>
                                 <button class="btn btn-sm btn-outline-secondary btn-edit-staging d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="Edit staged receipt (qty, lot, expiry, remarks)">
@@ -217,22 +218,16 @@
                                 </button>
                             <?php endif; ?>
                         <?php elseif (in_array($status, ['approved', 'received'])): ?>
-                            <span class="badge bg-success">Received &amp; Approved</span>
-                            <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                            <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
                                 <i class="bi bi-eye"></i> View
                             </button>
-                            <button class="btn btn-sm btn-outline-secondary btn-edit-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="Edit Record">
-                                <i class="bi bi-pencil"></i> Edit
-                            </button>
                         <?php elseif ($status === 'rejected'): ?>
-                            <span class="badge bg-danger">Rejected</span>
-                            <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                            <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
                                 <i class="bi bi-eye"></i> View
                             </button>
                         <?php else: ?>
                             <?php if ($isCompletedShipment): ?>
-                                <span class="badge bg-secondary">Cancelled</span>
-                                <button class="btn btn-sm btn-outline-info btn-view-po d-block mt-1" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
+                                <button class="btn btn-sm btn-outline-info btn-view-po" data-id="<?= $o['supplier_order_id'] ?>" title="View Details">
                                     <i class="bi bi-eye"></i> View
                                 </button>
                             <?php else: ?>

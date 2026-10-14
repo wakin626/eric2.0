@@ -117,21 +117,21 @@
                     <td><?= !empty($o['received_by_name']) ? htmlspecialchars($o['received_by_name']) : '<span class="text-muted">-</span>' ?></td>
                     <td>
                         <?php if ($o['status'] === 'requested'): ?>
-                            <span class="badge bg-info">Requested</span>
+                            <span class="badge bg-info text-dark">Requested</span>
                         <?php elseif ($o['status'] === 'pending'): ?>
                             <span class="badge bg-warning text-dark">Pending</span>
                         <?php elseif ($o['status'] === 'processed'): ?>
                             <span class="badge bg-primary">Processed</span>
                         <?php elseif ($o['status'] === 'partially_received'): ?>
-                            <span class="badge bg-info text-dark">Partially Received</span>
+                            <span class="badge bg-secondary">Partially Received</span>
                         <?php elseif ($o['status'] === 'For Inspection'): ?>
-                            <span class="badge bg-warning text-dark">For Inspection</span>
+                            <span class="badge text-white" style="background:#6f42c1">For Inspection</span>
                         <?php elseif ($o['status'] === 'received'): ?>
                             <span class="badge bg-success">Received</span>
                         <?php elseif ($o['status'] === 'rejected'): ?>
                             <span class="badge bg-danger">Rejected</span>
                         <?php else: ?>
-                            <span class="badge bg-secondary"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
+                            <span class="badge bg-light text-dark border"><?= htmlspecialchars(ucfirst($o['status'])) ?: 'Unknown' ?></span>
                         <?php endif; ?>
                     </td>
                     <td><span class="badge bg-secondary-subtle text-secondary">Read-only</span></td>

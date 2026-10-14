@@ -128,87 +128,84 @@
     <input type="hidden" name="customer_name" id="customerNameHidden">
     <input type="hidden" name="customer_code" id="customerCodeHidden">
     <div class="row g-4 mb-4">
-        <div class="col-lg-6">
-            <div class="lmr-section-title mb-3">Header Meta & Schedule</div>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">LMR Number <span class="text-danger">*</span></label>
-                    <input type="text" name="lmr_number" class="form-control" placeholder="Enter LMR number" value="<?= htmlspecialchars($lmr['lmr_number'] ?? '') ?>" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">LMR Type</label>
-                    <select name="lmr_type" class="form-select filter-select">
-                        <option value="Standard" <?= ($lmr['lmr_type'] ?? 'Standard') === 'Standard' ? 'selected' : '' ?>>Standard</option>
-                        <option value="Rework" <?= ($lmr['lmr_type'] ?? '') === 'Rework' ? 'selected' : '' ?>>Rework</option>
-                        <option value="Trial" <?= ($lmr['lmr_type'] ?? '') === 'Trial' ? 'selected' : '' ?>>Trial</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">LMR Site</label>
-                    <select name="lmr_site" class="form-select filter-select">
-                        <option value="001 - Sterling Technopark" selected>001 - Sterling Technopark</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Order Date</label>
-                    <input type="date" name="order_date" class="form-control" value="<?= htmlspecialchars($lmr['order_date'] ?? date('Y-m-d')) ?>">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Due Date</label>
-                    <input type="date" name="due_date" class="form-control" value="<?= htmlspecialchars($lmr['due_date'] ?? date('Y-m-d')) ?>">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Planned Start Date</label>
-                    <input type="date" name="planned_start_date" class="form-control" value="<?= htmlspecialchars($lmr['planned_start_date'] ?? date('Y-m-d')) ?>">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Priority</label>
-                    <input type="number" name="priority" class="form-control" value="<?= (int) ($lmr['priority'] ?? 3) ?>" min="1" max="9">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Reference No</label>
-                    <input type="text" name="reference_no" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($lmr['reference_no'] ?? '') ?>">
-                </div>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">LMR Number <span class="text-danger">*</span></label>
+                <input type="text" name="lmr_number" class="form-control" placeholder="Enter LMR number" value="<?= htmlspecialchars($lmr['lmr_number'] ?? '') ?>" required>
             </div>
-        </div>
-
-        <div class="col-lg-6">
-            <div class="lmr-section-title mb-3">Customer & Order Tracking</div>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">LMR Status</label>
-                    <select name="lmr_status" class="form-select filter-select">
-                        <option value="Planned" <?= ($lmr['lmr_status'] ?? 'Planned') === 'Planned' ? 'selected' : '' ?>>Planned</option>
-                        <option value="Released" <?= ($lmr['lmr_status'] ?? '') === 'Released' ? 'selected' : '' ?>>Released</option>
-                        <option value="Completed" <?= ($lmr['lmr_status'] ?? '') === 'Completed' ? 'selected' : '' ?>>Completed</option>
-                        <option value="Cancelled" <?= ($lmr['lmr_status'] ?? '') === 'Cancelled' ? 'selected' : '' ?>>Cancelled</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Customer Code</label>
-                    <select name="customer_code" id="customerCode" class="form-select filter-select">
-                        <option value="">Select customer</option>
-                        <?php foreach ($customers ?? [] as $customer): ?>
-                            <option value="<?= htmlspecialchars($customer['customer_id']) ?>" data-name="<?= htmlspecialchars($customer['customer_name'] ?? '') ?>" data-code="<?= htmlspecialchars($customer['customer_code'] ?? '') ?>" <?= (int) ($lmr['customer_id'] ?? 0) === (int) $customer['customer_id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($customer['customer_code'] ?? '') ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-12">
-                    <label class="form-label fw-semibold">Customer Name</label>
-                    <input type="text" id="customerName" class="form-control" readonly placeholder="Auto-fills after selecting customer" value="<?= htmlspecialchars($lmr['customer_name'] ?? '') ?>">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Batch / Lot No</label>
-                    <input type="text" name="batch_lot_no" class="form-control" placeholder="e.g. FB013-0826143" value="<?= htmlspecialchars($lmr['batch_lot_no'] ?? '') ?>">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">PO Number <span class="text-danger">*</span></label>
-                    <select name="po_number" id="poNumber" class="form-select filter-select" data-selected-po="<?= htmlspecialchars($lmr['po_number'] ?? '') ?>">
-                        <option value="">Select open PO</option>
-                    </select>
-                </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">LMR Site</label>
+                <select name="lmr_site" class="form-select filter-select">
+                    <option value="001 - Sterling Technopark" selected>001 - Sterling Technopark</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Customer Code</label>
+                <select name="customer_code" id="customerCode" class="form-select filter-select">
+                    <option value="">Select customer</option>
+                    <?php foreach ($customers ?? [] as $customer): ?>
+                        <option value="<?= htmlspecialchars($customer['customer_id']) ?>" data-name="<?= htmlspecialchars($customer['customer_name'] ?? '') ?>" data-code="<?= htmlspecialchars($customer['customer_code'] ?? '') ?>" <?= (int) ($lmr['customer_id'] ?? 0) === (int) $customer['customer_id'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($customer['customer_code'] ?? '') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Customer Name</label>
+                <input type="text" id="customerName" class="form-control" readonly placeholder="Auto-fills after selecting customer" value="<?= htmlspecialchars($lmr['customer_name'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Batch / Lot No</label>
+                <input type="text" name="batch_lot_no" class="form-control" placeholder="e.g. FB013-0826143" value="<?= htmlspecialchars($lmr['batch_lot_no'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">PO Number <span class="text-danger">*</span></label>
+                <select name="po_number" id="poNumber" class="form-select filter-select" data-selected-po="<?= htmlspecialchars($lmr['po_number'] ?? '') ?>">
+                    <option value="">Select open PO</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Formulation (BOM Code)</label>
+                <select name="bom_code" id="bomCode" class="form-select filter-select">
+                    <option value="">Select formulation</option>
+                    <?php foreach ($boms ?? [] as $bom): ?>
+                        <option value="<?= htmlspecialchars($bom['bom_code']) ?>" data-item-code="<?= htmlspecialchars($bom['item_code'] ?? '') ?>" data-item-description="<?= htmlspecialchars($bom['item_description'] ?? '') ?>" <?= ($lmr['bom_code'] ?? '') === $bom['bom_code'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($bom['bom_code']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Item Number</label>
+                <input type="text" name="item_code" id="headerItemCode" class="form-control" readonly placeholder="Auto-fills from formulation" value="<?= htmlspecialchars($lmr['item_code'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Item Description</label>
+                <input type="text" name="item_description" id="headerItemDescription" class="form-control" readonly placeholder="Auto-fills from formulation" value="<?= htmlspecialchars($lmr['item_description'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Qty Ordered</label>
+                <input type="number" name="qty_ordered" id="headerQtyOrdered" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($lmr['qty_ordered'] ?? '') ?>" min="0" step="any">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Batch / Lot Series</label>
+                <input type="text" name="lot_series" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($lmr['lot_series'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Lot Number</label>
+                <input type="text" name="lot_number" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($lmr['lot_number'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Date Started</label>
+                <input type="date" name="date_started" class="form-control" value="<?= htmlspecialchars($lmr['date_started'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Date Finished</label>
+                <input type="date" name="date_finished" class="form-control" value="<?= htmlspecialchars($lmr['date_finished'] ?? '') ?>">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Expiry Date</label>
+                <input type="date" name="expiry_date" class="form-control" value="<?= htmlspecialchars($lmr['expiry_date'] ?? '') ?>">
             </div>
         </div>
     </div>
@@ -694,6 +691,26 @@ document.addEventListener('DOMContentLoaded', function () {
         moSiteSelect.addEventListener('change', function () {
             document.getElementById('lineSite').value = this.value;
         });
+    }
+
+    var bomCodeSelect = document.getElementById('bomCode');
+    if (bomCodeSelect) {
+        // Formulation (BOM Code) auto-populates the header item fields.
+        bomCodeSelect.addEventListener('change', function () {
+            var opt = this.options[this.selectedIndex];
+            document.getElementById('headerItemCode').value = this.value ? (opt.getAttribute('data-item-code') || '') : '';
+            document.getElementById('headerItemDescription').value = this.value ? (opt.getAttribute('data-item-description') || '') : '';
+        });
+        // Restore hidden data attrs in edit mode (options already reflect selection).
+        if (bomCodeSelect.value) {
+            var selOpt = bomCodeSelect.options[bomCodeSelect.selectedIndex];
+            if (selOpt && !document.getElementById('headerItemCode').value) {
+                document.getElementById('headerItemCode').value = selOpt.getAttribute('data-item-code') || '';
+            }
+            if (selOpt && !document.getElementById('headerItemDescription').value) {
+                document.getElementById('headerItemDescription').value = selOpt.getAttribute('data-item-description') || '';
+            }
+        }
     }
 
     document.getElementById('lmrItemModal').addEventListener('hidden.bs.modal', function () {
