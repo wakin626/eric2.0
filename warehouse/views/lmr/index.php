@@ -84,7 +84,7 @@
                                     <?php endif; ?>
                                 </td>
                                 <td><?= htmlspecialchars($lmr['qty_ordered'] ?? 0) ?></td>
-                                <td><?= htmlspecialchars($lmr['batch_lot_no'] ?? '-') ?></td>
+                                <td><?= htmlspecialchars($lmr['batch_lot_no'] ?? (!empty($lmr['lot_series']) ? $lmr['lot_series'] : '-')) ?></td>
                                 <td><?= !empty($lmr['planned_start_date']) ? date('Y-m-d', strtotime($lmr['planned_start_date'])) : '-' ?></td>
                                 <td>
                                     <?php

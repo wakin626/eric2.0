@@ -36,8 +36,45 @@ class LmrModel extends BaseModel {
         return $stmt->fetchAll();
     }
 
+    /**
+     * Line-item shell built from the LMR header itself (bom_code / item_code /
+     * item_description / qty_ordered). Used when the entry form stored only the
+     * header and no lmr_order_items rows exist, so print/view/validation still
+     * resolve the BOM breakdown.
+     */
+    public function headerAsItemRow($order) {
+        return [[
+            'lri_id' => 0,
+            'lmr_id' => $order['lmr_id'] ?? null,
+            'item_id' => null,
+            'item_code' => $order['item_code'] ?? null,
+            'item_description' => $order['item_description'] ?? null,
+            'uom' => null,
+            'item_type' => null,
+            'site' => $order['lmr_site'] ?? null,
+            'qty_ordered' => $order['qty_ordered'] ?? 0,
+            'so_number' => null,
+            'bom_code' => $order['bom_code'] ?? null,
+        ]];
+    }
+
+    /**
+     * Line items for breakdown/print purposes, falling back to the header row
+     * when the LMR has no lmr_order_items entries (header-only entry form).
+     */
+    public function getItemsForDisplay($lmrId) {
+        $items = $this->getItemsByLmrId($lmrId);
+        if (empty($items)) {
+            $order = $this->findById($lmrId);
+            if ($order) {
+                $items = $this->headerAsItemRow($order);
+            }
+        }
+        return $items;
+    }
+
     public function getActiveBoms() {
-        $sql = "SELECT b.bom_code, b.fg_item_id, i.item_code, i.item_description
+        $sql = "SELECT b.bom_code, b.fg_item_id, b.customer_id, i.item_code, i.item_description
                 FROM fg_boms b
                 JOIN items i ON i.item_id = b.fg_item_id
                 WHERE b.status = 'active' AND i.`remove` = 0
@@ -45,6 +82,57 @@ class LmrModel extends BaseModel {
         $stmt = self::getConnection()->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    public function getItemIdByBomCode($bomCode) {
+        $sql = "SELECT fg_item_id FROM fg_boms WHERE bom_code = :bom_code AND status = 'active' ORDER BY id ASC LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['bom_code' => $bomCode]);
+        return $stmt->fetchColumn() ?: null;
+    }
+
+    public function poBelongsToCustomer($poNumber, $customerId) {
+        $sql = "SELECT po_id FROM purchase_orders
+                WHERE customer_po_number = :po_number
+                  AND customer_id = :customer_id
+                  AND `remove` = 0
+                LIMIT 1";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute(['po_number' => $poNumber, 'customer_id' => (int) $customerId]);
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /**
+     * Latest receiving lot number per item code (QC positions preferred:
+     * PASSED, then any). Used to print the actual lot the RM arrived with.
+     */
+    public function getReceivingLotNumbers(array $itemCodes) {
+        $itemCodes = array_values(array_unique(array_filter($itemCodes, function ($c) {
+            return $c !== null && trim((string) $c) !== '';
+        })));
+        if (empty($itemCodes)) {
+            return [];
+        }
+        $in = implode(',', array_fill(0, count($itemCodes), '?'));
+        $sql = "SELECT item_code, lot_number
+                FROM receiving_items
+                WHERE item_code IN ($in)
+                  AND lot_number IS NOT NULL AND lot_number <> ''
+                  AND qc_status <> 'CANCELLED'
+                ORDER BY item_code,
+                         CASE qc_status WHEN 'PASSED' THEN 0 WHEN 'PENDING_QC' THEN 1 ELSE 2 END ASC,
+                         received_date DESC,
+                         id DESC";
+        $stmt = self::getConnection()->prepare($sql);
+        $stmt->execute($itemCodes);
+        $lots = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $code = $row['item_code'];
+            if (!isset($lots[$code])) {
+                $lots[$code] = $row['lot_number'];
+            }
+        }
+        return $lots;
     }
 
     /**
@@ -397,7 +485,7 @@ class LmrModel extends BaseModel {
 
     public function getLmrBomBreakdown($lmrId) {
         $warehouseModel = new \App\Models\WarehouseModel();
-        $items = $this->getItemsByLmrId($lmrId);
+        $items = $this->getItemsForDisplay($lmrId);
         $breakdown = [];
 
         foreach ($items as $item) {

@@ -76,7 +76,7 @@
             </div>
             <div class="col-md-3">
                 <small class="text-muted d-block">Batch / Lot No</small>
-                <?= htmlspecialchars($lmr['batch_lot_no'] ?? '-') ?>
+                <?= htmlspecialchars($lmr['batch_lot_no'] ?? (!empty($lmr['lot_series']) ? $lmr['lot_series'] : '-')) ?>
             </div>
         </div>
         <?php if (!empty($lmr['reference_no']) || !empty($lmr['po_number'])): ?>

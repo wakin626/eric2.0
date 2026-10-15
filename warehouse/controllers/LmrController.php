@@ -138,6 +138,30 @@ class LmrController {
             exit;
         }
 
+        if ($header['customer_id'] && !$this->lmrModel->poBelongsToCustomer($header['po_number'], $header['customer_id'])) {
+            $poError = 'Selected PO does not belong to the selected customer.';
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => $poError]);
+                exit;
+            }
+            $_SESSION['error'] = $poError;
+            header('Location: ?controller=lmr&action=create');
+            exit;
+        }
+
+        $bomError = $this->validateHeaderBom($header);
+        if ($bomError !== null) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => $bomError]);
+                exit;
+            }
+            $_SESSION['error'] = $bomError;
+            header('Location: ?controller=lmr&action=create');
+            exit;
+        }
+
         try {
             $this->lmrModel->create($header, $items);
             if ($isAjax) {
@@ -268,6 +292,30 @@ class LmrController {
                 exit;
             }
             $_SESSION['error'] = 'PO Number is required for LMR printing.';
+            header('Location: ?controller=lmr&action=edit&id=' . $lmrId);
+            exit;
+        }
+
+        if ($header['customer_id'] && !$this->lmrModel->poBelongsToCustomer($header['po_number'], $header['customer_id'])) {
+            $poError = 'Selected PO does not belong to the selected customer.';
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => $poError]);
+                exit;
+            }
+            $_SESSION['error'] = $poError;
+            header('Location: ?controller=lmr&action=edit&id=' . $lmrId);
+            exit;
+        }
+
+        $bomError = $this->validateHeaderBom($header);
+        if ($bomError !== null) {
+            if ($isAjax) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => $bomError]);
+                exit;
+            }
+            $_SESSION['error'] = $bomError;
             header('Location: ?controller=lmr&action=edit&id=' . $lmrId);
             exit;
         }
@@ -482,7 +530,7 @@ class LmrController {
         $data = [
             'page_title' => 'LMR Print',
             'lmr' => $order,
-            'items' => $this->lmrModel->getItemsByLmrId($id),
+            'items' => $this->lmrModel->getItemsForDisplay($id),
             'breakdown' => $this->lmrModel->getLmrBomBreakdown($id),
             'documentId' => 'LMR-' . $order['lmr_number'],
         ];
@@ -575,6 +623,35 @@ class LmrController {
             'breakdown' => $breakdown,
         ];
         $this->render('lmr/view', $data);
+    }
+
+    private function validateHeaderBom(array $header) {
+        $qty = (float) ($header['qty_ordered'] ?? 0);
+        if ($qty <= 0) {
+            return 'Qty Ordered is required and must be greater than zero.';
+        }
+        $bomCode = $header['bom_code'] ?? '';
+        if ($bomCode === '' || $bomCode === null) {
+            return 'Formulation (BOM Code) is required so raw material availability can be checked.';
+        }
+        $itemId = $this->lmrModel->getItemIdByBomCode($bomCode);
+        if (!$itemId) {
+            return 'BOM "' . $bomCode . '" is not an active formulation in the system.';
+        }
+        $breakdown = $this->lmrModel->getBomBreakdownForItem($itemId, $qty);
+        if (!empty($breakdown['no_bom']) || !empty($breakdown['not_found'])) {
+            return 'BOM "' . $bomCode . '" is not an active formulation in the system.';
+        }
+        $short = [];
+        foreach (($breakdown['components'] ?? []) as $c) {
+            if ((float) ($c['shortage'] ?? 0) > 0) {
+                $short[] = $c['item_code'] ?? ($c['item_description'] ?? 'unknown');
+            }
+        }
+        if (!empty($short)) {
+            return 'Cannot save: stock shortage exists for the following component items: ' . implode(', ', $short) . '.';
+        }
+        return null;
     }
 
     private function render($view, $data = []) {

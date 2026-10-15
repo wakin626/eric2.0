@@ -12,15 +12,6 @@ $items = $items ?? [];
 $breakdown = $breakdown ?? [];
 $documentId = $documentId ?? ('LMR-' . ($lmr['lmr_number'] ?? ''));
 
-// First non-empty SO number across LMR lines
-$soNumber = '';
-foreach ($items as $lineItem) {
-    if (!empty($lineItem['so_number'])) {
-        $soNumber = $lineItem['so_number'];
-        break;
-    }
-}
-
 // Formulation: first FG line (item_code / bom_code), with multi-line indicator
 $formulation = '';
 if (!empty($items)) {
@@ -45,6 +36,7 @@ foreach ($breakdown as $line) {
                 'item_code' => $code,
                 'item_description' => $comp['item_description'] ?? '',
                 'item_uom' => $comp['item_uom'] ?? '',
+                'item_type' => $comp['item_type'] ?? '',
                 'phase_code' => (string) ($comp['phase_code'] ?? '101'),
                 'required_qty' => 0.0,
             ];
@@ -57,10 +49,15 @@ usort($components, function ($a, $b) {
     return strcmp($a['phase_code'], $b['phase_code']);
 });
 $components = array_values($components);
-$totalRawMaterial = array_sum(array_column($components, 'required_qty'));
+// Receiving lot numbers (what actually arrived from the supplier) per RM
+$receivingLots = (new \App\Models\LmrModel())->getReceivingLotNumbers(array_column($components, 'item_code'));
+// Total Raw Material = the ordered quantity the raw materials must produce
+$totalRawMaterial = 0.0;
+foreach ($breakdown as $line) {
+    $totalRawMaterial += floatval($line['qty_ordered'] ?? 0);
+}
 
-$batchLot = !empty($lmr['batch_lot_no']) ? $lmr['batch_lot_no'] : '';
-$soDisplay = $soNumber !== '' ? $soNumber : '';
+$batchLot = !empty($lmr['batch_lot_no']) ? $lmr['batch_lot_no'] : ($lmr['lot_series'] ?? '');
 $batchDisplay = $batchLot;
 
 // Underline field helper: filled value or blank rule
@@ -194,8 +191,6 @@ $uf = function ($val) {
     }
     .num { text-align: right !important; }
 
-    .lot-subrow td:first-child { padding-left: 20px; }
-
     .phase-group-row td {
         font-weight: bold;
         border-top: 1px solid #000 !important;
@@ -298,36 +293,24 @@ $uf = function ($val) {
         <tr>
             <td class="meta-label">Site:</td>
             <td class="meta-value"><?= $uf($lmr['lmr_site'] ?? '') ?></td>
+            <td class="meta-label">Customer:</td>
+            <td class="meta-value"><?= $uf(($lmr['customer_name'] ?? '') ?: ($lmr['customer_code'] ?? '')) ?></td>
+        </tr>
+        <tr>
+            <td class="meta-label">Date Started:</td>
+            <td class="meta-value"><?= $uf($lmr['date_started'] ?? '') ?></td>
+            <td class="meta-label">Customer PO No.:</td>
+            <td class="meta-value"><?= $uf($lmr['po_number'] ?? '') ?></td>
+        </tr>
+        <tr>
+            <td class="meta-label">Date Finished:</td>
+            <td class="meta-value"><?= $uf($lmr['date_finished'] ?? '') ?></td>
             <td class="meta-label">Formulation:</td>
             <td class="meta-value"><?= $uf($formulation) ?></td>
         </tr>
         <tr>
-            <td class="meta-label">Customer:</td>
-            <td class="meta-value"><?= $uf(($lmr['customer_name'] ?? '') ?: ($lmr['customer_code'] ?? '')) ?></td>
-            <td class="meta-label">Supersedes:</td>
-            <td class="meta-value"><?= $uf('') ?></td>
-        </tr>
-        <tr>
-            <td class="meta-label">Customer PO No.:</td>
-            <td class="meta-value"><?= $uf($lmr['po_number'] ?? '') ?></td>
-            <td class="meta-label">LMR Rev. No.:</td>
-            <td class="meta-value"><?= $uf('') ?></td>
-        </tr>
-        <tr>
-            <td class="meta-label">Date Started:</td>
-            <td class="meta-value"><?= $uf('') ?></td>
-            <td class="meta-label">Job No.:</td>
-            <td class="meta-value"><?= $uf('') ?></td>
-        </tr>
-        <tr>
-            <td class="meta-label">Date Finished:</td>
-            <td class="meta-value"><?= $uf('') ?></td>
-            <td class="meta-label">SO Number:</td>
-            <td class="meta-value"><?= $uf($soDisplay) ?></td>
-        </tr>
-        <tr>
             <td class="meta-label">Expiry Date:</td>
-            <td class="meta-value"><?= $uf('') ?></td>
+            <td class="meta-value"><?= $uf($lmr['expiry_date'] ?? '') ?></td>
             <td class="meta-label">Batch/Lot Series:</td>
             <td class="meta-value"><?= $uf($batchDisplay) ?></td>
         </tr>
@@ -337,7 +320,6 @@ $uf = function ($val) {
     <table class="summary-table">
         <thead>
             <tr>
-                <th>LMR Number</th>
                 <th>Item Number</th>
                 <th>Description</th>
                 <th>Qty Ordered</th>
@@ -347,16 +329,16 @@ $uf = function ($val) {
         <tbody>
             <?php if (empty($items)): ?>
                 <tr>
-                    <td colspan="5" class="empty-note">No items attached to this LMR.</td>
+                    <td colspan="4" class="empty-note">No items attached to this LMR.</td>
                 </tr>
             <?php else: ?>
                 <?php foreach ($items as $lineItem): ?>
                     <tr>
-                        <td><?= htmlspecialchars($lmr['lmr_number'] ?? '') ?></td>
+                        <td><?= htmlspecialchars($lineItem['item_code'] ?? '-') ?></td>
                         <td><?= htmlspecialchars($lineItem['item_code'] ?? '-') ?></td>
                         <td><?= htmlspecialchars($lineItem['item_description'] ?? '-') ?></td>
                         <td><?= formatQty(floatval($lineItem['qty_ordered'] ?? 0), 3) ?></td>
-                        <td><?= $batchLot !== '' ? htmlspecialchars($batchLot) : '<span class="underline-field">&nbsp;</span>' ?></td>
+                        <td><?= $uf(trim((string) (($lineItem['lot_number'] ?? '') ?: ($lmr['lot_number'] ?? '')))) ?></td>
                     </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -367,9 +349,8 @@ $uf = function ($val) {
     <table class="items-table">
         <thead>
             <tr>
-                <th>Phase</th>
                 <th>Item Number</th>
-                <th>Description</th>
+                <th>LOT</th>
                 <th class="num">Qty</th>
                 <th>U/M</th>
                 <th>Actual Qty</th>
@@ -382,20 +363,14 @@ $uf = function ($val) {
         <tbody>
             <?php if (empty($components)): ?>
                 <tr>
-                    <td colspan="10" class="empty-note">No BOM components available for this LMR.</td>
+                    <td colspan="9" class="empty-note">No BOM components available for this LMR.</td>
                 </tr>
             <?php else: ?>
-                <?php $currentPhase = null; foreach ($components as $comp): ?>
-                    <?php if ($comp['phase_code'] !== $currentPhase): $currentPhase = $comp['phase_code']; ?>
-                    <tr class="phase-group-row">
-                        <td colspan="10"><strong>PHASE <?= htmlspecialchars($currentPhase) ?></strong> &mdash; mix / handle all items in this phase</td>
-                    </tr>
-                    <?php endif; ?>
+                <?php foreach ($components as $comp): ?>
                     <!-- Main Item Row -->
                     <tr>
-                        <td><?= htmlspecialchars($comp['phase_code']) ?></td>
-                        <td><?= htmlspecialchars($comp['item_code']) ?></td>
-                        <td><?= htmlspecialchars($comp['item_description']) ?></td>
+                        <td><?= htmlspecialchars($comp['phase_code']) ?> - <?= htmlspecialchars($comp['item_code']) ?></td>
+                        <td><?= $uf(trim((string) ($receivingLots[$comp['item_code']] ?? ''))) ?></td>
                         <td class="num"><?= formatQty($comp['required_qty'], 3) ?></td>
                         <td><?= htmlspecialchars($comp['item_uom']) ?></td>
                         <td>_______</td>
@@ -404,20 +379,13 @@ $uf = function ($val) {
                         <td>_______</td>
                         <td>_______</td>
                     </tr>
-                    <!-- Lot No. sub-row -->
-                    <tr class="lot-subrow">
-                        <td colspan="3">
-                            Lot No.: ____________________
-                        </td>
-                        <td colspan="7"></td>
-                    </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
         </tbody>
         <?php if (!empty($components)): ?>
         <tfoot>
             <tr>
-                <td colspan="3">Total Raw Material:</td>
+                <td colspan="2">Total Raw Material:</td>
                 <td class="num"><?= formatQty($totalRawMaterial, 3) ?></td>
                 <td colspan="6"></td>
             </tr>

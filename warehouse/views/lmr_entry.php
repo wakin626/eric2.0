@@ -69,25 +69,6 @@
         box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
     }
 
-    #formToast {
-        position: fixed;
-        top: 1.25rem;
-        right: 1.25rem;
-        z-index: 9999;
-        min-width: 360px;
-        max-width: 480px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        transition: opacity 0.3s, transform 0.3s;
-        opacity: 0;
-        transform: translateX(20px);
-        pointer-events: none;
-    }
-
-    #formToast.show {
-        opacity: 1;
-        transform: translateX(0);
-        pointer-events: auto;
-    }
 </style>
 
 <div class="lmr-toolbar sticky-toolbar pb-2">
@@ -99,9 +80,6 @@
         <a href="?controller=lmr&action=index" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Back to LMR List
         </a>
-        <button type="button" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-file-earmark-text me-1"></i>Draft
-        </button>
         <button type="button" id="btn-save-lmr" class="btn btn-primary btn-sm">
             <i class="bi bi-check2-circle me-1"></i>Save LMR
         </button>
@@ -109,21 +87,15 @@
 </div>
 
 <div id="formValidationAlert" class="alert alert-danger d-none" role="alert">
-    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-    <span id="formValidationMessage"></span>
-</div>
-
-<div id="formToast" class="alert alert-danger d-flex align-items-start" role="alert">
     <i class="bi bi-exclamation-triangle-fill me-2 mt-1 flex-shrink-0"></i>
-    <div id="formToastBody" class="flex-grow-1"></div>
-    <button type="button" class="btn-close ms-2 mt-1" onclick="document.getElementById('formToast').classList.remove('show');"></button>
+    <span id="formValidationMessage" class="flex-grow-1"></span>
+    <button type="button" class="btn-close ms-2 mt-1" id="formValidationClose" aria-label="Close"></button>
 </div>
 
 <form id="lmrEntryForm" class="lmr-card p-4" method="POST" action="<?= !empty($lmr) ? '?controller=lmr&action=update' : '?controller=lmr&action=store' ?>" novalidate>
     <?php if (!empty($lmr)): ?>
         <input type="hidden" name="lmr_id" value="<?= (int) $lmr['lmr_id'] ?>">
     <?php endif; ?>
-    <input type="hidden" name="line_items_json" id="lineItemsJson">
     <input type="hidden" name="customer_id" id="customerIdHidden">
     <input type="hidden" name="customer_name" id="customerNameHidden">
     <input type="hidden" name="customer_code" id="customerCodeHidden">
@@ -150,26 +122,22 @@
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <label class="form-label fw-semibold">Customer Name</label>
                 <input type="text" id="customerName" class="form-control" readonly placeholder="Auto-fills after selecting customer" value="<?= htmlspecialchars($lmr['customer_name'] ?? '') ?>">
             </div>
-            <div class="col-md-4">
-                <label class="form-label fw-semibold">Batch / Lot No</label>
-                <input type="text" name="batch_lot_no" class="form-control" placeholder="e.g. FB013-0826143" value="<?= htmlspecialchars($lmr['batch_lot_no'] ?? '') ?>">
-            </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <label class="form-label fw-semibold">PO Number <span class="text-danger">*</span></label>
                 <select name="po_number" id="poNumber" class="form-select filter-select" data-selected-po="<?= htmlspecialchars($lmr['po_number'] ?? '') ?>">
                     <option value="">Select open PO</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-semibold">Formulation (BOM Code)</label>
-                <select name="bom_code" id="bomCode" class="form-select filter-select">
-                    <option value="">Select formulation</option>
+                <label class="form-label fw-semibold">Formulation (BOM Code) <span class="text-danger">*</span></label>
+                <select name="bom_code" id="bomCode" class="form-select filter-select" required data-selected-bom="<?= htmlspecialchars($lmr['bom_code'] ?? '') ?>">
+                    <option value="">Select customer to load formulations</option>
                     <?php foreach ($boms ?? [] as $bom): ?>
-                        <option value="<?= htmlspecialchars($bom['bom_code']) ?>" data-item-code="<?= htmlspecialchars($bom['item_code'] ?? '') ?>" data-item-description="<?= htmlspecialchars($bom['item_description'] ?? '') ?>" <?= ($lmr['bom_code'] ?? '') === $bom['bom_code'] ? 'selected' : '' ?>>
+                        <option value="<?= htmlspecialchars($bom['bom_code']) ?>" data-item-id="<?= htmlspecialchars($bom['fg_item_id']) ?>" data-item-code="<?= htmlspecialchars($bom['item_code'] ?? '') ?>" data-item-description="<?= htmlspecialchars($bom['item_description'] ?? '') ?>" data-customer-id="<?= htmlspecialchars($bom['customer_id'] ?? '') ?>">
                             <?= htmlspecialchars($bom['bom_code']) ?>
                         </option>
                     <?php endforeach; ?>
@@ -184,12 +152,17 @@
                 <input type="text" name="item_description" id="headerItemDescription" class="form-control" readonly placeholder="Auto-fills from formulation" value="<?= htmlspecialchars($lmr['item_description'] ?? '') ?>">
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-semibold">Qty Ordered</label>
-                <input type="number" name="qty_ordered" id="headerQtyOrdered" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($lmr['qty_ordered'] ?? '') ?>" min="0" step="any">
+                <label class="form-label fw-semibold">Qty Ordered <span class="text-danger">*</span></label>
+                <input type="number" name="qty_ordered" id="headerQtyOrdered" class="form-control" placeholder="Required" value="<?= htmlspecialchars($lmr['qty_ordered'] ?? '') ?>" min="0.01" step="any" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Batch / Lot Series</label>
-                <input type="text" name="lot_series" class="form-control" placeholder="Optional" value="<?= htmlspecialchars($lmr['lot_series'] ?? '') ?>">
+                <select name="lot_series" class="form-select">
+                    <option value="">Select</option>
+                    <?php $savedLotSeries = htmlspecialchars($lmr['lot_series'] ?? ''); for ($i = 1; $i <= 9; $i++): $bln = '1/' . $i; ?>
+                        <option value="<?= $bln ?>"<?= $savedLotSeries === $bln ? ' selected' : '' ?>><?= $bln ?></option>
+                    <?php endfor; ?>
+                </select>
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Lot Number</label>
@@ -210,127 +183,29 @@
         </div>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div class="lmr-section-title mb-0">Item / Material Lines</div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#lmrItemModal">
-            <i class="bi bi-plus-circle me-1"></i>Add Line Item
-        </button>
-    </div>
-
-    <div class="table-responsive border rounded-3">
-        <table class="table-soft mb-0">
-            <thead>
-                <tr>
-                    <th>Type</th>
-                    <th>Item Number</th>
-                    <th>Description</th>
-                    <th>UOM</th>
-                    <th>Item Type</th>
-                    <th>Site</th>
-                    <th>Qty Ordered</th>
-                    <th>SO Number</th>
-                    <th>BOM Code</th>
-                    <th class="text-center">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="lmrLinesTableBody">
-                <tr class="empty-state-row">
-                    <td colspan="10" class="text-center text-muted py-3">
-                        No line items added yet. Use "Add Line Item" to begin the LMR.
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</form>
-
-<div class="modal fade" id="lmrItemModal" tabindex="-1" aria-labelledby="lmrItemModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header">
-                <h5 class="modal-title" id="lmrItemModalLabel"><i class="bi bi-plus-circle me-2"></i>Add LMR Product Item</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="mb-4">
+        <div class="lmr-section-title mb-3">Component Breakdown <span class="text-muted fs-6 fw-normal">(updates from Formulation &amp; Qty Ordered)</span></div>
+        <div id="bomStatusAlert" style="display:none;"></div>
+        <div id="bomShortageWarning" style="display:none;"></div>
+        <div id="bomComponentPreview" style="display:none;">
+            <div class="table-responsive border rounded-3">
+                <table class="table table-sm mb-0 align-middle" id="bomComponentTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Component Item</th>
+                            <th>UOM</th>
+                            <th class="text-end">Req. Qty</th>
+                            <th class="text-end">SOH</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bomComponentBody"></tbody>
+                </table>
             </div>
-            <div class="modal-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Type</label>
-                        <select id="lineType" class="form-select filter-select">
-                            <option value="FG" selected>FG</option>
-                            <option value="SFG">SFG - Semi-Finished Goods (Bulk)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Item Number</label>
-                        <select id="lineItemSelect" class="form-select filter-select">
-                            <option value="">Select item</option>
-                            <?php foreach (($allItems ?? $items ?? []) as $item): ?>
-                                <option value="<?= htmlspecialchars($item['item_id']) ?>" data-code="<?= htmlspecialchars($item['item_code'] ?? '') ?>" data-description="<?= htmlspecialchars($item['item_description'] ?? '') ?>" data-uom="<?= htmlspecialchars($item['item_uom'] ?? '') ?>" data-type="<?= htmlspecialchars($item['item_type'] ?? '') ?>">
-                                    <?= htmlspecialchars($item['item_code'] ?? '') ?> - <?= htmlspecialchars($item['item_description'] ?? '') ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Description</label>
-                        <input type="text" id="lineDescription" class="form-control" readonly>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">UOM</label>
-                        <input type="text" id="lineUom" class="form-control" readonly>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Item Type</label>
-                        <input type="text" id="lineItemType" class="form-control" readonly>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Site</label>
-                        <input type="text" id="lineSite" class="form-control" value="001 - Sterling Technopark" readonly>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Qty Ordered</label>
-                        <input type="number" id="lineQtyOrdered" class="form-control" min="1" placeholder="0" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">SO Number</label>
-                        <input type="text" id="lineSoNumber" class="form-control" placeholder="Optional">
-                    </div>
-                    <div class="col-md-12">
-                        <label class="form-label fw-semibold">BOM Code</label>
-                        <input type="text" id="lineBomCode" class="form-control" readonly placeholder="Auto-populated from active formulation">
-                    </div>
-
-                    <div class="col-md-12" id="bomStatusAlert" style="display:none;"></div>
-
-                    <div class="col-md-12" id="bomComponentPreview" style="display:none;">
-                        <label class="form-label fw-semibold">Component Breakdown</label>
-                        <div class="table-responsive border rounded-3">
-                            <table class="table table-sm mb-0 align-middle" id="bomComponentTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Component Item</th>
-                                        <th>UOM</th>
-                                        <th class="text-end">Req. Qty</th>
-                                        <th class="text-end">SOH</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="bomComponentBody"></tbody>
-                            </table>
-                        </div>
-                        <small class="text-muted d-block mt-1" id="bomBatchInfo"></small>
-                    </div>
-
-                    <div class="col-md-12" id="bomShortageWarning" style="display:none;"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveLineItemBtn">Save Line</button>
-            </div>
+            <small class="text-muted d-block mt-1" id="bomBatchInfo"></small>
         </div>
     </div>
-</div>
+</form>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -340,24 +215,74 @@ document.addEventListener('DOMContentLoaded', function () {
     const customerNameHidden = document.getElementById('customerNameHidden');
     const customerCodeHidden = document.getElementById('customerCodeHidden');
     const poSelect = document.getElementById('poNumber');
-    const lineItemsJson = document.getElementById('lineItemsJson');
-    const itemSelect = document.getElementById('lineItemSelect');
-    const lineDescription = document.getElementById('lineDescription');
-    const lineUom = document.getElementById('lineUom');
-    const lineItemType = document.getElementById('lineItemType');
-    const lineBomCode = document.getElementById('lineBomCode');
-    const lineQtyOrdered = document.getElementById('lineQtyOrdered');
-    const lineType = document.getElementById('lineType');
-    const linesTable = document.getElementById('lmrLinesTableBody');
-    const saveLineBtn = document.getElementById('saveLineItemBtn');
+    const bomCodeSelect = document.getElementById('bomCode');
+    const headerItemCode = document.getElementById('headerItemCode');
+    const headerItemDescription = document.getElementById('headerItemDescription');
+    const headerQtyOrdered = document.getElementById('headerQtyOrdered');
     const bomStatusAlert = document.getElementById('bomStatusAlert');
     const bomComponentPreview = document.getElementById('bomComponentPreview');
     const bomComponentBody = document.getElementById('bomComponentBody');
     const bomBatchInfo = document.getElementById('bomBatchInfo');
     const bomShortageWarning = document.getElementById('bomShortageWarning');
 
-    let currentBomData = null;
     let bomFetchTimeout = null;
+
+    var allBomOptions = [];
+    var bomOptionsCaptured = false;
+
+    function filterBomOptionsByCustomer(customerId, customerCode) {
+        if (!bomOptionsCaptured) {
+            bomCodeSelect.querySelectorAll('option[data-customer-id]').forEach(function (opt) {
+                allBomOptions.push(opt.cloneNode(true));
+            });
+            bomOptionsCaptured = true;
+        }
+
+        var matchCount = 0;
+        var prevSel = bomCodeSelect.dataset.selectedBom || '';
+
+        bomCodeSelect.innerHTML = '';
+
+        if (String(customerId) === '') {
+            var customerPlaceholder = document.createElement('option');
+            customerPlaceholder.value = '';
+            customerPlaceholder.textContent = 'Select customer to load formulations';
+            bomCodeSelect.appendChild(customerPlaceholder);
+        } else {
+            allBomOptions.forEach(function (opt) {
+                if ((opt.dataset.customerId || '').trim() === String(customerId)) {
+                    var clone = opt.cloneNode(true);
+                    if (opt.value === prevSel) {
+                        clone.selected = true;
+                    }
+                    bomCodeSelect.appendChild(clone);
+                    matchCount++;
+                }
+            });
+            var emptyPlaceholder = document.createElement('option');
+            emptyPlaceholder.value = '';
+            if (matchCount === 0) {
+                emptyPlaceholder.textContent = 'No formulation yet for ' + (customerCode || 'this customer');
+            } else {
+                emptyPlaceholder.textContent = 'Select formulation';
+            }
+            bomCodeSelect.insertBefore(emptyPlaceholder, bomCodeSelect.firstChild);
+        }
+
+        if (matchCount > 0 && bomCodeSelect.value === prevSel) {
+            var selOpt = bomCodeSelect.options[bomCodeSelect.selectedIndex] || null;
+            if (selOpt) {
+                headerItemCode.value = selOpt.getAttribute('data-item-code') || '';
+                headerItemDescription.value = selOpt.getAttribute('data-item-description') || '';
+                return;
+            }
+        }
+        bomCodeSelect.value = '';
+        headerItemCode.value = '';
+        headerItemDescription.value = '';
+        resetBomPreview();
+        delete bomCodeSelect.dataset.selectedBom;
+    }
 
     function populateCustomerName() {
         const selectedOption = customerSelect.selectedOptions[0];
@@ -370,6 +295,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const customerId = selectedOption ? selectedOption.value : '';
         poSelect.innerHTML = '<option value="">Select open PO</option>';
+        filterBomOptionsByCustomer(customerId, code);
 
         if (!customerId) {
             return;
@@ -378,6 +304,12 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch('?controller=warehouse&action=getCustomerPOs&customer_id=' + encodeURIComponent(customerId))
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                if (!data || data.length === 0) {
+                    poSelect.innerHTML = '<option value="">No open PO for this customer</option>';
+                    delete poSelect.dataset.selectedPo;
+                    showFormValidation('No open purchase orders found for <strong>' + escapeHtml(name || code || 'this customer') + '</strong>. Create a Customer PO first.');
+                    return;
+                }
                 var selectedPo = poSelect.dataset.selectedPo || '';
                 data.forEach(function (po) {
                     const option = document.createElement('option');
@@ -395,21 +327,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    function setSaveButtonState(enabled) {
-        if (enabled) {
-            saveLineBtn.disabled = false;
-            saveLineBtn.classList.remove('btn-secondary');
-            saveLineBtn.classList.add('btn-primary');
-        } else {
-            saveLineBtn.disabled = true;
-            saveLineBtn.classList.remove('btn-primary');
-            saveLineBtn.classList.add('btn-secondary');
-        }
-    }
-
     function resetBomPreview() {
-        currentBomData = null;
-        lineBomCode.value = '';
         bomStatusAlert.style.display = 'none';
         bomStatusAlert.innerHTML = '';
         bomComponentPreview.style.display = 'none';
@@ -417,11 +335,9 @@ document.addEventListener('DOMContentLoaded', function () {
         bomBatchInfo.textContent = '';
         bomShortageWarning.style.display = 'none';
         bomShortageWarning.innerHTML = '';
-        setSaveButtonState(true);
     }
 
     function renderBomPreview(data) {
-        currentBomData = data;
         bomStatusAlert.style.display = 'block';
         bomComponentPreview.style.display = 'none';
         bomComponentBody.innerHTML = '';
@@ -431,23 +347,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (data.no_bom) {
             bomStatusAlert.innerHTML = '<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i><strong>No active BOM found</strong> for this item.</div>';
-            lineBomCode.value = '';
-            setSaveButtonState(false);
             return;
         }
 
         if (data.not_found) {
             bomStatusAlert.innerHTML = '<div class="alert alert-danger py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>BOM <strong>' + (data.bom_code || '') + '</strong> not found in system.</div>';
-            lineBomCode.value = data.bom_code || '';
-            setSaveButtonState(false);
             return;
         }
 
-        lineBomCode.value = data.bom_code || '';
-
         if (!data.components || data.components.length === 0) {
             bomStatusAlert.innerHTML = '<div class="alert alert-success py-2 mb-0"><i class="bi bi-check-circle me-1"></i>BOM <strong>' + data.bom_code + '</strong> found. No components to check.</div>';
-            setSaveButtonState(true);
             return;
         }
 
@@ -489,8 +398,6 @@ document.addEventListener('DOMContentLoaded', function () {
             html += '</tr>';
         });
         bomComponentBody.innerHTML = html;
-
-        setSaveButtonState(true);
     }
 
     function fetchBomBreakdown(itemId, qty) {
@@ -517,263 +424,67 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 250);
     }
 
-    function updateLineDetails() {
-        const selectedOption = itemSelect.selectedOptions[0];
-        if (!selectedOption || !selectedOption.value) {
-            lineDescription.value = '';
-            lineUom.value = '';
-            lineItemType.value = '';
-            resetBomPreview();
-            return;
-        }
-
-        const itemType = selectedOption.dataset.type || lineType.value || 'FG';
-        lineDescription.value = selectedOption.dataset.description || '';
-        lineUom.value = selectedOption.dataset.uom || '';
-        lineItemType.value = itemType;
-
-        fetchBomBreakdown(selectedOption.value, lineQtyOrdered.value || 0);
-    }
-
-    function filterItemOptionsByType() {
-        var selectedType = lineType.value || 'FG';
-        var selectedWasHidden = false;
-
-        Array.from(itemSelect.options).forEach(function (opt) {
-            if (!opt.value) {
-                return;
-            }
-            var optType = (opt.dataset.type || '').trim();
-            var visible = !optType || optType === selectedType;
-            if (!visible && opt.selected) {
-                selectedWasHidden = true;
-            }
-            opt.hidden = !visible;
-            opt.disabled = !visible;
-        });
-
-        if (selectedWasHidden) {
-            itemSelect.value = '';
-            lineDescription.value = '';
-            lineUom.value = '';
-            lineItemType.value = '';
-            resetBomPreview();
-        }
-    }
-
-    function syncLineItemsPayload() {
-        const rows = Array.from(linesTable.querySelectorAll('tr')).filter(function (row) {
-            return !row.classList.contains('empty-state-row');
-        });
-
-        const payload = rows.map(function (row) {
-            const cells = row.querySelectorAll('td');
-            return {
-                type: cells[0]?.textContent?.trim() || 'FG',
-                item_code: cells[1]?.textContent?.trim() || '',
-                item_description: cells[2]?.textContent?.trim() || '',
-                uom: cells[3]?.textContent?.trim() || '',
-                item_type: cells[4]?.textContent?.trim() || '',
-                site: cells[5]?.textContent?.trim() || '001 - Sterling Technopark',
-                qty_ordered: cells[6]?.textContent?.trim() || 0,
-                so_number: cells[7]?.textContent?.trim() === '-' ? '' : cells[7]?.textContent?.trim() || '',
-                bom_code: cells[8]?.textContent?.trim() === '—' ? '' : cells[8]?.textContent?.trim() || '',
-                item_id: row.dataset.itemId || '',
-            };
-        });
-
-        lineItemsJson.value = JSON.stringify(payload);
-    }
-
-    function addLineItem() {
-        const selectedItem = itemSelect.selectedOptions[0];
-        const qty = parseFloat(lineQtyOrdered.value || '0');
-
-        if (!selectedItem || !selectedItem.value) {
-            alert('Please select an item before saving the line.');
-            return;
-        }
-
-        if (!qty || qty <= 0) {
-            alert('Qty Ordered must be greater than zero.');
-            return;
-        }
-
-        if (currentBomData && currentBomData.no_bom) {
-            alert('Cannot add item to LMR without an active BOM formulation.');
-            return;
-        }
-
-        var hasShortage = false;
-        var shortItems = [];
-        Array.from(bomComponentBody.querySelectorAll('tr')).forEach(function (tr) {
-            var badge = tr.querySelector('.badge');
-            if (badge && (badge.classList.contains('bg-danger') || badge.textContent.indexOf('Shortage') !== -1)) {
-                hasShortage = true;
-                var cell = tr.querySelector('td');
-                shortItems.push(cell ? cell.textContent.trim() : '');
-            }
-        });
-        if (hasShortage) {
-            alert('Cannot proceed with saving this production line because stock shortages exist for:\n'
-                + shortItems.join(', ')
-                + '.\n\nAll component items must be In Stock before adding to the LMR.');
-            return;
-        }
-
-        var existingEmptyRow = linesTable.querySelector('.empty-state-row');
-        if (existingEmptyRow) {
-            existingEmptyRow.remove();
-        }
-
-        const row = document.createElement('tr');
-        row.dataset.itemId = selectedItem.value;
-        row.innerHTML = `
-            <td><span class="badge bg-light text-dark border">${lineType.value || 'FG'}</span></td>
-            <td><strong>${selectedItem.dataset.code || ''}</strong></td>
-            <td>${lineDescription.value || ''}</td>
-            <td>${lineUom.value || ''}</td>
-            <td>${lineItemType.value || 'FG'}</td>
-            <td>001 - Sterling Technopark</td>
-            <td>${qty}</td>
-            <td>${(document.getElementById('lineSoNumber').value || '-')}</td>
-            <td>${lineBomCode.value || '—'}</td>
-            <td class="text-center">
-                <button type="button" class="btn btn-sm btn-outline-danger remove-line-item">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </td>
-        `;
-
-        linesTable.appendChild(row);
-        syncLineItemsPayload();
-
-        document.getElementById('lineSoNumber').value = '';
-        lineQtyOrdered.value = '';
-        itemSelect.value = '';
-        lineDescription.value = '';
-        lineUom.value = '';
-        lineItemType.value = '';
-        lineType.value = 'FG';
-        resetBomPreview();
-
-        var modal = bootstrap.Modal.getInstance(document.getElementById('lmrItemModal'));
-        if (modal) {
-            modal.hide();
-        }
+    function refreshHeaderBomBreakdown() {
+        var opt = bomCodeSelect.options[bomCodeSelect.selectedIndex] || null;
+        var itemId = (bomCodeSelect.value && opt) ? (opt.getAttribute('data-item-id') || '') : '';
+        fetchBomBreakdown(itemId, headerQtyOrdered.value || 0);
     }
 
     customerSelect.addEventListener('change', populateCustomerName);
-    itemSelect.addEventListener('change', updateLineDetails);
-    lineType.addEventListener('change', function () {
-        filterItemOptionsByType();
-        if (itemSelect.value) {
-            updateLineDetails();
-        }
+
+    bomCodeSelect.addEventListener('change', function () {
+        var opt = this.options[this.selectedIndex];
+        headerItemCode.value = this.value ? (opt.getAttribute('data-item-code') || '') : '';
+        headerItemDescription.value = this.value ? (opt.getAttribute('data-item-description') || '') : '';
+        refreshHeaderBomBreakdown();
     });
 
-    lineQtyOrdered.addEventListener('input', function () {
-        if (itemSelect.value) {
-            fetchBomBreakdown(itemSelect.value, lineQtyOrdered.value || 0);
-        }
-    });
+    headerQtyOrdered.addEventListener('input', refreshHeaderBomBreakdown);
 
-    document.getElementById('lmrItemModal').addEventListener('show.bs.modal', function () {
-        filterItemOptionsByType();
-        if (itemSelect.value) {
-            fetchBomBreakdown(itemSelect.value, lineQtyOrdered.value || 0);
-        }
-    });
+    var FORM_ALERT_FADE_DELAY = 4500;
+    var FORM_ALERT_FADE_MS = 600;
+    var validationAlertEl = document.getElementById('formValidationAlert');
 
-    var moSiteSelect = document.querySelector('select[name="lmr_site"]');
-    if (moSiteSelect) {
-        // Site is display-only data (shown on LMR print) — it does not affect SOH.
-        moSiteSelect.addEventListener('change', function () {
-            document.getElementById('lineSite').value = this.value;
-        });
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
-    var bomCodeSelect = document.getElementById('bomCode');
-    if (bomCodeSelect) {
-        // Formulation (BOM Code) auto-populates the header item fields.
-        bomCodeSelect.addEventListener('change', function () {
-            var opt = this.options[this.selectedIndex];
-            document.getElementById('headerItemCode').value = this.value ? (opt.getAttribute('data-item-code') || '') : '';
-            document.getElementById('headerItemDescription').value = this.value ? (opt.getAttribute('data-item-description') || '') : '';
+    function hideValidationAlertNow() {
+        clearTimeout(validationAlertEl._fadeTimer);
+        clearTimeout(validationAlertEl._hideTimer);
+        validationAlertEl.classList.add('d-none');
+        validationAlertEl.style.opacity = '1';
+        document.getElementById('formValidationMessage').innerHTML = '';
+        document.querySelectorAll('#lmrEntryForm .is-invalid').forEach(function (el) {
+            el.classList.remove('is-invalid');
         });
-        // Restore hidden data attrs in edit mode (options already reflect selection).
-        if (bomCodeSelect.value) {
-            var selOpt = bomCodeSelect.options[bomCodeSelect.selectedIndex];
-            if (selOpt && !document.getElementById('headerItemCode').value) {
-                document.getElementById('headerItemCode').value = selOpt.getAttribute('data-item-code') || '';
-            }
-            if (selOpt && !document.getElementById('headerItemDescription').value) {
-                document.getElementById('headerItemDescription').value = selOpt.getAttribute('data-item-description') || '';
-            }
-        }
-    }
-
-    document.getElementById('lmrItemModal').addEventListener('hidden.bs.modal', function () {
-        resetBomPreview();
-        itemSelect.value = '';
-        lineDescription.value = '';
-        lineUom.value = '';
-        lineItemType.value = '';
-        lineType.value = 'FG';
-        lineQtyOrdered.value = '';
-        document.getElementById('lineSoNumber').value = '';
-    });
-
-    saveLineBtn.addEventListener('click', addLineItem);
-
-    linesTable.addEventListener('click', function (event) {
-        const removeButton = event.target.closest('.remove-line-item');
-        if (!removeButton) {
-            return;
-        }
-        const row = removeButton.closest('tr');
-        if (row) {
-            row.remove();
-            syncLineItemsPayload();
-            if (!linesTable.querySelector('tr') && !document.querySelector('#lmrLinesTableBody .empty-state-row')) {
-                linesTable.innerHTML = `
-                    <tr class="empty-state-row">
-                        <td colspan="10" class="text-center text-muted py-3">
-                            No line items added yet. Use "Add Line Item" to begin the LMR.
-                        </td>
-                    </tr>
-                `;
-                lineItemsJson.value = '[]';
-            }
-        }
-    });
-
-    function showToast(message, type) {
-        type = type || 'danger';
-        var toast = document.getElementById('formToast');
-        var body = document.getElementById('formToastBody');
-        toast.className = 'alert alert-' + type + ' d-flex align-items-start';
-        body.innerHTML = message;
-        toast.classList.add('show');
-        clearTimeout(showToast._timer);
-        showToast._timer = setTimeout(function () {
-            toast.classList.remove('show');
-        }, 8000);
     }
 
     function showFormValidation(message) {
-        var alertEl = document.getElementById('formValidationAlert');
-        var msgEl = document.getElementById('formValidationMessage');
-        msgEl.innerHTML = message;
-        alertEl.classList.remove('d-none');
-        alertEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        showToast(message, 'danger');
+        clearTimeout(validationAlertEl._fadeTimer);
+        clearTimeout(validationAlertEl._hideTimer);
+        validationAlertEl.style.transition = 'opacity ' + (FORM_ALERT_FADE_MS / 1000) + 's ease';
+        validationAlertEl.style.opacity = '1';
+        document.getElementById('formValidationMessage').innerHTML = message;
+        validationAlertEl.classList.remove('d-none');
+        validationAlertEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        validationAlertEl._fadeTimer = setTimeout(function () {
+            validationAlertEl.style.opacity = '0';
+            validationAlertEl._hideTimer = setTimeout(hideValidationAlertNow, FORM_ALERT_FADE_MS);
+        }, FORM_ALERT_FADE_DELAY);
     }
 
+    document.getElementById('formValidationClose').addEventListener('click', hideValidationAlertNow);
+
     function clearFormValidation() {
-        document.getElementById('formValidationAlert').classList.add('d-none');
+        clearTimeout(validationAlertEl._fadeTimer);
+        validationAlertEl.classList.add('d-none');
+        validationAlertEl.style.opacity = '1';
         document.getElementById('formValidationMessage').innerHTML = '';
-        document.getElementById('formToast').classList.remove('show');
         document.querySelectorAll('#lmrEntryForm .is-invalid').forEach(function (el) {
             el.classList.remove('is-invalid');
         });
@@ -824,12 +535,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!firstInvalid) firstInvalid = poSelectEl;
             }
 
-            var dataRows = Array.from(linesTable.querySelectorAll('tr')).filter(function (row) {
-                return !row.classList.contains('empty-state-row');
-            });
+            var qtyOrderedEl = document.getElementById('headerQtyOrdered');
+            var bomSelectEl = document.getElementById('bomCode');
+            if (!qtyOrderedEl.value || parseFloat(qtyOrderedEl.value) <= 0) {
+                errors.push('Qty Ordered must be greater than zero so the component breakdown can be calculated.');
+                qtyOrderedEl.classList.add('is-invalid');
+                if (!firstInvalid) firstInvalid = qtyOrderedEl;
+            }
 
-            if (dataRows.length === 0) {
-                errors.push('Please add at least one line item.');
+            if (!bomSelectEl.value) {
+                errors.push('Formulation (BOM Code) is required so raw material availability can be checked.');
+                bomSelectEl.classList.add('is-invalid');
+                if (!firstInvalid) firstInvalid = bomSelectEl;
+            }
+            else if (bomShortageWarning.style.display === 'block') {
+                errors.push('Cannot save: stock shortages exist for component items listed in the Component Breakdown.');
             }
 
             if (errors.length > 0) {
@@ -840,10 +560,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             console.log('Form validation passed. Submitting via AJAX...');
-            syncLineItemsPayload();
-
-            var payload = JSON.parse(lineItemsJson.value || '[]');
-            console.log('Submitting LMR payload:', payload);
 
             setSubmitLoading(true);
 
@@ -893,33 +609,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    lineItemsJson.value = '[]';
-    filterItemOptionsByType();
+    // Instant-clear banners as soon as the user starts typing/changing values.
+    var entryFormEl = document.getElementById('lmrEntryForm');
+    if (entryFormEl) {
+        entryFormEl.addEventListener('input', hideValidationAlertNow);
+        entryFormEl.addEventListener('change', hideValidationAlertNow);
+    }
+
+    // Edit mode: populateCustomerName() filters BOM options by the selected
+    // customer and re-selects the saved formulation; then populate item fields
+    // and re-fetch the breakdown.
     populateCustomerName();
-    syncLineItemsPayload();
-
-    var existingItems = <?= json_encode($items ?? []) ?>;
-    if (existingItems.length > 0) {
-        var existingEmptyRow = linesTable.querySelector('.empty-state-row');
-        if (existingEmptyRow) existingEmptyRow.remove();
-
-        existingItems.forEach(function (item) {
-            var row = document.createElement('tr');
-            row.dataset.itemId = item.item_id || '';
-            row.innerHTML =
-                '<td><span class="badge bg-light text-dark border">' + (item.item_type || 'FG') + '</span></td>' +
-                '<td><strong>' + (item.item_code || '') + '</strong></td>' +
-                '<td>' + (item.item_description || '') + '</td>' +
-                '<td>' + (item.uom || '') + '</td>' +
-                '<td>' + (item.item_type || 'FG') + '</td>' +
-                '<td>' + (item.site || '001 - Sterling Technopark') + '</td>' +
-                '<td>' + (item.qty_ordered || 0) + '</td>' +
-                '<td>' + (item.so_number || '-') + '</td>' +
-                '<td>' + (item.bom_code || '—') + '</td>' +
-                '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger remove-line-item"><i class="bi bi-trash"></i></button></td>';
-            linesTable.appendChild(row);
-        });
-        syncLineItemsPayload();
+    if (bomCodeSelect.value) {
+        var initOpt = bomCodeSelect.options[bomCodeSelect.selectedIndex];
+        headerItemCode.value = initOpt ? (initOpt.getAttribute('data-item-code') || '') : '';
+        headerItemDescription.value = initOpt ? (initOpt.getAttribute('data-item-description') || '') : '';
+        refreshHeaderBomBreakdown();
     }
 });
 </script>
